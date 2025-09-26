@@ -49,6 +49,10 @@ from ...utils.deprecation import deprecate_kwarg
 from ...utils.model_parallel_utils import assert_device_map, get_device_map
 from .configuration_gpt2 import GPT2Config
 
+try:
+    from fla.layers.path_attn import PaTHAttention as _PaTHAttention
+except Exception as _e:
+    _PaTHAttention = None
 
 logger = logging.get_logger(__name__)
 
@@ -94,7 +98,80 @@ def eager_attention_forward(module, query, key, value, attention_mask, head_mask
     attn_output = attn_output.transpose(1, 2)
 
     return attn_output, attn_weights
+import pdb
+class GPT2PaTHAttention(nn.Module):
+    """
+    轻量适配器：复用 fla.layers.path_attn.PaTHAttention 的实现，
+    但把入参/出参改成 GPT2Block 期望的样子。
+    """
+    def __init__(self, config, is_cross_attention: bool = False, layer_idx: int = None):
+        super().__init__()
+        if is_cross_attention:
+            raise NotImplementedError("PaTHAttention 暂不支持 cross-attention（config.add_cross_attention=False 时使用）。")
+        if _PaTHAttention is None:
+            raise ImportError(
+                "未能 import fla.PaTHAttention。请确认 fla 在 sys.path 上并已可用（建议用 .pth 方案或 pip install -e .）。"
+            )
 
+        self.layer_idx = layer_idx
+        # 构造 PaTH 核心
+        self.core = _PaTHAttention(
+            hidden_size=config.hidden_size,
+            num_heads=getattr(config, "num_attention_heads", getattr(config, "n_head", None)),
+            num_kv_heads=getattr(config, "num_key_value_heads", None),
+            layer_idx=layer_idx,
+            # 可选开关，从 config 读取（不存在则给默认）
+            use_forget_gate=getattr(config, "path_use_forget_gate", False),
+            use_qk_norm=getattr(config, "path_use_qk_norm", False),
+            use_low_rank_w=getattr(config, "path_use_low_rank_w", True),
+            use_w_shortconv=getattr(config, "path_use_w_shortconv", True),
+            conv_size=getattr(config, "path_conv_size", 3),
+            conv_bias=getattr(config, "path_conv_bias", False),
+        )
+        self.resid_dropout = nn.Dropout(config.resid_pdrop)
+
+    def forward(
+        self,
+        hidden_states: torch.Tensor,
+        past_key_values=None,                  # HF 的 Cache，这里不使用（最小改动）
+        cache_position: Optional[torch.LongTensor] = None,  # 不使用
+        attention_mask: Optional[torch.Tensor] = None,      # HF 传入的 4D 加性 mask（PaTH 不用）
+        head_mask: Optional[torch.Tensor] = None,           # 不使用
+        encoder_hidden_states: Optional[torch.Tensor] = None,
+        encoder_attention_mask: Optional[torch.Tensor] = None,
+        use_cache: Optional[bool] = False,
+        output_attentions: Optional[bool] = False,
+        attention_mask_2d: Optional[torch.Tensor] = None,   # 我们在 GPT2Model 额外传入的 2D 0/1 mask
+        **kwargs,
+    ):
+        if encoder_hidden_states is not None:
+            raise NotImplementedError("PaTHAttention 适配器暂不支持 cross-attention。")
+
+        # 选择 PaTH 用的 2D mask：优先采用 attention_mask_2d；训练建议传 None
+        mask_2d = attention_mask_2d if attention_mask_2d is not None else None
+
+        # PaTH 约束：训练时 attention_mask 必须为 None，且不使用 cache（源码有断言）。:contentReference[oaicite:3]{index=3}
+        mask_2d = None
+        use_cache = False
+
+        # 最小改动：PaTH 自己的 cache 语义与 HF 不同，这里不走 HF 的 past_key_values。
+        # 如需解码加速，后续可扩展成模块内维护 self._path_cache。
+        path_cache = getattr(self, "_path_cache", None) if use_cache else None
+        # print(hidden_states, 'in GPT2PaTHAttention.')
+        # pdb.set_trace()
+        attn_out, _weights, path_cache = self.core(
+            hidden_states,
+            attention_mask=mask_2d,          # 2D 0/1 mask（或 None）
+            past_key_values=path_cache,      # PaTH 自己的 cache（dict）
+            output_attentions=output_attentions,
+            use_cache=use_cache,
+        )
+        if use_cache:
+            self._path_cache = path_cache
+
+        attn_out = self.resid_dropout(attn_out)
+        # GPT2Block 期望返回 (attn_output, attn_weights)
+        return attn_out, None
 
 class GPT2Attention(nn.Module):
     def __init__(self, config, is_cross_attention=False, layer_idx=None):
@@ -328,7 +405,10 @@ class GPT2Block(GradientCheckpointingLayer):
         inner_dim = config.n_inner if config.n_inner is not None else 4 * hidden_size
 
         self.ln_1 = nn.LayerNorm(hidden_size, eps=config.layer_norm_epsilon)
-        self.attn = GPT2Attention(config=config, layer_idx=layer_idx)
+        if getattr(config, "attn_implementation", None) == "path_attn":
+            self.attn = GPT2PaTHAttention(config=config, layer_idx=layer_idx)
+        else:
+            self.attn = GPT2Attention(config=config, layer_idx=layer_idx)
         self.ln_2 = nn.LayerNorm(hidden_size, eps=config.layer_norm_epsilon)
 
         if config.add_cross_attention:
@@ -353,6 +433,8 @@ class GPT2Block(GradientCheckpointingLayer):
     ) -> Union[tuple[torch.Tensor], Optional[tuple[torch.Tensor, tuple[torch.FloatTensor, ...]]]]:
         residual = hidden_states
         hidden_states = self.ln_1(hidden_states)
+        # print(hidden_states, 'in GPT2Block.')
+        # pdb.set_trace()
         attn_output, self_attn_weights = self.attn(
             hidden_states,
             past_key_values=past_key_values,
@@ -628,7 +710,7 @@ DEPARALLELIZE_DOCSTRING = r"""
     ```
 """
 
-
+import pdb
 @auto_docstring
 class GPT2Model(GPT2PreTrainedModel):
     _supports_param_buffer_assignment = False
@@ -801,9 +883,11 @@ class GPT2Model(GPT2PreTrainedModel):
             )
         if position_ids is None:
             position_ids = cache_position.unsqueeze(0)
-
-        position_embeds = self.wpe(position_ids)
-        hidden_states = inputs_embeds + position_embeds.to(inputs_embeds.device)
+        if self.config.attn_implementation == 'path_attn':
+            hidden_states = inputs_embeds
+        else:
+            position_embeds = self.wpe(position_ids)
+            hidden_states = inputs_embeds + position_embeds.to(inputs_embeds.device)
 
         # Attention mask.
         # ._update_causal_mask() and ._prepare_4d_causal_attention_mask_with_cache_position() copied from LlamaModel
@@ -872,8 +956,10 @@ class GPT2Model(GPT2PreTrainedModel):
                 encoder_attention_mask=encoder_attention_mask,
                 use_cache=use_cache,
                 output_attentions=output_attentions,
+                attention_mask_2d=attention_mask,  # ← 传给 PaTH 用的 2D 0/1 mask；其他实现会忽略
                 **kwargs,
             )
+
 
             hidden_states = outputs[0]
 
