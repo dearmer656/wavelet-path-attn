@@ -902,11 +902,11 @@ class GPT2Model(GPT2PreTrainedModel):
             )
         if position_ids is None:
             position_ids = cache_position.unsqueeze(0)
-        if self.config.attn_implementation in ['path_attn', 'path_attn_wfreq']:
-            hidden_states = inputs_embeds
-        else:
-            position_embeds = self.wpe(position_ids)
-            hidden_states = inputs_embeds + position_embeds.to(inputs_embeds.device)
+        # if self.config.attn_implementation in ['path_attn', 'path_attn_wfreq']:
+        #     hidden_states = inputs_embeds
+        # else:
+        position_embeds = self.wpe(position_ids)
+        hidden_states = inputs_embeds + position_embeds.to(inputs_embeds.device)
 
         # Attention mask.
         # ._update_causal_mask() and ._prepare_4d_causal_attention_mask_with_cache_position() copied from LlamaModel

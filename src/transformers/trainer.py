@@ -1437,47 +1437,6 @@ class Trainer:
 
         return self.optimizer
 
-        #     if self.optimizer_cls_and_kwargs is not None:
-        #         optimizer_cls, optimizer_kwargs = self.optimizer_cls_and_kwargs
-        #     else:
-        #         optimizer_cls, optimizer_kwargs = self.get_optimizer_cls_and_kwargs(self.args, opt_model)
-
-        #     # Overwrite `params` in case it's created by `get_optimizer_cls_and_kwargs`
-        #     # e.g. for GaLore optimizer.
-        #     if "params" in optimizer_kwargs:
-        #         optimizer_grouped_parameters = optimizer_kwargs.pop("params")
-
-        #     # Overwrite `model` in case it's created by `get_optimizer_cls_and_kwargs`
-        #     # e.g. for LOMO optimizer.
-        #     if "model" in optimizer_kwargs:
-        #         optimizer_grouped_parameters = optimizer_kwargs.pop("model")
-
-        #     # For layer-wise dummy optimizers we overwrite optimizer_grouped_parameters with `optimizer_dict`
-        #     # to avoid arguments conflicts.
-        #     if "optimizer_dict" in optimizer_kwargs:
-        #         optimizer_grouped_parameters = optimizer_kwargs.pop("optimizer_dict")
-
-        #     self.optimizer = optimizer_cls(optimizer_grouped_parameters, **optimizer_kwargs)
-
-        #     if "bitsandbytes" in str(optimizer_cls) and optimizer_kwargs.get("optim_bits", None) == 8:
-        #         import bitsandbytes
-
-        #         manager = bitsandbytes.optim.GlobalOptimManager.get_instance()
-
-        #         skipped = 0
-        #         for module in opt_model.modules():
-        #             if isinstance(module, nn.Embedding):
-        #                 skipped += sum({p.data_ptr(): p.numel() for p in module.parameters()}.values())
-        #                 logger.info(f"skipped {module}: {skipped / 2**20}M params")
-        #                 manager.register_module_override(module, "weight", {"optim_bits": 32})
-        #                 logger.debug(f"bitsandbytes: will optimize {module} in fp32")
-        #         logger.info(f"skipped: {skipped / 2**20}M params")
-
-        # if is_sagemaker_mp_enabled():
-        #     self.optimizer = smp.DistributedOptimizer(self.optimizer)
-
-        # return self.optimizer
-
     def get_num_trainable_parameters(self):
         """
         Get the number of trainable parameters.
