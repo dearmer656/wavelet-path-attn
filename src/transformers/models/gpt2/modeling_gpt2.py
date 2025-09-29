@@ -49,11 +49,13 @@ from ...utils.deprecation import deprecate_kwarg
 from ...utils.model_parallel_utils import assert_device_map, get_device_map
 from .configuration_gpt2 import GPT2Config
 
-try:
-    from fla.layers.path_attn import PaTHAttention as _PaTHAttention
-except Exception as _e:
-    _PaTHAttention = None
-
+# try:
+#     from fla.layers.path_attn import PaTHAttention as _PaTHAttention
+#     from fla.layers.path_attn import PaTHAttentionWfreq as _PaTHAttentionWfreq
+# except Exception as _e:
+#     _PaTHAttention = None
+#     _PaTHAttentionWfreq = None
+from fla.layers.path_attn import PaTHAttention as _PaTHAttention
 logger = logging.get_logger(__name__)
 
 
@@ -115,19 +117,36 @@ class GPT2PaTHAttention(nn.Module):
 
         self.layer_idx = layer_idx
         # 构造 PaTH 核心
-        self.core = _PaTHAttention(
-            hidden_size=config.hidden_size,
-            num_heads=getattr(config, "num_attention_heads", getattr(config, "n_head", None)),
-            num_kv_heads=getattr(config, "num_key_value_heads", None),
-            layer_idx=layer_idx,
-            # 可选开关，从 config 读取（不存在则给默认）
-            use_forget_gate=getattr(config, "path_use_forget_gate", False),
-            use_qk_norm=getattr(config, "path_use_qk_norm", False),
-            use_low_rank_w=getattr(config, "path_use_low_rank_w", True),
-            use_w_shortconv=getattr(config, "path_use_w_shortconv", True),
-            conv_size=getattr(config, "path_conv_size", 3),
-            conv_bias=getattr(config, "path_conv_bias", False),
-        )
+        if getattr(config, "attn_implementation", None) == "path_attn_wfreq":
+            self.core = _PaTHAttentionWfreq(
+                hidden_size=config.hidden_size,
+                num_heads=getattr(config, "num_attention_heads", getattr(config, "n_head", None)),
+                num_kv_heads=getattr(config, "num_key_value_heads", None),
+                layer_idx=layer_idx,
+                # 可选开关，从 config 读取（不存在则给默认）
+                use_forget_gate=getattr(config, "path_use_forget_gate", False),
+                use_qk_norm=getattr(config, "path_use_qk_norm", False),
+                use_low_rank_w=getattr(config, "path_use_low_rank_w", True),
+                use_w_shortconv=getattr(config, "path_use_w_shortconv", True),
+                conv_size=getattr(config, "path_conv_size", 3),
+                conv_bias=getattr(config, "path_conv_bias", False),
+                num_harmonics=getattr(config, "num_harmonics", 2),
+                share_freq_across_heads=getattr(config, "share_freq_across_heads", False),
+            )
+        elif getattr(config, "attn_implementation", None) == "path_attn":
+            self.core = _PaTHAttention(
+                hidden_size=config.hidden_size,
+                num_heads=getattr(config, "num_attention_heads", getattr(config, "n_head", None)),
+                num_kv_heads=getattr(config, "num_key_value_heads", None),
+                layer_idx=layer_idx,
+                # 可选开关，从 config 读取（不存在则给默认）
+                use_forget_gate=getattr(config, "path_use_forget_gate", False),
+                use_qk_norm=getattr(config, "path_use_qk_norm", False),
+                use_low_rank_w=getattr(config, "path_use_low_rank_w", True),
+                use_w_shortconv=getattr(config, "path_use_w_shortconv", True),
+                conv_size=getattr(config, "path_conv_size", 3),
+                conv_bias=getattr(config, "path_conv_bias", False),
+            )
         self.resid_dropout = nn.Dropout(config.resid_pdrop)
 
     def forward(
@@ -405,7 +424,7 @@ class GPT2Block(GradientCheckpointingLayer):
         inner_dim = config.n_inner if config.n_inner is not None else 4 * hidden_size
 
         self.ln_1 = nn.LayerNorm(hidden_size, eps=config.layer_norm_epsilon)
-        if getattr(config, "attn_implementation", None) == "path_attn":
+        if getattr(config, "attn_implementation", None) in ["path_attn", "path_attn_wfreq"]:
             self.attn = GPT2PaTHAttention(config=config, layer_idx=layer_idx)
         else:
             self.attn = GPT2Attention(config=config, layer_idx=layer_idx)
@@ -883,7 +902,7 @@ class GPT2Model(GPT2PreTrainedModel):
             )
         if position_ids is None:
             position_ids = cache_position.unsqueeze(0)
-        if self.config.attn_implementation == 'path_attn':
+        if self.config.attn_implementation in ['path_attn', 'path_attn_wfreq']:
             hidden_states = inputs_embeds
         else:
             position_embeds = self.wpe(position_ids)

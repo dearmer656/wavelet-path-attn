@@ -85,7 +85,47 @@ class ModelArguments:
     """
     Arguments pertaining to which model/config/tokenizer we are going to fine-tune, or train from scratch.
     """
+    attn_implementation: str = field(
+        default="eager",
+        metadata={
+            "help": "Attention backend to use: eager | sdpa | flash_attention_2 | path_attn.",
+            "choices": ["eager", "sdpa", "flash_attention_2", "path_attn", "path_attn_wfreq"],
+        },
+    )
 
+    # ===== PaTHAttention 专用开关（仅在 --_attn_implementation path_attn 时生效） =====
+    path_use_forget_gate: bool = field(
+        default=False,
+        metadata={"help": "Enable forget gate (g) for PaTH attention."},
+    )
+    path_use_qk_norm: bool = field(
+        default=False,
+        metadata={"help": "Apply RMSNorm to Q and K in PaTH attention."},
+    )
+    share_freq_across_heads: bool = field(
+        default=False,
+        metadata={"help": "Apply RMSNorm to Q and K in PaTH attention."},
+    )    
+    path_use_low_rank_w: bool = field(
+        default=True,
+        metadata={"help": "Use low-rank parameterization for W projection (32 bottleneck)."},
+    )
+    path_use_w_shortconv: bool = field(
+        default=True,
+        metadata={"help": "Use ShortConvolution on W path."},
+    )
+    path_conv_size: int = field(
+        default=3,
+        metadata={"help": "Kernel size for W ShortConvolution."},
+    )
+    num_harmonics: int = field(
+        default=2,
+        metadata={"help": "number of harmonics"},
+    )    
+    path_conv_bias: bool = field(
+        default=False,
+        metadata={"help": "Use bias in W ShortConvolution."},
+    )
     model_name_or_path: Optional[str] = field(
         default=None,
         metadata={
@@ -238,7 +278,16 @@ class DataTrainingArguments:
             if self.validation_file is not None:
                 extension = self.validation_file.split(".")[-1]
                 assert extension in ["csv", "json", "txt"], "`validation_file` should be a csv, a json or a txt file."
-
+@dataclass
+class SupplyTrainingArguments(TrainingArguments):
+    b_unfreeze_step: int = field(
+        default=5000,
+        metadata={
+            "help": (
+                "The wB doesn't update until unfreeze_step"
+            )
+        },
+    )
 
 def split_streaming_dataset(
     full_streaming_dataset,
@@ -278,13 +327,77 @@ def split_streaming_dataset(
 
     return IterableDatasetDict({"train": train_stream, "validation": validation_stream})
 
+import wandb
+def init_wandb(config, proj_name, run_name=None):
+    import os
+    import yaml
+    api_key = os.getenv("WANDB_API_KEY")
+    # config_json = yaml.safe_load(config.dump())
+    # config_json['CODE_VERSION'] = get_git_commit_hash()
+    wandb.login(key=api_key)
+    wandb.init(
+        # set the wandb project where this run will be logged
+        project=proj_name,
+        # track hyperparameters and run metadata
+        config=config
+    )
+from transformers import TrainerCallback
+
+class LrMonitorCallback(TrainerCallback):
+    def __init__(self, group_names_expect=("main_decay","main_nodecay","B_decay","B_nodecay")):
+        self.expect = set(group_names_expect)
+        self._optimizer = None  # 训练开始后会缓存
+        # 可选：如果你有自定义名字，初始化时传入元组即可
+
+    # 任一钩子若提供了 optimizer，就缓存下来（不同版本/时机更稳妥）
+    def on_train_begin(self, args, state, control, **kwargs):
+        if "optimizer" in kwargs and kwargs["optimizer"] is not None:
+            self._optimizer = kwargs["optimizer"]
+        return control
+
+    def on_step_begin(self, args, state, control, **kwargs):
+        if self._optimizer is None and "optimizer" in kwargs and kwargs["optimizer"] is not None:
+            self._optimizer = kwargs["optimizer"]
+        return control
+
+    def on_log(self, args, state, control, model=None, logs=None, **kwargs):
+        # 部分版本在 on_log 里也会带 optimizer；若有则更新缓存
+        if "optimizer" in kwargs and kwargs["optimizer"] is not None:
+            self._optimizer = kwargs["optimizer"]
+
+        if self._optimizer is None:
+            # 还没拿到 optimizer，就先不打印，避免报错
+            return control
+
+        opt = self._optimizer
+        lines, seen = [], set()
+
+        for i, pg in enumerate(opt.param_groups):
+            name = pg.get("name", f"group_{i}")
+            lr = pg.get("lr", 0.0)
+            # “active”：该组里是否有参数当前参与反传更新
+            any_updating = any(getattr(p, "requires_grad", False) for p in pg["params"])
+            lines.append(f"{name}: lr={lr:.6g}, active={any_updating}")
+            seen.add(name)
+
+            # 把 lr 写入日志（便于 tb/wandb）
+            if logs is not None:
+                logs[f"lr/{name}"] = float(lr)
+
+        # 预期但尚未加入 optimizer 的组（比如 B 还没注册）→ 标注 N/A
+        for name in (self.expect - seen):
+            lines.append(f"{name}: lr=N/A, active=False (not in optimizer)")
+            if logs is not None:
+                logs[f"lr/{name}"] = float("nan")
+
+        print("[LR]", " | ".join(lines))
+        return control
 
 def main():
     # See all possible arguments in src/transformers/training_args.py
     # or by passing the --help flag to this script.
     # We now keep distinct sets of args, for a cleaner separation of concerns.
-
-    parser = HfArgumentParser((ModelArguments, DataTrainingArguments, TrainingArguments))
+    parser = HfArgumentParser((ModelArguments, DataTrainingArguments, SupplyTrainingArguments))
     if len(sys.argv) == 2 and sys.argv[1].endswith(".json"):
         # If we pass only one argument to the script and it's the path to a json file,
         # let's parse it to get our arguments.
@@ -485,7 +598,17 @@ def main():
             "You are instantiating a new tokenizer from scratch. This is not supported by this script. "
             "You can do it from another script, save it, and load it from here, using --tokenizer_name."
         )
-
+    config.attn_implementation = model_args.attn_implementation
+    config.path_use_forget_gate = model_args.path_use_forget_gate
+    config.path_use_qk_norm = model_args.path_use_qk_norm
+    config.path_use_low_rank_w = model_args.path_use_low_rank_w
+    config.path_use_w_shortconv = model_args.path_use_w_shortconv
+    config.path_conv_size = model_args.path_conv_size
+    config.path_conv_bias = model_args.path_conv_bias
+    config.num_harmonics = model_args.num_harmonics
+    config.share_freq_across_heads = model_args.share_freq_across_heads
+    if torch.cuda.current_device() == 0:
+        init_wandb(config, 'gpt2 with path attn')    
     if model_args.model_name_or_path:
         dtype = model_args.dtype if model_args.dtype in ["auto", None] else getattr(torch, model_args.dtype)
         model = AutoModelForCausalLM.from_pretrained(
@@ -570,8 +693,8 @@ def main():
                 f"The block_size passed ({data_args.block_size}) is larger than the maximum length for the model "
                 f"({tokenizer.model_max_length}). Using block_size={tokenizer.model_max_length}."
             )
-        block_size = min(data_args.block_size, tokenizer.model_max_length)
-
+        # block_size = min(data_args.block_size, tokenizer.model_max_length)
+        block_size = data_args.block_size
     # Main data processing function that will concatenate all texts from our dataset and generate chunks of block_size.
     def group_texts(examples):
         # Concatenate all texts.
@@ -663,6 +786,20 @@ def main():
         if training_args.do_eval and not is_torch_xla_available()
         else None,
     )
+    # trainer = Trainer(
+    #     model=model,
+    #     args=training_args,
+    #     train_dataset=train_dataset if training_args.do_train else None,
+    #     eval_dataset=eval_dataset if training_args.do_eval else None,
+    #     processing_class=tokenizer,
+    #     # Data collator will default to DataCollatorWithPadding, so we change it.
+    #     data_collator=default_data_collator,
+    #     compute_metrics=compute_metrics if training_args.do_eval and not is_torch_xla_available() else None,
+    #     preprocess_logits_for_metrics=preprocess_logits_for_metrics
+    #     if training_args.do_eval and not is_torch_xla_available()
+    #     else None,
+    #     callbacks=[LrMonitorCallback(group_names_expect=("main_decay","main_nodecay","B_decay","B_nodecay"))],
+    # )    
 
     # Training
     if training_args.do_train:
