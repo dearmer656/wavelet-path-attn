@@ -1,0 +1,71 @@
+MASTER_ADDR: lang01
+MASTER_PORT: 12345
+WORLD_SIZE: 1
+RANK: 0
++ echo 'Workdir: /project/nlp-work5/hongyu-s/transformers/examples/pytorch/language-modeling'
+Workdir: /project/nlp-work5/hongyu-s/transformers/examples/pytorch/language-modeling
++ cd /project/nlp-work5/hongyu-s/transformers/examples/pytorch/language-modeling
++ echo 'Launching training/eval command'
+Launching training/eval command
++ echo '================= BEGIN RUN ================='
+================= BEGIN RUN =================
++ torchrun --nproc_per_node=4 --master_port=12433 ./run_clm.py --model_type gpt2 --tokenizer_name gpt2 --share_freq_across_heads True --learning_rate 1e-4 --per_device_train_batch_size 16 --per_device_eval_batch_size 16 --block_size 512 --dataset_name wikitext --dataset_config_name wikitext-103-raw-v1 --do_train --do_eval --overwrite_output_dir --num_train_epochs 30 --num_harmonics 1 --eval_strategy steps --eval_steps 250 --logging_dir ./path_attn_test_log --logging_steps 250 --save_steps 5000 --attn_implementation path_attn --path_use_qk_norm false --path_use_low_rank_w true --path_use_w_shortconv false --path_conv_size 3 --warmup_steps 5000 --path_conv_bias false --output_dir runs/path_attn_test --gradient_accumulation_steps 1 --b_unfreeze_step 5000
+W0930 08:44:24.384000 2020918 /project/nlp-work5/hongyu-s/conda/envs/latest_transformers/lib/python3.12/site-packages/torch/distributed/run.py:774] 
+W0930 08:44:24.384000 2020918 /project/nlp-work5/hongyu-s/conda/envs/latest_transformers/lib/python3.12/site-packages/torch/distributed/run.py:774] *****************************************
+W0930 08:44:24.384000 2020918 /project/nlp-work5/hongyu-s/conda/envs/latest_transformers/lib/python3.12/site-packages/torch/distributed/run.py:774] Setting OMP_NUM_THREADS environment variable for each process to be 1 in default, to avoid your system being overloaded, please further tune the variable for optimal performance in your application as needed. 
+W0930 08:44:24.384000 2020918 /project/nlp-work5/hongyu-s/conda/envs/latest_transformers/lib/python3.12/site-packages/torch/distributed/run.py:774] *****************************************
+[rank0]: Traceback (most recent call last):
+[rank0]:   File "/project/nlp-work5/hongyu-s/transformers/examples/pytorch/language-modeling/./run_clm.py", line 733, in <module>
+[rank0]:     main()
+[rank0]:   File "/project/nlp-work5/hongyu-s/transformers/examples/pytorch/language-modeling/./run_clm.py", line 293, in main
+[rank0]:     model_args, data_args, training_args = parser.parse_args_into_dataclasses()
+[rank0]:                                            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+[rank0]:   File "/project/nlp-work5/hongyu-s/transformers/src/transformers/hf_argparser.py", line 367, in parse_args_into_dataclasses
+[rank0]:     raise ValueError(f"Some specified arguments are not used by the HfArgumentParser: {remaining_args}")
+[rank0]: ValueError: Some specified arguments are not used by the HfArgumentParser: ['--share_freq_across_heads', 'True', '--num_harmonics', '1', '--attn_implementation', 'path_attn', '--path_use_qk_norm', 'false', '--path_use_low_rank_w', 'true', '--path_use_w_shortconv', 'false', '--path_conv_size', '3', '--path_conv_bias', 'false', '--b_unfreeze_step', '5000']
+[rank3]: Traceback (most recent call last):
+[rank3]:   File "/project/nlp-work5/hongyu-s/transformers/examples/pytorch/language-modeling/./run_clm.py", line 733, in <module>
+[rank3]:     main()
+[rank3]:   File "/project/nlp-work5/hongyu-s/transformers/examples/pytorch/language-modeling/./run_clm.py", line 293, in main
+[rank3]:     model_args, data_args, training_args = parser.parse_args_into_dataclasses()
+[rank3]:                                            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+[rank3]:   File "/project/nlp-work5/hongyu-s/transformers/src/transformers/hf_argparser.py", line 367, in parse_args_into_dataclasses
+[rank3]:     raise ValueError(f"Some specified arguments are not used by the HfArgumentParser: {remaining_args}")
+[rank3]: ValueError: Some specified arguments are not used by the HfArgumentParser: ['--share_freq_across_heads', 'True', '--num_harmonics', '1', '--attn_implementation', 'path_attn', '--path_use_qk_norm', 'false', '--path_use_low_rank_w', 'true', '--path_use_w_shortconv', 'false', '--path_conv_size', '3', '--path_conv_bias', 'false', '--b_unfreeze_step', '5000']
+[rank0]:[W930 08:45:00.650956415 ProcessGroupNCCL.cpp:1538] Warning: WARNING: destroy_process_group() was not called before program exit, which can leak resources. For more info, please see https://pytorch.org/docs/stable/distributed.html#shutdown (function operator())
+W0930 08:45:01.566000 2020918 /project/nlp-work5/hongyu-s/conda/envs/latest_transformers/lib/python3.12/site-packages/torch/distributed/elastic/multiprocessing/api.py:900] Sending process 2020926 closing signal SIGTERM
+W0930 08:45:01.567000 2020918 /project/nlp-work5/hongyu-s/conda/envs/latest_transformers/lib/python3.12/site-packages/torch/distributed/elastic/multiprocessing/api.py:900] Sending process 2020927 closing signal SIGTERM
+W0930 08:45:01.568000 2020918 /project/nlp-work5/hongyu-s/conda/envs/latest_transformers/lib/python3.12/site-packages/torch/distributed/elastic/multiprocessing/api.py:900] Sending process 2020928 closing signal SIGTERM
+E0930 08:45:01.896000 2020918 /project/nlp-work5/hongyu-s/conda/envs/latest_transformers/lib/python3.12/site-packages/torch/distributed/elastic/multiprocessing/api.py:874] failed (exitcode: 1) local_rank: 0 (pid: 2020925) of binary: /cl/work5/hongyu-s/conda/envs/latest_transformers/bin/python3.12
+Traceback (most recent call last):
+  File "/cl/work5/hongyu-s/conda/envs/latest_transformers/bin/torchrun", line 7, in <module>
+    sys.exit(main())
+             ^^^^^^
+  File "/cl/work5/hongyu-s/conda/envs/latest_transformers/lib/python3.12/site-packages/torch/distributed/elastic/multiprocessing/errors/__init__.py", line 357, in wrapper
+    return f(*args, **kwargs)
+           ^^^^^^^^^^^^^^^^^^
+  File "/cl/work5/hongyu-s/conda/envs/latest_transformers/lib/python3.12/site-packages/torch/distributed/run.py", line 901, in main
+    run(args)
+  File "/cl/work5/hongyu-s/conda/envs/latest_transformers/lib/python3.12/site-packages/torch/distributed/run.py", line 892, in run
+    elastic_launch(
+  File "/cl/work5/hongyu-s/conda/envs/latest_transformers/lib/python3.12/site-packages/torch/distributed/launcher/api.py", line 143, in __call__
+    return launch_agent(self._config, self._entrypoint, list(args))
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/cl/work5/hongyu-s/conda/envs/latest_transformers/lib/python3.12/site-packages/torch/distributed/launcher/api.py", line 277, in launch_agent
+    raise ChildFailedError(
+torch.distributed.elastic.multiprocessing.errors.ChildFailedError: 
+============================================================
+./run_clm.py FAILED
+------------------------------------------------------------
+Failures:
+  <NO_OTHER_FAILURES>
+------------------------------------------------------------
+Root Cause (first observed failure):
+[0]:
+  time      : 2025-09-30_08:45:01
+  host      : lang01.naist.jp
+  rank      : 0 (local_rank: 0)
+  exitcode  : 1 (pid: 2020925)
+  error_file: <N/A>
+  traceback : To enable traceback see: https://pytorch.org/docs/stable/elastic/errors.html
+============================================================

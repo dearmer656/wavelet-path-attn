@@ -1,0 +1,1383 @@
+MASTER_ADDR: elm63
+MASTER_PORT: 12345
+WORLD_SIZE: 1
+RANK: 0
++ echo 'Workdir: /project/nlp-work5/hongyu-s/transformers/examples/pytorch/language-modeling'
+Workdir: /project/nlp-work5/hongyu-s/transformers/examples/pytorch/language-modeling
++ cd /project/nlp-work5/hongyu-s/transformers/examples/pytorch/language-modeling
++ echo 'Launching training/eval command'
+Launching training/eval command
++ echo '================= BEGIN RUN ================='
+================= BEGIN RUN =================
++ torchrun --nproc_per_node=2 --master_port=12425 ./run_clm.py --model_type gpt2 --tokenizer_name gpt2 --model_name_or_path ./runs/1r_baseline_from_s/checkpoint-50000 --share_freq_across_heads True --learning_rate 1e-4 --per_device_train_batch_size 1 --per_device_eval_batch_size 1 --block_size 512 --dataset_name wikitext --dataset_config_name wikitext-103-raw-v1 --do_eval --overwrite_output_dir --num_train_epochs 30 --output_dir ./1r_baseline_from_s --eval_strategy steps --logging_dir ./1r_baseline_from_s_log --logging_steps 250 --save_steps 2500 --attn_implementation path_attn --path_use_qk_norm false --path_use_low_rank_w true --path_use_w_shortconv false --path_conv_size 3 --warmup_steps 5000 --path_conv_bias false --output_dir runs/1r_baseline_from_s --gradient_accumulation_steps 2 --num_harmonics 1
+W1005 23:04:54.603000 2498332 /project/nlp-work5/hongyu-s/conda/envs/latest_transformers/lib/python3.12/site-packages/torch/distributed/run.py:774] 
+W1005 23:04:54.603000 2498332 /project/nlp-work5/hongyu-s/conda/envs/latest_transformers/lib/python3.12/site-packages/torch/distributed/run.py:774] *****************************************
+W1005 23:04:54.603000 2498332 /project/nlp-work5/hongyu-s/conda/envs/latest_transformers/lib/python3.12/site-packages/torch/distributed/run.py:774] Setting OMP_NUM_THREADS environment variable for each process to be 1 in default, to avoid your system being overloaded, please further tune the variable for optimal performance in your application as needed. 
+W1005 23:04:54.603000 2498332 /project/nlp-work5/hongyu-s/conda/envs/latest_transformers/lib/python3.12/site-packages/torch/distributed/run.py:774] *****************************************
+10/05/2025 23:05:11 - WARNING - __main__ - Process rank: 1, device: cuda:1, n_gpu: 1, distributed training: True, 16-bits training: False
+10/05/2025 23:05:11 - WARNING - __main__ - Process rank: 0, device: cuda:0, n_gpu: 1, distributed training: True, 16-bits training: False
+10/05/2025 23:05:11 - INFO - __main__ - Training/evaluation parameters SupplyTrainingArguments(
+_n_gpu=1,
+accelerator_config={'split_batches': False, 'dispatch_batches': None, 'even_batches': True, 'use_seedable_sampler': True, 'non_blocking': False, 'gradient_accumulation_kwargs': None, 'use_configured_state': False},
+adafactor=False,
+adam_beta1=0.9,
+adam_beta2=0.999,
+adam_epsilon=1e-08,
+auto_find_batch_size=False,
+average_tokens_across_devices=True,
+b_unfreeze_step=5000,
+batch_eval_metrics=False,
+bf16=False,
+bf16_full_eval=False,
+data_seed=None,
+dataloader_drop_last=False,
+dataloader_num_workers=0,
+dataloader_persistent_workers=False,
+dataloader_pin_memory=True,
+dataloader_prefetch_factor=None,
+ddp_backend=None,
+ddp_broadcast_buffers=None,
+ddp_bucket_cap_mb=None,
+ddp_find_unused_parameters=None,
+ddp_timeout=1800,
+debug=[],
+deepspeed=None,
+disable_tqdm=False,
+do_eval=True,
+do_predict=False,
+do_train=False,
+eval_accumulation_steps=None,
+eval_delay=0,
+eval_do_concat_batches=True,
+eval_on_start=False,
+eval_steps=250,
+eval_strategy=IntervalStrategy.STEPS,
+eval_use_gather_object=False,
+fp16=False,
+fp16_backend=auto,
+fp16_full_eval=False,
+fp16_opt_level=O1,
+fsdp=[],
+fsdp_config={'min_num_params': 0, 'xla': False, 'xla_fsdp_v2': False, 'xla_fsdp_grad_ckpt': False},
+fsdp_min_num_params=0,
+fsdp_transformer_layer_cls_to_wrap=None,
+full_determinism=False,
+gradient_accumulation_steps=2,
+gradient_checkpointing=False,
+gradient_checkpointing_kwargs=None,
+greater_is_better=None,
+group_by_length=False,
+half_precision_backend=auto,
+hub_always_push=False,
+hub_model_id=None,
+hub_private_repo=None,
+hub_revision=None,
+hub_strategy=HubStrategy.EVERY_SAVE,
+hub_token=<HUB_TOKEN>,
+ignore_data_skip=False,
+include_for_metrics=[],
+include_inputs_for_metrics=False,
+include_num_input_tokens_seen=no,
+include_tokens_per_second=False,
+jit_mode_eval=False,
+label_names=None,
+label_smoothing_factor=0.0,
+learning_rate=0.0001,
+length_column_name=length,
+liger_kernel_config=None,
+load_best_model_at_end=False,
+local_rank=0,
+log_level=passive,
+log_level_replica=warning,
+log_on_each_node=True,
+logging_dir=./1r_baseline_from_s_log,
+logging_first_step=False,
+logging_nan_inf_filter=True,
+logging_steps=250,
+logging_strategy=IntervalStrategy.STEPS,
+lr_scheduler_kwargs={},
+lr_scheduler_type=SchedulerType.LINEAR,
+max_grad_norm=1.0,
+max_steps=-1,
+metric_for_best_model=None,
+mp_parameters=,
+neftune_noise_alpha=None,
+no_cuda=False,
+num_train_epochs=30.0,
+optim=OptimizerNames.ADAMW_TORCH_FUSED,
+optim_args=None,
+optim_target_modules=None,
+output_dir=runs/1r_baseline_from_s,
+overwrite_output_dir=True,
+parallelism_config=None,
+past_index=-1,
+per_device_eval_batch_size=1,
+per_device_train_batch_size=1,
+prediction_loss_only=False,
+push_to_hub=False,
+push_to_hub_model_id=None,
+push_to_hub_organization=None,
+push_to_hub_token=<PUSH_TO_HUB_TOKEN>,
+ray_scope=last,
+remove_unused_columns=True,
+report_to=['tensorboard', 'wandb'],
+restore_callback_states_from_checkpoint=False,
+resume_from_checkpoint=None,
+run_name=None,
+save_on_each_node=False,
+save_only_model=False,
+save_safetensors=True,
+save_steps=2500,
+save_strategy=SaveStrategy.STEPS,
+save_total_limit=None,
+seed=42,
+skip_memory_metrics=True,
+tf32=None,
+torch_compile=False,
+torch_compile_backend=None,
+torch_compile_mode=None,
+torch_empty_cache_steps=None,
+torchdynamo=None,
+tpu_metrics_debug=False,
+tpu_num_cores=None,
+use_cpu=False,
+use_legacy_prediction_loop=False,
+use_liger_kernel=False,
+use_mps_device=False,
+warmup_ratio=0.0,
+warmup_steps=5000,
+weight_decay=0.0,
+)
+Found cached dataset wikitext (/cl/work5/hongyu-s/huggingfac/datasets/wikitext/wikitext-103-raw-v1/0.0.0/b08601e04326c79dfdd32d625aee71d232d685c3)
+10/05/2025 23:05:17 - INFO - datasets.builder - Found cached dataset wikitext (/cl/work5/hongyu-s/huggingfac/datasets/wikitext/wikitext-103-raw-v1/0.0.0/b08601e04326c79dfdd32d625aee71d232d685c3)
+[INFO|configuration_utils.py:757] 2025-10-05 23:05:19,322 >> loading configuration file ./runs/1r_baseline_from_s/checkpoint-50000/config.json
+[INFO|configuration_utils.py:833] 2025-10-05 23:05:19,323 >> Model config GPT2Config {
+  "activation_function": "gelu_new",
+  "architectures": [
+    "GPT2LMHeadModel"
+  ],
+  "attn_pdrop": 0.1,
+  "block_size": 512,
+  "bos_token_id": 50256,
+  "dtype": "float32",
+  "embd_pdrop": 0.1,
+  "eos_token_id": 50256,
+  "initializer_range": 0.02,
+  "layer_norm_epsilon": 1e-05,
+  "model_type": "gpt2",
+  "n_embd": 768,
+  "n_head": 12,
+  "n_inner": null,
+  "n_layer": 12,
+  "n_positions": 1024,
+  "num_harmonics": 1,
+  "path_conv_bias": false,
+  "path_conv_size": 3,
+  "path_use_forget_gate": false,
+  "path_use_low_rank_w": true,
+  "path_use_qk_norm": false,
+  "path_use_w_shortconv": false,
+  "pe_method": "vanilla",
+  "reorder_and_upcast_attn": false,
+  "resid_pdrop": 0.1,
+  "rope_theta": 10000,
+  "scale_attn_by_inverse_layer_idx": false,
+  "scale_attn_weights": true,
+  "share_freq_across_heads": true,
+  "summary_activation": null,
+  "summary_first_dropout": 0.1,
+  "summary_proj_to_labels": true,
+  "summary_type": "cls_index",
+  "summary_use_proj": true,
+  "transformers_version": "4.57.0.dev0",
+  "use_cache": true,
+  "vocab_size": 50257
+}
+
+[INFO|configuration_utils.py:759] 2025-10-05 23:05:19,605 >> loading configuration file config.json from cache at /cl/work5/hongyu-s/huggingfac/hub/models--gpt2/snapshots/607a30d783dfa663caf39e06633721c8d4cfcd7e/config.json
+[INFO|configuration_utils.py:833] 2025-10-05 23:05:19,606 >> Model config GPT2Config {
+  "activation_function": "gelu_new",
+  "architectures": [
+    "GPT2LMHeadModel"
+  ],
+  "attn_pdrop": 0.1,
+  "bos_token_id": 50256,
+  "embd_pdrop": 0.1,
+  "eos_token_id": 50256,
+  "initializer_range": 0.02,
+  "layer_norm_epsilon": 1e-05,
+  "model_type": "gpt2",
+  "n_ctx": 1024,
+  "n_embd": 768,
+  "n_head": 12,
+  "n_inner": null,
+  "n_layer": 12,
+  "n_positions": 1024,
+  "reorder_and_upcast_attn": false,
+  "resid_pdrop": 0.1,
+  "scale_attn_by_inverse_layer_idx": false,
+  "scale_attn_weights": true,
+  "summary_activation": null,
+  "summary_first_dropout": 0.1,
+  "summary_proj_to_labels": true,
+  "summary_type": "cls_index",
+  "summary_use_proj": true,
+  "task_specific_params": {
+    "text-generation": {
+      "do_sample": true,
+      "max_length": 50
+    }
+  },
+  "transformers_version": "4.57.0.dev0",
+  "use_cache": true,
+  "vocab_size": 50257
+}
+
+/cl/work5/hongyu-s/conda/envs/latest_transformers/lib/python3.12/site-packages/torch/distributed/distributed_c10d.py:4807: UserWarning: No device id is provided via `init_process_group` or `barrier `. Using the current device set by the user. 
+  warnings.warn(  # warn only once
+[rank1]:[W1005 23:05:20.768263287 ProcessGroupNCCL.cpp:5023] [PG ID 0 PG GUID 0 Rank 1]  using GPU 1 as device used by this process is currently unknown. This can potentially cause a hang if this rank to GPU mapping is incorrect. You can specify device_id in init_process_group() to force use of a particular device.
+[INFO|tokenization_utils_base.py:2057] 2025-10-05 23:05:20,244 >> loading file vocab.json from cache at /cl/work5/hongyu-s/huggingfac/hub/models--gpt2/snapshots/607a30d783dfa663caf39e06633721c8d4cfcd7e/vocab.json
+[INFO|tokenization_utils_base.py:2057] 2025-10-05 23:05:20,244 >> loading file merges.txt from cache at /cl/work5/hongyu-s/huggingfac/hub/models--gpt2/snapshots/607a30d783dfa663caf39e06633721c8d4cfcd7e/merges.txt
+[INFO|tokenization_utils_base.py:2057] 2025-10-05 23:05:20,244 >> loading file tokenizer.json from cache at /cl/work5/hongyu-s/huggingfac/hub/models--gpt2/snapshots/607a30d783dfa663caf39e06633721c8d4cfcd7e/tokenizer.json
+[INFO|tokenization_utils_base.py:2057] 2025-10-05 23:05:20,244 >> loading file added_tokens.json from cache at None
+[INFO|tokenization_utils_base.py:2057] 2025-10-05 23:05:20,244 >> loading file special_tokens_map.json from cache at None
+[INFO|tokenization_utils_base.py:2057] 2025-10-05 23:05:20,244 >> loading file tokenizer_config.json from cache at /cl/work5/hongyu-s/huggingfac/hub/models--gpt2/snapshots/607a30d783dfa663caf39e06633721c8d4cfcd7e/tokenizer_config.json
+[INFO|tokenization_utils_base.py:2057] 2025-10-05 23:05:20,244 >> loading file chat_template.jinja from cache at None
+[INFO|configuration_utils.py:759] 2025-10-05 23:05:20,247 >> loading configuration file config.json from cache at /cl/work5/hongyu-s/huggingfac/hub/models--gpt2/snapshots/607a30d783dfa663caf39e06633721c8d4cfcd7e/config.json
+[INFO|configuration_utils.py:833] 2025-10-05 23:05:20,247 >> Model config GPT2Config {
+  "activation_function": "gelu_new",
+  "architectures": [
+    "GPT2LMHeadModel"
+  ],
+  "attn_pdrop": 0.1,
+  "bos_token_id": 50256,
+  "embd_pdrop": 0.1,
+  "eos_token_id": 50256,
+  "initializer_range": 0.02,
+  "layer_norm_epsilon": 1e-05,
+  "model_type": "gpt2",
+  "n_ctx": 1024,
+  "n_embd": 768,
+  "n_head": 12,
+  "n_inner": null,
+  "n_layer": 12,
+  "n_positions": 1024,
+  "reorder_and_upcast_attn": false,
+  "resid_pdrop": 0.1,
+  "scale_attn_by_inverse_layer_idx": false,
+  "scale_attn_weights": true,
+  "summary_activation": null,
+  "summary_first_dropout": 0.1,
+  "summary_proj_to_labels": true,
+  "summary_type": "cls_index",
+  "summary_use_proj": true,
+  "task_specific_params": {
+    "text-generation": {
+      "do_sample": true,
+      "max_length": 50
+    }
+  },
+  "transformers_version": "4.57.0.dev0",
+  "use_cache": true,
+  "vocab_size": 50257
+}
+
+wandb: Currently logged in as: hongyu-s-aa-titech (hongyu-s-aa-titech-nara-institute-of-science-and-technology) to https://api.wandb.ai. Use `wandb login --relogin` to force relogin
+wandb: creating run
+wandb: Tracking run with wandb version 0.22.0
+wandb: Run data is saved locally in /project/nlp-work5/hongyu-s/transformers/examples/pytorch/language-modeling/wandb/run-20251005_230520-5rk82mo3
+wandb: Run `wandb offline` to turn off syncing.
+wandb: Syncing run exalted-capybara-247
+wandb: ⭐️ View project at https://wandb.ai/hongyu-s-aa-titech-nara-institute-of-science-and-technology/gpt2%20with%20path%20attn
+wandb: 🚀 View run at https://wandb.ai/hongyu-s-aa-titech-nara-institute-of-science-and-technology/gpt2%20with%20path%20attn/runs/5rk82mo3
+Loading cached processed dataset at /cl/work5/hongyu-s/huggingfac/datasets/wikitext/wikitext-103-raw-v1/0.0.0/b08601e04326c79dfdd32d625aee71d232d685c3/cache-78d56f068833be52_*_of_00001.arrow
+10/05/2025 23:05:21 - INFO - datasets.arrow_dataset - Loading cached processed dataset at /cl/work5/hongyu-s/huggingfac/datasets/wikitext/wikitext-103-raw-v1/0.0.0/b08601e04326c79dfdd32d625aee71d232d685c3/cache-78d56f068833be52_*_of_00001.arrow
+Loading cached processed dataset at /cl/work5/hongyu-s/huggingfac/datasets/wikitext/wikitext-103-raw-v1/0.0.0/b08601e04326c79dfdd32d625aee71d232d685c3/cache-4aa64ec0866d64bf_*_of_00001.arrow
+10/05/2025 23:05:24 - INFO - datasets.arrow_dataset - Loading cached processed dataset at /cl/work5/hongyu-s/huggingfac/datasets/wikitext/wikitext-103-raw-v1/0.0.0/b08601e04326c79dfdd32d625aee71d232d685c3/cache-4aa64ec0866d64bf_*_of_00001.arrow
+Loading cached processed dataset at /cl/work5/hongyu-s/huggingfac/datasets/wikitext/wikitext-103-raw-v1/0.0.0/b08601e04326c79dfdd32d625aee71d232d685c3/cache-dd72d81b3872e8ad_*_of_00001.arrow
+10/05/2025 23:05:24 - INFO - datasets.arrow_dataset - Loading cached processed dataset at /cl/work5/hongyu-s/huggingfac/datasets/wikitext/wikitext-103-raw-v1/0.0.0/b08601e04326c79dfdd32d625aee71d232d685c3/cache-dd72d81b3872e8ad_*_of_00001.arrow
+/cl/work5/hongyu-s/conda/envs/latest_transformers/lib/python3.12/site-packages/torch/distributed/distributed_c10d.py:4807: UserWarning: No device id is provided via `init_process_group` or `barrier `. Using the current device set by the user. 
+  warnings.warn(  # warn only once
+[rank0]:[W1005 23:05:24.061095346 ProcessGroupNCCL.cpp:5023] [PG ID 0 PG GUID 0 Rank 0]  using GPU 0 as device used by this process is currently unknown. This can potentially cause a hang if this rank to GPU mapping is incorrect. You can specify device_id in init_process_group() to force use of a particular device.
+[INFO|modeling_utils.py:1202] 2025-10-05 23:05:31,181 >> loading weights file ./runs/1r_baseline_from_s/checkpoint-50000/model.safetensors
+[INFO|configuration_utils.py:986] 2025-10-05 23:05:31,210 >> Generate config GenerationConfig {
+  "bos_token_id": 50256,
+  "eos_token_id": 50256
+}
+
+[INFO|modeling_utils.py:5570] 2025-10-05 23:05:31,899 >> All model checkpoint weights were used when initializing GPT2LMHeadModel.
+
+[INFO|modeling_utils.py:5578] 2025-10-05 23:05:31,900 >> All the weights of GPT2LMHeadModel were initialized from the model checkpoint at ./runs/1r_baseline_from_s/checkpoint-50000.
+If your task is similar to the task the model of the checkpoint was trained on, you can already use GPT2LMHeadModel for predictions without further training.
+[INFO|configuration_utils.py:939] 2025-10-05 23:05:31,903 >> loading configuration file ./runs/1r_baseline_from_s/checkpoint-50000/generation_config.json
+[INFO|configuration_utils.py:986] 2025-10-05 23:05:31,904 >> Generate config GenerationConfig {
+  "bos_token_id": 50256,
+  "eos_token_id": [
+    50256
+  ]
+}
+
+/cl/work5/hongyu-s/conda/envs/latest_transformers/lib/python3.12/site-packages/torch/distributed/distributed_c10d.py:4807: UserWarning: No device id is provided via `init_process_group` or `barrier `. Using the current device set by the user. 
+  warnings.warn(  # warn only once
+Loading cached processed dataset at /cl/work5/hongyu-s/huggingfac/datasets/wikitext/wikitext-103-raw-v1/0.0.0/b08601e04326c79dfdd32d625aee71d232d685c3/cache-6c45e581cfd12e15_*_of_00001.arrow
+10/05/2025 23:05:31 - INFO - datasets.arrow_dataset - Loading cached processed dataset at /cl/work5/hongyu-s/huggingfac/datasets/wikitext/wikitext-103-raw-v1/0.0.0/b08601e04326c79dfdd32d625aee71d232d685c3/cache-6c45e581cfd12e15_*_of_00001.arrow
+Loading cached processed dataset at /cl/work5/hongyu-s/huggingfac/datasets/wikitext/wikitext-103-raw-v1/0.0.0/b08601e04326c79dfdd32d625aee71d232d685c3/cache-f4b57832a890a927_*_of_00001.arrow
+10/05/2025 23:05:36 - INFO - datasets.arrow_dataset - Loading cached processed dataset at /cl/work5/hongyu-s/huggingfac/datasets/wikitext/wikitext-103-raw-v1/0.0.0/b08601e04326c79dfdd32d625aee71d232d685c3/cache-f4b57832a890a927_*_of_00001.arrow
+Loading cached processed dataset at /cl/work5/hongyu-s/huggingfac/datasets/wikitext/wikitext-103-raw-v1/0.0.0/b08601e04326c79dfdd32d625aee71d232d685c3/cache-5e0edde0740173f5_*_of_00001.arrow
+10/05/2025 23:05:36 - INFO - datasets.arrow_dataset - Loading cached processed dataset at /cl/work5/hongyu-s/huggingfac/datasets/wikitext/wikitext-103-raw-v1/0.0.0/b08601e04326c79dfdd32d625aee71d232d685c3/cache-5e0edde0740173f5_*_of_00001.arrow
+/cl/work5/hongyu-s/conda/envs/latest_transformers/lib/python3.12/site-packages/torch/distributed/distributed_c10d.py:4807: UserWarning: No device id is provided via `init_process_group` or `barrier `. Using the current device set by the user. 
+  warnings.warn(  # warn only once
+10/05/2025 23:05:39 - INFO - __main__ - *** Evaluate ***
+[INFO|trainer.py:4833] 2025-10-05 23:05:39,176 >> 
+***** Running Evaluation *****
+[INFO|trainer.py:4835] 2025-10-05 23:05:39,176 >>   Num examples = 481
+[INFO|trainer.py:4838] 2025-10-05 23:05:39,176 >>   Batch size = 1
+[WARNING|logging.py:328] 2025-10-05 23:05:40,383 >> `loss_type=None` was set in the config but it is unrecognized. Using the default loss: `ForCausalLMLoss`.
+[WARNING|logging.py:328] 2025-10-05 23:05:40,394 >> `loss_type=None` was set in the config but it is unrecognized. Using the default loss: `ForCausalLMLoss`.
+  0%|          | 0/241 [00:00<?, ?it/s]  3%|▎         | 7/241 [00:00<00:03, 61.16it/s]  6%|▌         | 14/241 [00:00<00:03, 58.33it/s]  8%|▊         | 20/241 [00:00<00:03, 57.72it/s] 11%|█         | 26/241 [00:00<00:03, 57.12it/s] 13%|█▎        | 32/241 [00:00<00:03, 57.14it/s] 16%|█▌        | 38/241 [00:00<00:03, 57.29it/s] 18%|█▊        | 44/241 [00:00<00:03, 56.93it/s] 21%|██        | 50/241 [00:00<00:03, 56.92it/s] 23%|██▎       | 56/241 [00:00<00:03, 57.16it/s] 26%|██▌       | 62/241 [00:01<00:03, 57.42it/s] 28%|██▊       | 68/241 [00:01<00:03, 57.60it/s] 31%|███       | 74/241 [00:01<00:02, 57.40it/s] 33%|███▎      | 80/241 [00:01<00:02, 57.59it/s] 36%|███▌      | 86/241 [00:01<00:04, 37.74it/s] 38%|███▊      | 92/241 [00:01<00:03, 41.92it/s] 41%|████      | 98/241 [00:01<00:03, 45.60it/s] 43%|████▎     | 104/241 [00:01<00:02, 48.61it/s] 46%|████▌     | 110/241 [00:02<00:02, 51.00it/s] 48%|████▊     | 116/241 [00:02<00:02, 52.79it/s] 51%|█████     | 122/241 [00:02<00:02, 53.80it/s] 53%|█████▎    | 128/241 [00:02<00:02, 54.94it/s] 56%|█████▌    | 134/241 [00:02<00:01, 55.63it/s] 58%|█████▊    | 140/241 [00:02<00:01, 55.76it/s] 61%|██████    | 146/241 [00:02<00:01, 56.23it/s] 63%|██████▎   | 152/241 [00:02<00:01, 56.54it/s] 66%|██████▌   | 158/241 [00:02<00:01, 56.69it/s] 68%|██████▊   | 164/241 [00:03<00:01, 56.89it/s] 71%|███████   | 170/241 [00:03<00:01, 57.05it/s] 73%|███████▎  | 176/241 [00:03<00:01, 57.22it/s] 76%|███████▌  | 182/241 [00:03<00:01, 57.31it/s] 78%|███████▊  | 188/241 [00:03<00:00, 57.18it/s] 80%|████████  | 194/241 [00:03<00:00, 57.07it/s] 83%|████████▎ | 200/241 [00:03<00:00, 57.24it/s] 85%|████████▌ | 206/241 [00:03<00:00, 57.31it/s] 88%|████████▊ | 212/241 [00:03<00:00, 57.23it/s] 90%|█████████ | 218/241 [00:03<00:00, 57.29it/s] 93%|█████████▎| 224/241 [00:04<00:00, 57.36it/s] 95%|█████████▌| 230/241 [00:04<00:00, 57.48it/s] 98%|█████████▊| 236/241 [00:04<00:00, 57.53it/s][INFO|integration_utils.py:858] 2025-10-05 23:05:45,385 >> Automatic Weights & Biases logging enabled, to disable set os.environ["WANDB_DISABLED"] = "true"
+100%|██████████| 241/241 [00:04<00:00, 48.82it/s]
+***** eval metrics *****
+  eval_accuracy               =     0.4443
+  eval_loss                   =     2.9691
+  eval_model_preparation_time =     0.0022
+  eval_runtime                = 0:00:06.19
+  eval_samples                =        481
+  eval_samples_per_second     =     77.612
+  eval_steps_per_second       =     38.887
+  perplexity                  =    19.4753
+[INFO|modelcard.py:450] 2025-10-05 23:05:45,397 >> Dropping the following result as it does not have all the necessary fields:
+{'task': {'name': 'Causal Language Modeling', 'type': 'text-generation'}, 'dataset': {'name': 'wikitext wikitext-103-raw-v1', 'type': 'wikitext', 'args': 'wikitext-103-raw-v1'}}
+[1;34mwandb[0m: 
+[1;34mwandb[0m: 🚀 View run [33mexalted-capybara-247[0m at: [34m[0m
+[1;34mwandb[0m: Find logs at: [1;35mwandb/run-20251005_230520-5rk82mo3/logs[0m
+[rank0]:[W1005 23:05:48.987278291 ProcessGroupNCCL.cpp:1538] Warning: WARNING: destroy_process_group() was not called before program exit, which can leak resources. For more info, please see https://pytorch.org/docs/stable/distributed.html#shutdown (function operator())
++ torchrun --nproc_per_node=2 --master_port=12425 ./run_clm.py --model_type gpt2 --tokenizer_name gpt2 --model_name_or_path ./runs/1r_baseline_from_s/checkpoint-50000 --share_freq_across_heads True --learning_rate 1e-4 --per_device_train_batch_size 1 --per_device_eval_batch_size 1 --block_size 2048 --dataset_name wikitext --dataset_config_name wikitext-103-raw-v1 --do_eval --overwrite_output_dir --num_train_epochs 30 --output_dir ./1r_baseline_from_s --eval_strategy steps --logging_dir ./1r_baseline_from_s_log --logging_steps 250 --save_steps 2500 --attn_implementation path_attn --path_use_qk_norm false --path_use_low_rank_w true --path_use_w_shortconv false --path_conv_size 3 --warmup_steps 5000 --path_conv_bias false --output_dir runs/1r_baseline_from_s --gradient_accumulation_steps 2 --num_harmonics 1
+W1005 23:05:52.298000 2498480 /project/nlp-work5/hongyu-s/conda/envs/latest_transformers/lib/python3.12/site-packages/torch/distributed/run.py:774] 
+W1005 23:05:52.298000 2498480 /project/nlp-work5/hongyu-s/conda/envs/latest_transformers/lib/python3.12/site-packages/torch/distributed/run.py:774] *****************************************
+W1005 23:05:52.298000 2498480 /project/nlp-work5/hongyu-s/conda/envs/latest_transformers/lib/python3.12/site-packages/torch/distributed/run.py:774] Setting OMP_NUM_THREADS environment variable for each process to be 1 in default, to avoid your system being overloaded, please further tune the variable for optimal performance in your application as needed. 
+W1005 23:05:52.298000 2498480 /project/nlp-work5/hongyu-s/conda/envs/latest_transformers/lib/python3.12/site-packages/torch/distributed/run.py:774] *****************************************
+10/05/2025 23:06:06 - WARNING - __main__ - Process rank: 0, device: cuda:0, n_gpu: 1, distributed training: True, 16-bits training: False
+10/05/2025 23:06:06 - INFO - __main__ - Training/evaluation parameters SupplyTrainingArguments(
+_n_gpu=1,
+accelerator_config={'split_batches': False, 'dispatch_batches': None, 'even_batches': True, 'use_seedable_sampler': True, 'non_blocking': False, 'gradient_accumulation_kwargs': None, 'use_configured_state': False},
+adafactor=False,
+adam_beta1=0.9,
+adam_beta2=0.999,
+adam_epsilon=1e-08,
+auto_find_batch_size=False,
+average_tokens_across_devices=True,
+b_unfreeze_step=5000,
+batch_eval_metrics=False,
+bf16=False,
+bf16_full_eval=False,
+data_seed=None,
+dataloader_drop_last=False,
+dataloader_num_workers=0,
+dataloader_persistent_workers=False,
+dataloader_pin_memory=True,
+dataloader_prefetch_factor=None,
+ddp_backend=None,
+ddp_broadcast_buffers=None,
+ddp_bucket_cap_mb=None,
+ddp_find_unused_parameters=None,
+ddp_timeout=1800,
+debug=[],
+deepspeed=None,
+disable_tqdm=False,
+do_eval=True,
+do_predict=False,
+do_train=False,
+eval_accumulation_steps=None,
+eval_delay=0,
+eval_do_concat_batches=True,
+eval_on_start=False,
+eval_steps=250,
+eval_strategy=IntervalStrategy.STEPS,
+eval_use_gather_object=False,
+fp16=False,
+fp16_backend=auto,
+fp16_full_eval=False,
+fp16_opt_level=O1,
+fsdp=[],
+fsdp_config={'min_num_params': 0, 'xla': False, 'xla_fsdp_v2': False, 'xla_fsdp_grad_ckpt': False},
+fsdp_min_num_params=0,
+fsdp_transformer_layer_cls_to_wrap=None,
+full_determinism=False,
+gradient_accumulation_steps=2,
+gradient_checkpointing=False,
+gradient_checkpointing_kwargs=None,
+greater_is_better=None,
+group_by_length=False,
+half_precision_backend=auto,
+hub_always_push=False,
+hub_model_id=None,
+hub_private_repo=None,
+hub_revision=None,
+hub_strategy=HubStrategy.EVERY_SAVE,
+hub_token=<HUB_TOKEN>,
+ignore_data_skip=False,
+include_for_metrics=[],
+include_inputs_for_metrics=False,
+include_num_input_tokens_seen=no,
+include_tokens_per_second=False,
+jit_mode_eval=False,
+label_names=None,
+label_smoothing_factor=0.0,
+learning_rate=0.0001,
+length_column_name=length,
+liger_kernel_config=None,
+load_best_model_at_end=False,
+local_rank=0,
+log_level=passive,
+log_level_replica=warning,
+log_on_each_node=True,
+logging_dir=./1r_baseline_from_s_log,
+logging_first_step=False,
+logging_nan_inf_filter=True,
+logging_steps=250,
+logging_strategy=IntervalStrategy.STEPS,
+lr_scheduler_kwargs={},
+lr_scheduler_type=SchedulerType.LINEAR,
+max_grad_norm=1.0,
+max_steps=-1,
+metric_for_best_model=None,
+mp_parameters=,
+neftune_noise_alpha=None,
+no_cuda=False,
+num_train_epochs=30.0,
+optim=OptimizerNames.ADAMW_TORCH_FUSED,
+optim_args=None,
+optim_target_modules=None,
+output_dir=runs/1r_baseline_from_s,
+overwrite_output_dir=True,
+parallelism_config=None,
+past_index=-1,
+per_device_eval_batch_size=1,
+per_device_train_batch_size=1,
+prediction_loss_only=False,
+push_to_hub=False,
+push_to_hub_model_id=None,
+push_to_hub_organization=None,
+push_to_hub_token=<PUSH_TO_HUB_TOKEN>,
+ray_scope=last,
+remove_unused_columns=True,
+report_to=['tensorboard', 'wandb'],
+restore_callback_states_from_checkpoint=False,
+resume_from_checkpoint=None,
+run_name=None,
+save_on_each_node=False,
+save_only_model=False,
+save_safetensors=True,
+save_steps=2500,
+save_strategy=SaveStrategy.STEPS,
+save_total_limit=None,
+seed=42,
+skip_memory_metrics=True,
+tf32=None,
+torch_compile=False,
+torch_compile_backend=None,
+torch_compile_mode=None,
+torch_empty_cache_steps=None,
+torchdynamo=None,
+tpu_metrics_debug=False,
+tpu_num_cores=None,
+use_cpu=False,
+use_legacy_prediction_loop=False,
+use_liger_kernel=False,
+use_mps_device=False,
+warmup_ratio=0.0,
+warmup_steps=5000,
+weight_decay=0.0,
+)
+10/05/2025 23:06:06 - WARNING - __main__ - Process rank: 1, device: cuda:1, n_gpu: 1, distributed training: True, 16-bits training: False
+Found cached dataset wikitext (/cl/work5/hongyu-s/huggingfac/datasets/wikitext/wikitext-103-raw-v1/0.0.0/b08601e04326c79dfdd32d625aee71d232d685c3)
+10/05/2025 23:06:11 - INFO - datasets.builder - Found cached dataset wikitext (/cl/work5/hongyu-s/huggingfac/datasets/wikitext/wikitext-103-raw-v1/0.0.0/b08601e04326c79dfdd32d625aee71d232d685c3)
+[INFO|configuration_utils.py:757] 2025-10-05 23:06:11,195 >> loading configuration file ./runs/1r_baseline_from_s/checkpoint-50000/config.json
+[INFO|configuration_utils.py:833] 2025-10-05 23:06:11,196 >> Model config GPT2Config {
+  "activation_function": "gelu_new",
+  "architectures": [
+    "GPT2LMHeadModel"
+  ],
+  "attn_pdrop": 0.1,
+  "block_size": 512,
+  "bos_token_id": 50256,
+  "dtype": "float32",
+  "embd_pdrop": 0.1,
+  "eos_token_id": 50256,
+  "initializer_range": 0.02,
+  "layer_norm_epsilon": 1e-05,
+  "model_type": "gpt2",
+  "n_embd": 768,
+  "n_head": 12,
+  "n_inner": null,
+  "n_layer": 12,
+  "n_positions": 1024,
+  "num_harmonics": 1,
+  "path_conv_bias": false,
+  "path_conv_size": 3,
+  "path_use_forget_gate": false,
+  "path_use_low_rank_w": true,
+  "path_use_qk_norm": false,
+  "path_use_w_shortconv": false,
+  "pe_method": "vanilla",
+  "reorder_and_upcast_attn": false,
+  "resid_pdrop": 0.1,
+  "rope_theta": 10000,
+  "scale_attn_by_inverse_layer_idx": false,
+  "scale_attn_weights": true,
+  "share_freq_across_heads": true,
+  "summary_activation": null,
+  "summary_first_dropout": 0.1,
+  "summary_proj_to_labels": true,
+  "summary_type": "cls_index",
+  "summary_use_proj": true,
+  "transformers_version": "4.57.0.dev0",
+  "use_cache": true,
+  "vocab_size": 50257
+}
+
+[INFO|configuration_utils.py:759] 2025-10-05 23:06:11,388 >> loading configuration file config.json from cache at /cl/work5/hongyu-s/huggingfac/hub/models--gpt2/snapshots/607a30d783dfa663caf39e06633721c8d4cfcd7e/config.json
+[INFO|configuration_utils.py:833] 2025-10-05 23:06:11,389 >> Model config GPT2Config {
+  "activation_function": "gelu_new",
+  "architectures": [
+    "GPT2LMHeadModel"
+  ],
+  "attn_pdrop": 0.1,
+  "bos_token_id": 50256,
+  "embd_pdrop": 0.1,
+  "eos_token_id": 50256,
+  "initializer_range": 0.02,
+  "layer_norm_epsilon": 1e-05,
+  "model_type": "gpt2",
+  "n_ctx": 1024,
+  "n_embd": 768,
+  "n_head": 12,
+  "n_inner": null,
+  "n_layer": 12,
+  "n_positions": 1024,
+  "reorder_and_upcast_attn": false,
+  "resid_pdrop": 0.1,
+  "scale_attn_by_inverse_layer_idx": false,
+  "scale_attn_weights": true,
+  "summary_activation": null,
+  "summary_first_dropout": 0.1,
+  "summary_proj_to_labels": true,
+  "summary_type": "cls_index",
+  "summary_use_proj": true,
+  "task_specific_params": {
+    "text-generation": {
+      "do_sample": true,
+      "max_length": 50
+    }
+  },
+  "transformers_version": "4.57.0.dev0",
+  "use_cache": true,
+  "vocab_size": 50257
+}
+
+/cl/work5/hongyu-s/conda/envs/latest_transformers/lib/python3.12/site-packages/torch/distributed/distributed_c10d.py:4807: UserWarning: No device id is provided via `init_process_group` or `barrier `. Using the current device set by the user. 
+  warnings.warn(  # warn only once
+[rank1]:[W1005 23:06:11.363886202 ProcessGroupNCCL.cpp:5023] [PG ID 0 PG GUID 0 Rank 1]  using GPU 1 as device used by this process is currently unknown. This can potentially cause a hang if this rank to GPU mapping is incorrect. You can specify device_id in init_process_group() to force use of a particular device.
+[INFO|tokenization_utils_base.py:2057] 2025-10-05 23:06:11,767 >> loading file vocab.json from cache at /cl/work5/hongyu-s/huggingfac/hub/models--gpt2/snapshots/607a30d783dfa663caf39e06633721c8d4cfcd7e/vocab.json
+[INFO|tokenization_utils_base.py:2057] 2025-10-05 23:06:11,767 >> loading file merges.txt from cache at /cl/work5/hongyu-s/huggingfac/hub/models--gpt2/snapshots/607a30d783dfa663caf39e06633721c8d4cfcd7e/merges.txt
+[INFO|tokenization_utils_base.py:2057] 2025-10-05 23:06:11,767 >> loading file tokenizer.json from cache at /cl/work5/hongyu-s/huggingfac/hub/models--gpt2/snapshots/607a30d783dfa663caf39e06633721c8d4cfcd7e/tokenizer.json
+[INFO|tokenization_utils_base.py:2057] 2025-10-05 23:06:11,767 >> loading file added_tokens.json from cache at None
+[INFO|tokenization_utils_base.py:2057] 2025-10-05 23:06:11,767 >> loading file special_tokens_map.json from cache at None
+[INFO|tokenization_utils_base.py:2057] 2025-10-05 23:06:11,767 >> loading file tokenizer_config.json from cache at /cl/work5/hongyu-s/huggingfac/hub/models--gpt2/snapshots/607a30d783dfa663caf39e06633721c8d4cfcd7e/tokenizer_config.json
+[INFO|tokenization_utils_base.py:2057] 2025-10-05 23:06:11,767 >> loading file chat_template.jinja from cache at None
+[INFO|configuration_utils.py:759] 2025-10-05 23:06:11,770 >> loading configuration file config.json from cache at /cl/work5/hongyu-s/huggingfac/hub/models--gpt2/snapshots/607a30d783dfa663caf39e06633721c8d4cfcd7e/config.json
+[INFO|configuration_utils.py:833] 2025-10-05 23:06:11,770 >> Model config GPT2Config {
+  "activation_function": "gelu_new",
+  "architectures": [
+    "GPT2LMHeadModel"
+  ],
+  "attn_pdrop": 0.1,
+  "bos_token_id": 50256,
+  "embd_pdrop": 0.1,
+  "eos_token_id": 50256,
+  "initializer_range": 0.02,
+  "layer_norm_epsilon": 1e-05,
+  "model_type": "gpt2",
+  "n_ctx": 1024,
+  "n_embd": 768,
+  "n_head": 12,
+  "n_inner": null,
+  "n_layer": 12,
+  "n_positions": 1024,
+  "reorder_and_upcast_attn": false,
+  "resid_pdrop": 0.1,
+  "scale_attn_by_inverse_layer_idx": false,
+  "scale_attn_weights": true,
+  "summary_activation": null,
+  "summary_first_dropout": 0.1,
+  "summary_proj_to_labels": true,
+  "summary_type": "cls_index",
+  "summary_use_proj": true,
+  "task_specific_params": {
+    "text-generation": {
+      "do_sample": true,
+      "max_length": 50
+    }
+  },
+  "transformers_version": "4.57.0.dev0",
+  "use_cache": true,
+  "vocab_size": 50257
+}
+
+wandb: Currently logged in as: hongyu-s-aa-titech (hongyu-s-aa-titech-nara-institute-of-science-and-technology) to https://api.wandb.ai. Use `wandb login --relogin` to force relogin
+wandb: Tracking run with wandb version 0.22.0
+wandb: Run data is saved locally in /project/nlp-work5/hongyu-s/transformers/examples/pytorch/language-modeling/wandb/run-20251005_230612-12i4ee39
+wandb: Run `wandb offline` to turn off syncing.
+wandb: Syncing run drawn-dragon-248
+wandb: ⭐️ View project at https://wandb.ai/hongyu-s-aa-titech-nara-institute-of-science-and-technology/gpt2%20with%20path%20attn
+wandb: 🚀 View run at https://wandb.ai/hongyu-s-aa-titech-nara-institute-of-science-and-technology/gpt2%20with%20path%20attn/runs/12i4ee39
+Loading cached processed dataset at /cl/work5/hongyu-s/huggingfac/datasets/wikitext/wikitext-103-raw-v1/0.0.0/b08601e04326c79dfdd32d625aee71d232d685c3/cache-78d56f068833be52_*_of_00001.arrow
+10/05/2025 23:06:13 - INFO - datasets.arrow_dataset - Loading cached processed dataset at /cl/work5/hongyu-s/huggingfac/datasets/wikitext/wikitext-103-raw-v1/0.0.0/b08601e04326c79dfdd32d625aee71d232d685c3/cache-78d56f068833be52_*_of_00001.arrow
+Loading cached processed dataset at /cl/work5/hongyu-s/huggingfac/datasets/wikitext/wikitext-103-raw-v1/0.0.0/b08601e04326c79dfdd32d625aee71d232d685c3/cache-4aa64ec0866d64bf_*_of_00001.arrow
+10/05/2025 23:06:13 - INFO - datasets.arrow_dataset - Loading cached processed dataset at /cl/work5/hongyu-s/huggingfac/datasets/wikitext/wikitext-103-raw-v1/0.0.0/b08601e04326c79dfdd32d625aee71d232d685c3/cache-4aa64ec0866d64bf_*_of_00001.arrow
+Loading cached processed dataset at /cl/work5/hongyu-s/huggingfac/datasets/wikitext/wikitext-103-raw-v1/0.0.0/b08601e04326c79dfdd32d625aee71d232d685c3/cache-dd72d81b3872e8ad_*_of_00001.arrow
+10/05/2025 23:06:13 - INFO - datasets.arrow_dataset - Loading cached processed dataset at /cl/work5/hongyu-s/huggingfac/datasets/wikitext/wikitext-103-raw-v1/0.0.0/b08601e04326c79dfdd32d625aee71d232d685c3/cache-dd72d81b3872e8ad_*_of_00001.arrow
+/cl/work5/hongyu-s/conda/envs/latest_transformers/lib/python3.12/site-packages/torch/distributed/distributed_c10d.py:4807: UserWarning: No device id is provided via `init_process_group` or `barrier `. Using the current device set by the user. 
+  warnings.warn(  # warn only once
+[rank0]:[W1005 23:06:13.013746500 ProcessGroupNCCL.cpp:5023] [PG ID 0 PG GUID 0 Rank 0]  using GPU 0 as device used by this process is currently unknown. This can potentially cause a hang if this rank to GPU mapping is incorrect. You can specify device_id in init_process_group() to force use of a particular device.
+10/05/2025 23:06:13 - WARNING - __main__ - The block_size passed (2048) is larger than the maximum length for the model (1024). Using block_size=1024.
+10/05/2025 23:06:13 - WARNING - __main__ - The block_size passed (2048) is larger than the maximum length for the model (1024). Using block_size=1024.
+[INFO|modeling_utils.py:1202] 2025-10-05 23:06:19,265 >> loading weights file ./runs/1r_baseline_from_s/checkpoint-50000/model.safetensors
+[INFO|configuration_utils.py:986] 2025-10-05 23:06:19,269 >> Generate config GenerationConfig {
+  "bos_token_id": 50256,
+  "eos_token_id": 50256
+}
+
+[INFO|modeling_utils.py:5570] 2025-10-05 23:06:19,343 >> All model checkpoint weights were used when initializing GPT2LMHeadModel.
+
+[INFO|modeling_utils.py:5578] 2025-10-05 23:06:19,343 >> All the weights of GPT2LMHeadModel were initialized from the model checkpoint at ./runs/1r_baseline_from_s/checkpoint-50000.
+If your task is similar to the task the model of the checkpoint was trained on, you can already use GPT2LMHeadModel for predictions without further training.
+[INFO|configuration_utils.py:939] 2025-10-05 23:06:19,346 >> loading configuration file ./runs/1r_baseline_from_s/checkpoint-50000/generation_config.json
+[INFO|configuration_utils.py:986] 2025-10-05 23:06:19,346 >> Generate config GenerationConfig {
+  "bos_token_id": 50256,
+  "eos_token_id": [
+    50256
+  ]
+}
+
+/cl/work5/hongyu-s/conda/envs/latest_transformers/lib/python3.12/site-packages/torch/distributed/distributed_c10d.py:4807: UserWarning: No device id is provided via `init_process_group` or `barrier `. Using the current device set by the user. 
+  warnings.warn(  # warn only once
+Loading cached processed dataset at /cl/work5/hongyu-s/huggingfac/datasets/wikitext/wikitext-103-raw-v1/0.0.0/b08601e04326c79dfdd32d625aee71d232d685c3/cache-73413772883c2e50_*_of_00001.arrow
+10/05/2025 23:06:19 - INFO - datasets.arrow_dataset - Loading cached processed dataset at /cl/work5/hongyu-s/huggingfac/datasets/wikitext/wikitext-103-raw-v1/0.0.0/b08601e04326c79dfdd32d625aee71d232d685c3/cache-73413772883c2e50_*_of_00001.arrow
+Loading cached processed dataset at /cl/work5/hongyu-s/huggingfac/datasets/wikitext/wikitext-103-raw-v1/0.0.0/b08601e04326c79dfdd32d625aee71d232d685c3/cache-ffcfad2017bda0bb_*_of_00001.arrow
+10/05/2025 23:06:24 - INFO - datasets.arrow_dataset - Loading cached processed dataset at /cl/work5/hongyu-s/huggingfac/datasets/wikitext/wikitext-103-raw-v1/0.0.0/b08601e04326c79dfdd32d625aee71d232d685c3/cache-ffcfad2017bda0bb_*_of_00001.arrow
+Loading cached processed dataset at /cl/work5/hongyu-s/huggingfac/datasets/wikitext/wikitext-103-raw-v1/0.0.0/b08601e04326c79dfdd32d625aee71d232d685c3/cache-bb0dfa1e639cc09f_*_of_00001.arrow
+10/05/2025 23:06:24 - INFO - datasets.arrow_dataset - Loading cached processed dataset at /cl/work5/hongyu-s/huggingfac/datasets/wikitext/wikitext-103-raw-v1/0.0.0/b08601e04326c79dfdd32d625aee71d232d685c3/cache-bb0dfa1e639cc09f_*_of_00001.arrow
+/cl/work5/hongyu-s/conda/envs/latest_transformers/lib/python3.12/site-packages/torch/distributed/distributed_c10d.py:4807: UserWarning: No device id is provided via `init_process_group` or `barrier `. Using the current device set by the user. 
+  warnings.warn(  # warn only once
+10/05/2025 23:06:25 - INFO - __main__ - *** Evaluate ***
+[INFO|trainer.py:4833] 2025-10-05 23:06:25,939 >> 
+***** Running Evaluation *****
+[INFO|trainer.py:4835] 2025-10-05 23:06:25,940 >>   Num examples = 119
+[INFO|trainer.py:4838] 2025-10-05 23:06:25,940 >>   Batch size = 1
+[WARNING|logging.py:328] 2025-10-05 23:06:26,403 >> `loss_type=None` was set in the config but it is unrecognized. Using the default loss: `ForCausalLMLoss`.
+[WARNING|logging.py:328] 2025-10-05 23:06:26,465 >> `loss_type=None` was set in the config but it is unrecognized. Using the default loss: `ForCausalLMLoss`.
+  0%|          | 0/60 [00:00<?, ?it/s]  5%|▌         | 3/60 [00:00<00:01, 29.87it/s] 10%|█         | 6/60 [00:00<00:02, 23.02it/s] 15%|█▌        | 9/60 [00:00<00:02, 21.47it/s] 20%|██        | 12/60 [00:00<00:02, 20.80it/s] 25%|██▌       | 15/60 [00:00<00:02, 20.45it/s] 30%|███       | 18/60 [00:00<00:02, 20.20it/s] 35%|███▌      | 21/60 [00:01<00:01, 20.09it/s] 40%|████      | 24/60 [00:01<00:01, 19.96it/s] 45%|████▌     | 27/60 [00:01<00:01, 19.93it/s] 48%|████▊     | 29/60 [00:01<00:01, 19.91it/s] 52%|█████▏    | 31/60 [00:01<00:01, 19.90it/s] 55%|█████▌    | 33/60 [00:01<00:01, 19.87it/s] 58%|█████▊    | 35/60 [00:01<00:01, 19.85it/s] 62%|██████▏   | 37/60 [00:01<00:01, 19.82it/s] 65%|██████▌   | 39/60 [00:01<00:01, 19.82it/s] 68%|██████▊   | 41/60 [00:02<00:00, 19.80it/s] 72%|███████▏  | 43/60 [00:02<00:00, 19.80it/s] 75%|███████▌  | 45/60 [00:02<00:00, 19.81it/s] 78%|███████▊  | 47/60 [00:02<00:00, 19.81it/s] 82%|████████▏ | 49/60 [00:02<00:00, 19.82it/s] 85%|████████▌ | 51/60 [00:02<00:00, 19.82it/s] 88%|████████▊ | 53/60 [00:02<00:00, 19.80it/s] 92%|█████████▏| 55/60 [00:02<00:00, 19.79it/s] 95%|█████████▌| 57/60 [00:02<00:00, 19.77it/s] 98%|█████████▊| 59/60 [00:02<00:00, 19.76it/s][INFO|integration_utils.py:858] 2025-10-05 23:06:30,015 >> Automatic Weights & Biases logging enabled, to disable set os.environ["WANDB_DISABLED"] = "true"
+100%|██████████| 60/60 [00:03<00:00, 17.08it/s]
+***** eval metrics *****
+  eval_accuracy               =     0.4534
+  eval_loss                   =     2.8854
+  eval_model_preparation_time =     0.0019
+  eval_runtime                = 0:00:04.06
+  eval_samples                =        119
+  eval_samples_per_second     =      29.28
+  eval_steps_per_second       =     14.763
+  perplexity                  =    17.9111
+[INFO|modelcard.py:450] 2025-10-05 23:06:30,030 >> Dropping the following result as it does not have all the necessary fields:
+{'task': {'name': 'Causal Language Modeling', 'type': 'text-generation'}, 'dataset': {'name': 'wikitext wikitext-103-raw-v1', 'type': 'wikitext', 'args': 'wikitext-103-raw-v1'}}
+[1;34mwandb[0m: 
+[1;34mwandb[0m: 🚀 View run [33mdrawn-dragon-248[0m at: [34m[0m
+[1;34mwandb[0m: Find logs at: [1;35mwandb/run-20251005_230612-12i4ee39/logs[0m
+[rank0]:[W1005 23:06:32.859979479 ProcessGroupNCCL.cpp:1538] Warning: WARNING: destroy_process_group() was not called before program exit, which can leak resources. For more info, please see https://pytorch.org/docs/stable/distributed.html#shutdown (function operator())
++ torchrun --nproc_per_node=2 --master_port=12425 ./run_clm.py --model_type gpt2 --tokenizer_name gpt2 --model_name_or_path ./runs/1r_baseline_from_s/checkpoint-50000 --share_freq_across_heads True --learning_rate 1e-4 --per_device_train_batch_size 1 --per_device_eval_batch_size 1 --block_size 4096 --dataset_name wikitext --dataset_config_name wikitext-103-raw-v1 --do_eval --overwrite_output_dir --num_train_epochs 30 --output_dir ./1r_baseline_from_s --eval_strategy steps --logging_dir ./1r_baseline_from_s_log --logging_steps 250 --save_steps 2500 --attn_implementation path_attn --path_use_qk_norm false --path_use_low_rank_w true --path_use_w_shortconv false --path_conv_size 3 --warmup_steps 5000 --path_conv_bias false --output_dir runs/1r_baseline_from_s --gradient_accumulation_steps 2 --num_harmonics 1
+W1005 23:06:35.882000 2498626 /project/nlp-work5/hongyu-s/conda/envs/latest_transformers/lib/python3.12/site-packages/torch/distributed/run.py:774] 
+W1005 23:06:35.882000 2498626 /project/nlp-work5/hongyu-s/conda/envs/latest_transformers/lib/python3.12/site-packages/torch/distributed/run.py:774] *****************************************
+W1005 23:06:35.882000 2498626 /project/nlp-work5/hongyu-s/conda/envs/latest_transformers/lib/python3.12/site-packages/torch/distributed/run.py:774] Setting OMP_NUM_THREADS environment variable for each process to be 1 in default, to avoid your system being overloaded, please further tune the variable for optimal performance in your application as needed. 
+W1005 23:06:35.882000 2498626 /project/nlp-work5/hongyu-s/conda/envs/latest_transformers/lib/python3.12/site-packages/torch/distributed/run.py:774] *****************************************
+10/05/2025 23:06:50 - WARNING - __main__ - Process rank: 1, device: cuda:1, n_gpu: 1, distributed training: True, 16-bits training: False
+10/05/2025 23:06:50 - WARNING - __main__ - Process rank: 0, device: cuda:0, n_gpu: 1, distributed training: True, 16-bits training: False
+10/05/2025 23:06:50 - INFO - __main__ - Training/evaluation parameters SupplyTrainingArguments(
+_n_gpu=1,
+accelerator_config={'split_batches': False, 'dispatch_batches': None, 'even_batches': True, 'use_seedable_sampler': True, 'non_blocking': False, 'gradient_accumulation_kwargs': None, 'use_configured_state': False},
+adafactor=False,
+adam_beta1=0.9,
+adam_beta2=0.999,
+adam_epsilon=1e-08,
+auto_find_batch_size=False,
+average_tokens_across_devices=True,
+b_unfreeze_step=5000,
+batch_eval_metrics=False,
+bf16=False,
+bf16_full_eval=False,
+data_seed=None,
+dataloader_drop_last=False,
+dataloader_num_workers=0,
+dataloader_persistent_workers=False,
+dataloader_pin_memory=True,
+dataloader_prefetch_factor=None,
+ddp_backend=None,
+ddp_broadcast_buffers=None,
+ddp_bucket_cap_mb=None,
+ddp_find_unused_parameters=None,
+ddp_timeout=1800,
+debug=[],
+deepspeed=None,
+disable_tqdm=False,
+do_eval=True,
+do_predict=False,
+do_train=False,
+eval_accumulation_steps=None,
+eval_delay=0,
+eval_do_concat_batches=True,
+eval_on_start=False,
+eval_steps=250,
+eval_strategy=IntervalStrategy.STEPS,
+eval_use_gather_object=False,
+fp16=False,
+fp16_backend=auto,
+fp16_full_eval=False,
+fp16_opt_level=O1,
+fsdp=[],
+fsdp_config={'min_num_params': 0, 'xla': False, 'xla_fsdp_v2': False, 'xla_fsdp_grad_ckpt': False},
+fsdp_min_num_params=0,
+fsdp_transformer_layer_cls_to_wrap=None,
+full_determinism=False,
+gradient_accumulation_steps=2,
+gradient_checkpointing=False,
+gradient_checkpointing_kwargs=None,
+greater_is_better=None,
+group_by_length=False,
+half_precision_backend=auto,
+hub_always_push=False,
+hub_model_id=None,
+hub_private_repo=None,
+hub_revision=None,
+hub_strategy=HubStrategy.EVERY_SAVE,
+hub_token=<HUB_TOKEN>,
+ignore_data_skip=False,
+include_for_metrics=[],
+include_inputs_for_metrics=False,
+include_num_input_tokens_seen=no,
+include_tokens_per_second=False,
+jit_mode_eval=False,
+label_names=None,
+label_smoothing_factor=0.0,
+learning_rate=0.0001,
+length_column_name=length,
+liger_kernel_config=None,
+load_best_model_at_end=False,
+local_rank=0,
+log_level=passive,
+log_level_replica=warning,
+log_on_each_node=True,
+logging_dir=./1r_baseline_from_s_log,
+logging_first_step=False,
+logging_nan_inf_filter=True,
+logging_steps=250,
+logging_strategy=IntervalStrategy.STEPS,
+lr_scheduler_kwargs={},
+lr_scheduler_type=SchedulerType.LINEAR,
+max_grad_norm=1.0,
+max_steps=-1,
+metric_for_best_model=None,
+mp_parameters=,
+neftune_noise_alpha=None,
+no_cuda=False,
+num_train_epochs=30.0,
+optim=OptimizerNames.ADAMW_TORCH_FUSED,
+optim_args=None,
+optim_target_modules=None,
+output_dir=runs/1r_baseline_from_s,
+overwrite_output_dir=True,
+parallelism_config=None,
+past_index=-1,
+per_device_eval_batch_size=1,
+per_device_train_batch_size=1,
+prediction_loss_only=False,
+push_to_hub=False,
+push_to_hub_model_id=None,
+push_to_hub_organization=None,
+push_to_hub_token=<PUSH_TO_HUB_TOKEN>,
+ray_scope=last,
+remove_unused_columns=True,
+report_to=['tensorboard', 'wandb'],
+restore_callback_states_from_checkpoint=False,
+resume_from_checkpoint=None,
+run_name=None,
+save_on_each_node=False,
+save_only_model=False,
+save_safetensors=True,
+save_steps=2500,
+save_strategy=SaveStrategy.STEPS,
+save_total_limit=None,
+seed=42,
+skip_memory_metrics=True,
+tf32=None,
+torch_compile=False,
+torch_compile_backend=None,
+torch_compile_mode=None,
+torch_empty_cache_steps=None,
+torchdynamo=None,
+tpu_metrics_debug=False,
+tpu_num_cores=None,
+use_cpu=False,
+use_legacy_prediction_loop=False,
+use_liger_kernel=False,
+use_mps_device=False,
+warmup_ratio=0.0,
+warmup_steps=5000,
+weight_decay=0.0,
+)
+Found cached dataset wikitext (/cl/work5/hongyu-s/huggingfac/datasets/wikitext/wikitext-103-raw-v1/0.0.0/b08601e04326c79dfdd32d625aee71d232d685c3)
+10/05/2025 23:06:54 - INFO - datasets.builder - Found cached dataset wikitext (/cl/work5/hongyu-s/huggingfac/datasets/wikitext/wikitext-103-raw-v1/0.0.0/b08601e04326c79dfdd32d625aee71d232d685c3)
+[INFO|configuration_utils.py:757] 2025-10-05 23:06:54,841 >> loading configuration file ./runs/1r_baseline_from_s/checkpoint-50000/config.json
+[INFO|configuration_utils.py:833] 2025-10-05 23:06:54,841 >> Model config GPT2Config {
+  "activation_function": "gelu_new",
+  "architectures": [
+    "GPT2LMHeadModel"
+  ],
+  "attn_pdrop": 0.1,
+  "block_size": 512,
+  "bos_token_id": 50256,
+  "dtype": "float32",
+  "embd_pdrop": 0.1,
+  "eos_token_id": 50256,
+  "initializer_range": 0.02,
+  "layer_norm_epsilon": 1e-05,
+  "model_type": "gpt2",
+  "n_embd": 768,
+  "n_head": 12,
+  "n_inner": null,
+  "n_layer": 12,
+  "n_positions": 1024,
+  "num_harmonics": 1,
+  "path_conv_bias": false,
+  "path_conv_size": 3,
+  "path_use_forget_gate": false,
+  "path_use_low_rank_w": true,
+  "path_use_qk_norm": false,
+  "path_use_w_shortconv": false,
+  "pe_method": "vanilla",
+  "reorder_and_upcast_attn": false,
+  "resid_pdrop": 0.1,
+  "rope_theta": 10000,
+  "scale_attn_by_inverse_layer_idx": false,
+  "scale_attn_weights": true,
+  "share_freq_across_heads": true,
+  "summary_activation": null,
+  "summary_first_dropout": 0.1,
+  "summary_proj_to_labels": true,
+  "summary_type": "cls_index",
+  "summary_use_proj": true,
+  "transformers_version": "4.57.0.dev0",
+  "use_cache": true,
+  "vocab_size": 50257
+}
+
+[INFO|configuration_utils.py:759] 2025-10-05 23:06:55,032 >> loading configuration file config.json from cache at /cl/work5/hongyu-s/huggingfac/hub/models--gpt2/snapshots/607a30d783dfa663caf39e06633721c8d4cfcd7e/config.json
+[INFO|configuration_utils.py:833] 2025-10-05 23:06:55,033 >> Model config GPT2Config {
+  "activation_function": "gelu_new",
+  "architectures": [
+    "GPT2LMHeadModel"
+  ],
+  "attn_pdrop": 0.1,
+  "bos_token_id": 50256,
+  "embd_pdrop": 0.1,
+  "eos_token_id": 50256,
+  "initializer_range": 0.02,
+  "layer_norm_epsilon": 1e-05,
+  "model_type": "gpt2",
+  "n_ctx": 1024,
+  "n_embd": 768,
+  "n_head": 12,
+  "n_inner": null,
+  "n_layer": 12,
+  "n_positions": 1024,
+  "reorder_and_upcast_attn": false,
+  "resid_pdrop": 0.1,
+  "scale_attn_by_inverse_layer_idx": false,
+  "scale_attn_weights": true,
+  "summary_activation": null,
+  "summary_first_dropout": 0.1,
+  "summary_proj_to_labels": true,
+  "summary_type": "cls_index",
+  "summary_use_proj": true,
+  "task_specific_params": {
+    "text-generation": {
+      "do_sample": true,
+      "max_length": 50
+    }
+  },
+  "transformers_version": "4.57.0.dev0",
+  "use_cache": true,
+  "vocab_size": 50257
+}
+
+/cl/work5/hongyu-s/conda/envs/latest_transformers/lib/python3.12/site-packages/torch/distributed/distributed_c10d.py:4807: UserWarning: No device id is provided via `init_process_group` or `barrier `. Using the current device set by the user. 
+  warnings.warn(  # warn only once
+[rank1]:[W1005 23:06:55.899777040 ProcessGroupNCCL.cpp:5023] [PG ID 0 PG GUID 0 Rank 1]  using GPU 1 as device used by this process is currently unknown. This can potentially cause a hang if this rank to GPU mapping is incorrect. You can specify device_id in init_process_group() to force use of a particular device.
+[INFO|tokenization_utils_base.py:2057] 2025-10-05 23:06:56,017 >> loading file vocab.json from cache at /cl/work5/hongyu-s/huggingfac/hub/models--gpt2/snapshots/607a30d783dfa663caf39e06633721c8d4cfcd7e/vocab.json
+[INFO|tokenization_utils_base.py:2057] 2025-10-05 23:06:56,017 >> loading file merges.txt from cache at /cl/work5/hongyu-s/huggingfac/hub/models--gpt2/snapshots/607a30d783dfa663caf39e06633721c8d4cfcd7e/merges.txt
+[INFO|tokenization_utils_base.py:2057] 2025-10-05 23:06:56,017 >> loading file tokenizer.json from cache at /cl/work5/hongyu-s/huggingfac/hub/models--gpt2/snapshots/607a30d783dfa663caf39e06633721c8d4cfcd7e/tokenizer.json
+[INFO|tokenization_utils_base.py:2057] 2025-10-05 23:06:56,017 >> loading file added_tokens.json from cache at None
+[INFO|tokenization_utils_base.py:2057] 2025-10-05 23:06:56,017 >> loading file special_tokens_map.json from cache at None
+[INFO|tokenization_utils_base.py:2057] 2025-10-05 23:06:56,017 >> loading file tokenizer_config.json from cache at /cl/work5/hongyu-s/huggingfac/hub/models--gpt2/snapshots/607a30d783dfa663caf39e06633721c8d4cfcd7e/tokenizer_config.json
+[INFO|tokenization_utils_base.py:2057] 2025-10-05 23:06:56,017 >> loading file chat_template.jinja from cache at None
+[INFO|configuration_utils.py:759] 2025-10-05 23:06:56,020 >> loading configuration file config.json from cache at /cl/work5/hongyu-s/huggingfac/hub/models--gpt2/snapshots/607a30d783dfa663caf39e06633721c8d4cfcd7e/config.json
+[INFO|configuration_utils.py:833] 2025-10-05 23:06:56,021 >> Model config GPT2Config {
+  "activation_function": "gelu_new",
+  "architectures": [
+    "GPT2LMHeadModel"
+  ],
+  "attn_pdrop": 0.1,
+  "bos_token_id": 50256,
+  "embd_pdrop": 0.1,
+  "eos_token_id": 50256,
+  "initializer_range": 0.02,
+  "layer_norm_epsilon": 1e-05,
+  "model_type": "gpt2",
+  "n_ctx": 1024,
+  "n_embd": 768,
+  "n_head": 12,
+  "n_inner": null,
+  "n_layer": 12,
+  "n_positions": 1024,
+  "reorder_and_upcast_attn": false,
+  "resid_pdrop": 0.1,
+  "scale_attn_by_inverse_layer_idx": false,
+  "scale_attn_weights": true,
+  "summary_activation": null,
+  "summary_first_dropout": 0.1,
+  "summary_proj_to_labels": true,
+  "summary_type": "cls_index",
+  "summary_use_proj": true,
+  "task_specific_params": {
+    "text-generation": {
+      "do_sample": true,
+      "max_length": 50
+    }
+  },
+  "transformers_version": "4.57.0.dev0",
+  "use_cache": true,
+  "vocab_size": 50257
+}
+
+wandb: Currently logged in as: hongyu-s-aa-titech (hongyu-s-aa-titech-nara-institute-of-science-and-technology) to https://api.wandb.ai. Use `wandb login --relogin` to force relogin
+wandb: creating run
+wandb: Tracking run with wandb version 0.22.0
+wandb: Run data is saved locally in /project/nlp-work5/hongyu-s/transformers/examples/pytorch/language-modeling/wandb/run-20251005_230656-e94q8q61
+wandb: Run `wandb offline` to turn off syncing.
+wandb: Syncing run laced-glitter-249
+wandb: ⭐️ View project at https://wandb.ai/hongyu-s-aa-titech-nara-institute-of-science-and-technology/gpt2%20with%20path%20attn
+wandb: 🚀 View run at https://wandb.ai/hongyu-s-aa-titech-nara-institute-of-science-and-technology/gpt2%20with%20path%20attn/runs/e94q8q61
+Loading cached processed dataset at /cl/work5/hongyu-s/huggingfac/datasets/wikitext/wikitext-103-raw-v1/0.0.0/b08601e04326c79dfdd32d625aee71d232d685c3/cache-78d56f068833be52_*_of_00001.arrow
+10/05/2025 23:06:57 - INFO - datasets.arrow_dataset - Loading cached processed dataset at /cl/work5/hongyu-s/huggingfac/datasets/wikitext/wikitext-103-raw-v1/0.0.0/b08601e04326c79dfdd32d625aee71d232d685c3/cache-78d56f068833be52_*_of_00001.arrow
+Loading cached processed dataset at /cl/work5/hongyu-s/huggingfac/datasets/wikitext/wikitext-103-raw-v1/0.0.0/b08601e04326c79dfdd32d625aee71d232d685c3/cache-4aa64ec0866d64bf_*_of_00001.arrow
+10/05/2025 23:06:57 - INFO - datasets.arrow_dataset - Loading cached processed dataset at /cl/work5/hongyu-s/huggingfac/datasets/wikitext/wikitext-103-raw-v1/0.0.0/b08601e04326c79dfdd32d625aee71d232d685c3/cache-4aa64ec0866d64bf_*_of_00001.arrow
+Loading cached processed dataset at /cl/work5/hongyu-s/huggingfac/datasets/wikitext/wikitext-103-raw-v1/0.0.0/b08601e04326c79dfdd32d625aee71d232d685c3/cache-dd72d81b3872e8ad_*_of_00001.arrow
+10/05/2025 23:06:57 - INFO - datasets.arrow_dataset - Loading cached processed dataset at /cl/work5/hongyu-s/huggingfac/datasets/wikitext/wikitext-103-raw-v1/0.0.0/b08601e04326c79dfdd32d625aee71d232d685c3/cache-dd72d81b3872e8ad_*_of_00001.arrow
+/cl/work5/hongyu-s/conda/envs/latest_transformers/lib/python3.12/site-packages/torch/distributed/distributed_c10d.py:4807: UserWarning: No device id is provided via `init_process_group` or `barrier `. Using the current device set by the user. 
+  warnings.warn(  # warn only once
+[rank0]:[W1005 23:06:57.270515724 ProcessGroupNCCL.cpp:5023] [PG ID 0 PG GUID 0 Rank 0]  using GPU 0 as device used by this process is currently unknown. This can potentially cause a hang if this rank to GPU mapping is incorrect. You can specify device_id in init_process_group() to force use of a particular device.
+10/05/2025 23:06:57 - WARNING - __main__ - The block_size passed (4096) is larger than the maximum length for the model (1024). Using block_size=1024.
+10/05/2025 23:06:58 - WARNING - __main__ - The block_size passed (4096) is larger than the maximum length for the model (1024). Using block_size=1024.
+[INFO|modeling_utils.py:1202] 2025-10-05 23:07:03,272 >> loading weights file ./runs/1r_baseline_from_s/checkpoint-50000/model.safetensors
+[INFO|configuration_utils.py:986] 2025-10-05 23:07:03,276 >> Generate config GenerationConfig {
+  "bos_token_id": 50256,
+  "eos_token_id": 50256
+}
+
+[INFO|modeling_utils.py:5570] 2025-10-05 23:07:03,363 >> All model checkpoint weights were used when initializing GPT2LMHeadModel.
+
+[INFO|modeling_utils.py:5578] 2025-10-05 23:07:03,363 >> All the weights of GPT2LMHeadModel were initialized from the model checkpoint at ./runs/1r_baseline_from_s/checkpoint-50000.
+If your task is similar to the task the model of the checkpoint was trained on, you can already use GPT2LMHeadModel for predictions without further training.
+[INFO|configuration_utils.py:939] 2025-10-05 23:07:03,366 >> loading configuration file ./runs/1r_baseline_from_s/checkpoint-50000/generation_config.json
+[INFO|configuration_utils.py:986] 2025-10-05 23:07:03,366 >> Generate config GenerationConfig {
+  "bos_token_id": 50256,
+  "eos_token_id": [
+    50256
+  ]
+}
+
+/cl/work5/hongyu-s/conda/envs/latest_transformers/lib/python3.12/site-packages/torch/distributed/distributed_c10d.py:4807: UserWarning: No device id is provided via `init_process_group` or `barrier `. Using the current device set by the user. 
+  warnings.warn(  # warn only once
+Loading cached processed dataset at /cl/work5/hongyu-s/huggingfac/datasets/wikitext/wikitext-103-raw-v1/0.0.0/b08601e04326c79dfdd32d625aee71d232d685c3/cache-00d3c443ece1ebea_*_of_00001.arrow
+10/05/2025 23:07:03 - INFO - datasets.arrow_dataset - Loading cached processed dataset at /cl/work5/hongyu-s/huggingfac/datasets/wikitext/wikitext-103-raw-v1/0.0.0/b08601e04326c79dfdd32d625aee71d232d685c3/cache-00d3c443ece1ebea_*_of_00001.arrow
+Loading cached processed dataset at /cl/work5/hongyu-s/huggingfac/datasets/wikitext/wikitext-103-raw-v1/0.0.0/b08601e04326c79dfdd32d625aee71d232d685c3/cache-61392361b257f811_*_of_00001.arrow
+10/05/2025 23:07:07 - INFO - datasets.arrow_dataset - Loading cached processed dataset at /cl/work5/hongyu-s/huggingfac/datasets/wikitext/wikitext-103-raw-v1/0.0.0/b08601e04326c79dfdd32d625aee71d232d685c3/cache-61392361b257f811_*_of_00001.arrow
+Loading cached processed dataset at /cl/work5/hongyu-s/huggingfac/datasets/wikitext/wikitext-103-raw-v1/0.0.0/b08601e04326c79dfdd32d625aee71d232d685c3/cache-c0ca90e59a5d85d9_*_of_00001.arrow
+10/05/2025 23:07:07 - INFO - datasets.arrow_dataset - Loading cached processed dataset at /cl/work5/hongyu-s/huggingfac/datasets/wikitext/wikitext-103-raw-v1/0.0.0/b08601e04326c79dfdd32d625aee71d232d685c3/cache-c0ca90e59a5d85d9_*_of_00001.arrow
+/cl/work5/hongyu-s/conda/envs/latest_transformers/lib/python3.12/site-packages/torch/distributed/distributed_c10d.py:4807: UserWarning: No device id is provided via `init_process_group` or `barrier `. Using the current device set by the user. 
+  warnings.warn(  # warn only once
+10/05/2025 23:07:09 - INFO - __main__ - *** Evaluate ***
+[INFO|trainer.py:4833] 2025-10-05 23:07:09,047 >> 
+***** Running Evaluation *****
+[INFO|trainer.py:4835] 2025-10-05 23:07:09,047 >>   Num examples = 59
+[INFO|trainer.py:4838] 2025-10-05 23:07:09,047 >>   Batch size = 1
+[WARNING|logging.py:328] 2025-10-05 23:07:09,430 >> `loss_type=None` was set in the config but it is unrecognized. Using the default loss: `ForCausalLMLoss`.
+[WARNING|logging.py:328] 2025-10-05 23:07:09,575 >> `loss_type=None` was set in the config but it is unrecognized. Using the default loss: `ForCausalLMLoss`.
+  0%|          | 0/30 [00:00<?, ?it/s]  7%|▋         | 2/30 [00:00<00:01, 19.56it/s] 13%|█▎        | 4/30 [00:00<00:02, 12.07it/s] 20%|██        | 6/30 [00:00<00:02, 10.74it/s] 27%|██▋       | 8/30 [00:00<00:02, 10.24it/s] 33%|███▎      | 10/30 [00:00<00:02,  9.93it/s] 40%|████      | 12/30 [00:01<00:01,  9.81it/s] 47%|████▋     | 14/30 [00:01<00:01,  9.69it/s] 50%|█████     | 15/30 [00:01<00:01,  9.66it/s] 53%|█████▎    | 16/30 [00:01<00:01,  9.65it/s] 57%|█████▋    | 17/30 [00:01<00:01,  9.60it/s] 60%|██████    | 18/30 [00:01<00:01,  9.56it/s] 63%|██████▎   | 19/30 [00:01<00:01,  9.55it/s] 67%|██████▋   | 20/30 [00:01<00:01,  9.56it/s] 70%|███████   | 21/30 [00:02<00:00,  9.53it/s] 73%|███████▎  | 22/30 [00:02<00:00,  9.50it/s] 77%|███████▋  | 23/30 [00:02<00:00,  9.52it/s] 80%|████████  | 24/30 [00:02<00:00,  9.52it/s] 83%|████████▎ | 25/30 [00:02<00:00,  9.48it/s] 87%|████████▋ | 26/30 [00:02<00:00,  9.49it/s] 90%|█████████ | 27/30 [00:02<00:00,  9.51it/s] 93%|█████████▎| 28/30 [00:02<00:00,  9.49it/s] 97%|█████████▋| 29/30 [00:02<00:00,  9.47it/s]100%|██████████| 30/30 [00:03<00:00,  9.53it/s][INFO|integration_utils.py:858] 2025-10-05 23:07:13,236 >> Automatic Weights & Biases logging enabled, to disable set os.environ["WANDB_DISABLED"] = "true"
+100%|██████████| 30/30 [00:03<00:00,  8.38it/s]
+***** eval metrics *****
+  eval_accuracy               =      0.453
+  eval_loss                   =     2.8843
+  eval_model_preparation_time =     0.0019
+  eval_runtime                = 0:00:04.17
+  eval_samples                =         59
+  eval_samples_per_second     =     14.121
+  eval_steps_per_second       =       7.18
+  perplexity                  =    17.8905
+[INFO|modelcard.py:450] 2025-10-05 23:07:13,251 >> Dropping the following result as it does not have all the necessary fields:
+{'task': {'name': 'Causal Language Modeling', 'type': 'text-generation'}, 'dataset': {'name': 'wikitext wikitext-103-raw-v1', 'type': 'wikitext', 'args': 'wikitext-103-raw-v1'}}
+[1;34mwandb[0m: 
+[1;34mwandb[0m: 🚀 View run [33mlaced-glitter-249[0m at: [34m[0m
+[1;34mwandb[0m: Find logs at: [1;35mwandb/run-20251005_230656-e94q8q61/logs[0m
+[rank0]:[W1005 23:07:15.060322766 ProcessGroupNCCL.cpp:1538] Warning: WARNING: destroy_process_group() was not called before program exit, which can leak resources. For more info, please see https://pytorch.org/docs/stable/distributed.html#shutdown (function operator())
++ torchrun --nproc_per_node=2 --master_port=12425 ./run_clm.py --model_type gpt2 --tokenizer_name gpt2 --model_name_or_path ./runs/1r_baseline_from_s/checkpoint-50000 --share_freq_across_heads True --learning_rate 1e-4 --per_device_train_batch_size 1 --per_device_eval_batch_size 1 --block_size 8192 --dataset_name wikitext --dataset_config_name wikitext-103-raw-v1 --do_eval --overwrite_output_dir --num_train_epochs 30 --output_dir ./1r_baseline_from_s --eval_strategy steps --logging_dir ./1r_baseline_from_s_log --logging_steps 250 --save_steps 2500 --attn_implementation path_attn --path_use_qk_norm false --path_use_low_rank_w true --path_use_w_shortconv false --path_conv_size 3 --warmup_steps 5000 --path_conv_bias false --output_dir runs/1r_baseline_from_s --gradient_accumulation_steps 2 --num_harmonics 1
+W1005 23:07:19.103000 2498768 /project/nlp-work5/hongyu-s/conda/envs/latest_transformers/lib/python3.12/site-packages/torch/distributed/run.py:774] 
+W1005 23:07:19.103000 2498768 /project/nlp-work5/hongyu-s/conda/envs/latest_transformers/lib/python3.12/site-packages/torch/distributed/run.py:774] *****************************************
+W1005 23:07:19.103000 2498768 /project/nlp-work5/hongyu-s/conda/envs/latest_transformers/lib/python3.12/site-packages/torch/distributed/run.py:774] Setting OMP_NUM_THREADS environment variable for each process to be 1 in default, to avoid your system being overloaded, please further tune the variable for optimal performance in your application as needed. 
+W1005 23:07:19.103000 2498768 /project/nlp-work5/hongyu-s/conda/envs/latest_transformers/lib/python3.12/site-packages/torch/distributed/run.py:774] *****************************************
+10/05/2025 23:07:32 - WARNING - __main__ - Process rank: 0, device: cuda:0, n_gpu: 1, distributed training: True, 16-bits training: False
+10/05/2025 23:07:32 - INFO - __main__ - Training/evaluation parameters SupplyTrainingArguments(
+_n_gpu=1,
+accelerator_config={'split_batches': False, 'dispatch_batches': None, 'even_batches': True, 'use_seedable_sampler': True, 'non_blocking': False, 'gradient_accumulation_kwargs': None, 'use_configured_state': False},
+adafactor=False,
+adam_beta1=0.9,
+adam_beta2=0.999,
+adam_epsilon=1e-08,
+auto_find_batch_size=False,
+average_tokens_across_devices=True,
+b_unfreeze_step=5000,
+batch_eval_metrics=False,
+bf16=False,
+bf16_full_eval=False,
+data_seed=None,
+dataloader_drop_last=False,
+dataloader_num_workers=0,
+dataloader_persistent_workers=False,
+dataloader_pin_memory=True,
+dataloader_prefetch_factor=None,
+ddp_backend=None,
+ddp_broadcast_buffers=None,
+ddp_bucket_cap_mb=None,
+ddp_find_unused_parameters=None,
+ddp_timeout=1800,
+debug=[],
+deepspeed=None,
+disable_tqdm=False,
+do_eval=True,
+do_predict=False,
+do_train=False,
+eval_accumulation_steps=None,
+eval_delay=0,
+eval_do_concat_batches=True,
+eval_on_start=False,
+eval_steps=250,
+eval_strategy=IntervalStrategy.STEPS,
+eval_use_gather_object=False,
+fp16=False,
+fp16_backend=auto,
+fp16_full_eval=False,
+fp16_opt_level=O1,
+fsdp=[],
+fsdp_config={'min_num_params': 0, 'xla': False, 'xla_fsdp_v2': False, 'xla_fsdp_grad_ckpt': False},
+fsdp_min_num_params=0,
+fsdp_transformer_layer_cls_to_wrap=None,
+full_determinism=False,
+gradient_accumulation_steps=2,
+gradient_checkpointing=False,
+gradient_checkpointing_kwargs=None,
+greater_is_better=None,
+group_by_length=False,
+half_precision_backend=auto,
+hub_always_push=False,
+hub_model_id=None,
+hub_private_repo=None,
+hub_revision=None,
+hub_strategy=HubStrategy.EVERY_SAVE,
+hub_token=<HUB_TOKEN>,
+ignore_data_skip=False,
+include_for_metrics=[],
+include_inputs_for_metrics=False,
+include_num_input_tokens_seen=no,
+include_tokens_per_second=False,
+jit_mode_eval=False,
+label_names=None,
+label_smoothing_factor=0.0,
+learning_rate=0.0001,
+length_column_name=length,
+liger_kernel_config=None,
+load_best_model_at_end=False,
+local_rank=0,
+log_level=passive,
+log_level_replica=warning,
+log_on_each_node=True,
+logging_dir=./1r_baseline_from_s_log,
+logging_first_step=False,
+logging_nan_inf_filter=True,
+logging_steps=250,
+logging_strategy=IntervalStrategy.STEPS,
+lr_scheduler_kwargs={},
+lr_scheduler_type=SchedulerType.LINEAR,
+max_grad_norm=1.0,
+max_steps=-1,
+metric_for_best_model=None,
+mp_parameters=,
+neftune_noise_alpha=None,
+no_cuda=False,
+num_train_epochs=30.0,
+optim=OptimizerNames.ADAMW_TORCH_FUSED,
+optim_args=None,
+optim_target_modules=None,
+output_dir=runs/1r_baseline_from_s,
+overwrite_output_dir=True,
+parallelism_config=None,
+past_index=-1,
+per_device_eval_batch_size=1,
+per_device_train_batch_size=1,
+prediction_loss_only=False,
+push_to_hub=False,
+push_to_hub_model_id=None,
+push_to_hub_organization=None,
+push_to_hub_token=<PUSH_TO_HUB_TOKEN>,
+ray_scope=last,
+remove_unused_columns=True,
+report_to=['tensorboard', 'wandb'],
+restore_callback_states_from_checkpoint=False,
+resume_from_checkpoint=None,
+run_name=None,
+save_on_each_node=False,
+save_only_model=False,
+save_safetensors=True,
+save_steps=2500,
+save_strategy=SaveStrategy.STEPS,
+save_total_limit=None,
+seed=42,
+skip_memory_metrics=True,
+tf32=None,
+torch_compile=False,
+torch_compile_backend=None,
+torch_compile_mode=None,
+torch_empty_cache_steps=None,
+torchdynamo=None,
+tpu_metrics_debug=False,
+tpu_num_cores=None,
+use_cpu=False,
+use_legacy_prediction_loop=False,
+use_liger_kernel=False,
+use_mps_device=False,
+warmup_ratio=0.0,
+warmup_steps=5000,
+weight_decay=0.0,
+)
+10/05/2025 23:07:32 - WARNING - __main__ - Process rank: 1, device: cuda:1, n_gpu: 1, distributed training: True, 16-bits training: False
+Found cached dataset wikitext (/cl/work5/hongyu-s/huggingfac/datasets/wikitext/wikitext-103-raw-v1/0.0.0/b08601e04326c79dfdd32d625aee71d232d685c3)
+10/05/2025 23:07:37 - INFO - datasets.builder - Found cached dataset wikitext (/cl/work5/hongyu-s/huggingfac/datasets/wikitext/wikitext-103-raw-v1/0.0.0/b08601e04326c79dfdd32d625aee71d232d685c3)
+[INFO|configuration_utils.py:757] 2025-10-05 23:07:37,313 >> loading configuration file ./runs/1r_baseline_from_s/checkpoint-50000/config.json
+[INFO|configuration_utils.py:833] 2025-10-05 23:07:37,314 >> Model config GPT2Config {
+  "activation_function": "gelu_new",
+  "architectures": [
+    "GPT2LMHeadModel"
+  ],
+  "attn_pdrop": 0.1,
+  "block_size": 512,
+  "bos_token_id": 50256,
+  "dtype": "float32",
+  "embd_pdrop": 0.1,
+  "eos_token_id": 50256,
+  "initializer_range": 0.02,
+  "layer_norm_epsilon": 1e-05,
+  "model_type": "gpt2",
+  "n_embd": 768,
+  "n_head": 12,
+  "n_inner": null,
+  "n_layer": 12,
+  "n_positions": 1024,
+  "num_harmonics": 1,
+  "path_conv_bias": false,
+  "path_conv_size": 3,
+  "path_use_forget_gate": false,
+  "path_use_low_rank_w": true,
+  "path_use_qk_norm": false,
+  "path_use_w_shortconv": false,
+  "pe_method": "vanilla",
+  "reorder_and_upcast_attn": false,
+  "resid_pdrop": 0.1,
+  "rope_theta": 10000,
+  "scale_attn_by_inverse_layer_idx": false,
+  "scale_attn_weights": true,
+  "share_freq_across_heads": true,
+  "summary_activation": null,
+  "summary_first_dropout": 0.1,
+  "summary_proj_to_labels": true,
+  "summary_type": "cls_index",
+  "summary_use_proj": true,
+  "transformers_version": "4.57.0.dev0",
+  "use_cache": true,
+  "vocab_size": 50257
+}
+
+[INFO|configuration_utils.py:759] 2025-10-05 23:07:37,510 >> loading configuration file config.json from cache at /cl/work5/hongyu-s/huggingfac/hub/models--gpt2/snapshots/607a30d783dfa663caf39e06633721c8d4cfcd7e/config.json
+[INFO|configuration_utils.py:833] 2025-10-05 23:07:37,511 >> Model config GPT2Config {
+  "activation_function": "gelu_new",
+  "architectures": [
+    "GPT2LMHeadModel"
+  ],
+  "attn_pdrop": 0.1,
+  "bos_token_id": 50256,
+  "embd_pdrop": 0.1,
+  "eos_token_id": 50256,
+  "initializer_range": 0.02,
+  "layer_norm_epsilon": 1e-05,
+  "model_type": "gpt2",
+  "n_ctx": 1024,
+  "n_embd": 768,
+  "n_head": 12,
+  "n_inner": null,
+  "n_layer": 12,
+  "n_positions": 1024,
+  "reorder_and_upcast_attn": false,
+  "resid_pdrop": 0.1,
+  "scale_attn_by_inverse_layer_idx": false,
+  "scale_attn_weights": true,
+  "summary_activation": null,
+  "summary_first_dropout": 0.1,
+  "summary_proj_to_labels": true,
+  "summary_type": "cls_index",
+  "summary_use_proj": true,
+  "task_specific_params": {
+    "text-generation": {
+      "do_sample": true,
+      "max_length": 50
+    }
+  },
+  "transformers_version": "4.57.0.dev0",
+  "use_cache": true,
+  "vocab_size": 50257
+}
+
+[INFO|tokenization_utils_base.py:2057] 2025-10-05 23:07:37,886 >> loading file vocab.json from cache at /cl/work5/hongyu-s/huggingfac/hub/models--gpt2/snapshots/607a30d783dfa663caf39e06633721c8d4cfcd7e/vocab.json
+[INFO|tokenization_utils_base.py:2057] 2025-10-05 23:07:37,886 >> loading file merges.txt from cache at /cl/work5/hongyu-s/huggingfac/hub/models--gpt2/snapshots/607a30d783dfa663caf39e06633721c8d4cfcd7e/merges.txt
+[INFO|tokenization_utils_base.py:2057] 2025-10-05 23:07:37,887 >> loading file tokenizer.json from cache at /cl/work5/hongyu-s/huggingfac/hub/models--gpt2/snapshots/607a30d783dfa663caf39e06633721c8d4cfcd7e/tokenizer.json
+[INFO|tokenization_utils_base.py:2057] 2025-10-05 23:07:37,887 >> loading file added_tokens.json from cache at None
+[INFO|tokenization_utils_base.py:2057] 2025-10-05 23:07:37,887 >> loading file special_tokens_map.json from cache at None
+[INFO|tokenization_utils_base.py:2057] 2025-10-05 23:07:37,887 >> loading file tokenizer_config.json from cache at /cl/work5/hongyu-s/huggingfac/hub/models--gpt2/snapshots/607a30d783dfa663caf39e06633721c8d4cfcd7e/tokenizer_config.json
+[INFO|tokenization_utils_base.py:2057] 2025-10-05 23:07:37,887 >> loading file chat_template.jinja from cache at None
+[INFO|configuration_utils.py:759] 2025-10-05 23:07:37,889 >> loading configuration file config.json from cache at /cl/work5/hongyu-s/huggingfac/hub/models--gpt2/snapshots/607a30d783dfa663caf39e06633721c8d4cfcd7e/config.json
+[INFO|configuration_utils.py:833] 2025-10-05 23:07:37,889 >> Model config GPT2Config {
+  "activation_function": "gelu_new",
+  "architectures": [
+    "GPT2LMHeadModel"
+  ],
+  "attn_pdrop": 0.1,
+  "bos_token_id": 50256,
+  "embd_pdrop": 0.1,
+  "eos_token_id": 50256,
+  "initializer_range": 0.02,
+  "layer_norm_epsilon": 1e-05,
+  "model_type": "gpt2",
+  "n_ctx": 1024,
+  "n_embd": 768,
+  "n_head": 12,
+  "n_inner": null,
+  "n_layer": 12,
+  "n_positions": 1024,
+  "reorder_and_upcast_attn": false,
+  "resid_pdrop": 0.1,
+  "scale_attn_by_inverse_layer_idx": false,
+  "scale_attn_weights": true,
+  "summary_activation": null,
+  "summary_first_dropout": 0.1,
+  "summary_proj_to_labels": true,
+  "summary_type": "cls_index",
+  "summary_use_proj": true,
+  "task_specific_params": {
+    "text-generation": {
+      "do_sample": true,
+      "max_length": 50
+    }
+  },
+  "transformers_version": "4.57.0.dev0",
+  "use_cache": true,
+  "vocab_size": 50257
+}
+
+/cl/work5/hongyu-s/conda/envs/latest_transformers/lib/python3.12/site-packages/torch/distributed/distributed_c10d.py:4807: UserWarning: No device id is provided via `init_process_group` or `barrier `. Using the current device set by the user. 
+  warnings.warn(  # warn only once
+[rank1]:[W1005 23:07:38.792336437 ProcessGroupNCCL.cpp:5023] [PG ID 0 PG GUID 0 Rank 1]  using GPU 1 as device used by this process is currently unknown. This can potentially cause a hang if this rank to GPU mapping is incorrect. You can specify device_id in init_process_group() to force use of a particular device.
+wandb: Currently logged in as: hongyu-s-aa-titech (hongyu-s-aa-titech-nara-institute-of-science-and-technology) to https://api.wandb.ai. Use `wandb login --relogin` to force relogin
+wandb: Tracking run with wandb version 0.22.0
+wandb: Run data is saved locally in /project/nlp-work5/hongyu-s/transformers/examples/pytorch/language-modeling/wandb/run-20251005_230738-m04be1mt
+wandb: Run `wandb offline` to turn off syncing.
+wandb: Syncing run bright-smoke-250
+wandb: ⭐️ View project at https://wandb.ai/hongyu-s-aa-titech-nara-institute-of-science-and-technology/gpt2%20with%20path%20attn
+wandb: 🚀 View run at https://wandb.ai/hongyu-s-aa-titech-nara-institute-of-science-and-technology/gpt2%20with%20path%20attn/runs/m04be1mt
+Loading cached processed dataset at /cl/work5/hongyu-s/huggingfac/datasets/wikitext/wikitext-103-raw-v1/0.0.0/b08601e04326c79dfdd32d625aee71d232d685c3/cache-78d56f068833be52_*_of_00001.arrow
+10/05/2025 23:07:39 - INFO - datasets.arrow_dataset - Loading cached processed dataset at /cl/work5/hongyu-s/huggingfac/datasets/wikitext/wikitext-103-raw-v1/0.0.0/b08601e04326c79dfdd32d625aee71d232d685c3/cache-78d56f068833be52_*_of_00001.arrow
+Loading cached processed dataset at /cl/work5/hongyu-s/huggingfac/datasets/wikitext/wikitext-103-raw-v1/0.0.0/b08601e04326c79dfdd32d625aee71d232d685c3/cache-4aa64ec0866d64bf_*_of_00001.arrow
+10/05/2025 23:07:39 - INFO - datasets.arrow_dataset - Loading cached processed dataset at /cl/work5/hongyu-s/huggingfac/datasets/wikitext/wikitext-103-raw-v1/0.0.0/b08601e04326c79dfdd32d625aee71d232d685c3/cache-4aa64ec0866d64bf_*_of_00001.arrow
+Loading cached processed dataset at /cl/work5/hongyu-s/huggingfac/datasets/wikitext/wikitext-103-raw-v1/0.0.0/b08601e04326c79dfdd32d625aee71d232d685c3/cache-dd72d81b3872e8ad_*_of_00001.arrow
+10/05/2025 23:07:39 - INFO - datasets.arrow_dataset - Loading cached processed dataset at /cl/work5/hongyu-s/huggingfac/datasets/wikitext/wikitext-103-raw-v1/0.0.0/b08601e04326c79dfdd32d625aee71d232d685c3/cache-dd72d81b3872e8ad_*_of_00001.arrow
+/cl/work5/hongyu-s/conda/envs/latest_transformers/lib/python3.12/site-packages/torch/distributed/distributed_c10d.py:4807: UserWarning: No device id is provided via `init_process_group` or `barrier `. Using the current device set by the user. 
+  warnings.warn(  # warn only once
+[rank0]:[W1005 23:07:39.435803136 ProcessGroupNCCL.cpp:5023] [PG ID 0 PG GUID 0 Rank 0]  using GPU 0 as device used by this process is currently unknown. This can potentially cause a hang if this rank to GPU mapping is incorrect. You can specify device_id in init_process_group() to force use of a particular device.
+10/05/2025 23:07:40 - WARNING - __main__ - The block_size passed (8192) is larger than the maximum length for the model (1024). Using block_size=1024.
+10/05/2025 23:07:40 - WARNING - __main__ - The block_size passed (8192) is larger than the maximum length for the model (1024). Using block_size=1024.
+[INFO|modeling_utils.py:1202] 2025-10-05 23:07:45,565 >> loading weights file ./runs/1r_baseline_from_s/checkpoint-50000/model.safetensors
+[INFO|configuration_utils.py:986] 2025-10-05 23:07:45,568 >> Generate config GenerationConfig {
+  "bos_token_id": 50256,
+  "eos_token_id": 50256
+}
+
+[INFO|modeling_utils.py:5570] 2025-10-05 23:07:45,649 >> All model checkpoint weights were used when initializing GPT2LMHeadModel.
+
+[INFO|modeling_utils.py:5578] 2025-10-05 23:07:45,649 >> All the weights of GPT2LMHeadModel were initialized from the model checkpoint at ./runs/1r_baseline_from_s/checkpoint-50000.
+If your task is similar to the task the model of the checkpoint was trained on, you can already use GPT2LMHeadModel for predictions without further training.
+[INFO|configuration_utils.py:939] 2025-10-05 23:07:45,652 >> loading configuration file ./runs/1r_baseline_from_s/checkpoint-50000/generation_config.json
+[INFO|configuration_utils.py:986] 2025-10-05 23:07:45,652 >> Generate config GenerationConfig {
+  "bos_token_id": 50256,
+  "eos_token_id": [
+    50256
+  ]
+}
+
+/cl/work5/hongyu-s/conda/envs/latest_transformers/lib/python3.12/site-packages/torch/distributed/distributed_c10d.py:4807: UserWarning: No device id is provided via `init_process_group` or `barrier `. Using the current device set by the user. 
+  warnings.warn(  # warn only once
+Loading cached processed dataset at /cl/work5/hongyu-s/huggingfac/datasets/wikitext/wikitext-103-raw-v1/0.0.0/b08601e04326c79dfdd32d625aee71d232d685c3/cache-aecb4b6330416528_*_of_00001.arrow
+10/05/2025 23:07:45 - INFO - datasets.arrow_dataset - Loading cached processed dataset at /cl/work5/hongyu-s/huggingfac/datasets/wikitext/wikitext-103-raw-v1/0.0.0/b08601e04326c79dfdd32d625aee71d232d685c3/cache-aecb4b6330416528_*_of_00001.arrow
+Loading cached processed dataset at /cl/work5/hongyu-s/huggingfac/datasets/wikitext/wikitext-103-raw-v1/0.0.0/b08601e04326c79dfdd32d625aee71d232d685c3/cache-6c194bc6df03c8bf_*_of_00001.arrow
+10/05/2025 23:07:50 - INFO - datasets.arrow_dataset - Loading cached processed dataset at /cl/work5/hongyu-s/huggingfac/datasets/wikitext/wikitext-103-raw-v1/0.0.0/b08601e04326c79dfdd32d625aee71d232d685c3/cache-6c194bc6df03c8bf_*_of_00001.arrow
+Loading cached processed dataset at /cl/work5/hongyu-s/huggingfac/datasets/wikitext/wikitext-103-raw-v1/0.0.0/b08601e04326c79dfdd32d625aee71d232d685c3/cache-69fe529e17b17b40_*_of_00001.arrow
+10/05/2025 23:07:50 - INFO - datasets.arrow_dataset - Loading cached processed dataset at /cl/work5/hongyu-s/huggingfac/datasets/wikitext/wikitext-103-raw-v1/0.0.0/b08601e04326c79dfdd32d625aee71d232d685c3/cache-69fe529e17b17b40_*_of_00001.arrow
+/cl/work5/hongyu-s/conda/envs/latest_transformers/lib/python3.12/site-packages/torch/distributed/distributed_c10d.py:4807: UserWarning: No device id is provided via `init_process_group` or `barrier `. Using the current device set by the user. 
+  warnings.warn(  # warn only once
+10/05/2025 23:07:51 - INFO - __main__ - *** Evaluate ***
+[INFO|trainer.py:4833] 2025-10-05 23:07:51,511 >> 
+***** Running Evaluation *****
+[INFO|trainer.py:4835] 2025-10-05 23:07:51,511 >>   Num examples = 28
+[INFO|trainer.py:4838] 2025-10-05 23:07:51,511 >>   Batch size = 1
+[WARNING|logging.py:328] 2025-10-05 23:07:52,013 >> `loss_type=None` was set in the config but it is unrecognized. Using the default loss: `ForCausalLMLoss`.
+[WARNING|logging.py:328] 2025-10-05 23:07:52,041 >> `loss_type=None` was set in the config but it is unrecognized. Using the default loss: `ForCausalLMLoss`.
+  0%|          | 0/14 [00:00<?, ?it/s] 14%|█▍        | 2/14 [00:00<00:01,  8.55it/s] 21%|██▏       | 3/14 [00:00<00:01,  5.99it/s] 29%|██▊       | 4/14 [00:00<00:01,  5.18it/s] 36%|███▌      | 5/14 [00:00<00:01,  4.80it/s] 43%|████▎     | 6/14 [00:01<00:01,  4.60it/s] 50%|█████     | 7/14 [00:01<00:01,  4.47it/s] 57%|█████▋    | 8/14 [00:01<00:01,  4.39it/s] 64%|██████▍   | 9/14 [00:01<00:01,  4.33it/s] 71%|███████▏  | 10/14 [00:02<00:00,  4.28it/s] 79%|███████▊  | 11/14 [00:02<00:00,  4.26it/s] 86%|████████▌ | 12/14 [00:02<00:00,  4.25it/s] 93%|█████████▎| 13/14 [00:02<00:00,  4.21it/s]100%|██████████| 14/14 [00:03<00:00,  4.25it/s][INFO|integration_utils.py:858] 2025-10-05 23:07:55,828 >> Automatic Weights & Biases logging enabled, to disable set os.environ["WANDB_DISABLED"] = "true"
+100%|██████████| 14/14 [00:03<00:00,  3.90it/s]
+***** eval metrics *****
+  eval_accuracy               =     0.4474
+  eval_loss                   =     2.9252
+  eval_model_preparation_time =     0.0019
+  eval_runtime                = 0:00:04.30
+  eval_samples                =         28
+  eval_samples_per_second     =      6.502
+  eval_steps_per_second       =      3.251
+  perplexity                  =    18.6374
+[INFO|modelcard.py:450] 2025-10-05 23:07:55,843 >> Dropping the following result as it does not have all the necessary fields:
+{'task': {'name': 'Causal Language Modeling', 'type': 'text-generation'}, 'dataset': {'name': 'wikitext wikitext-103-raw-v1', 'type': 'wikitext', 'args': 'wikitext-103-raw-v1'}}
+[1;34mwandb[0m: 
+[1;34mwandb[0m: 🚀 View run [33mbright-smoke-250[0m at: [34m[0m
+[1;34mwandb[0m: Find logs at: [1;35mwandb/run-20251005_230738-m04be1mt/logs[0m
+[rank0]:[W1005 23:07:57.511081584 ProcessGroupNCCL.cpp:1538] Warning: WARNING: destroy_process_group() was not called before program exit, which can leak resources. For more info, please see https://pytorch.org/docs/stable/distributed.html#shutdown (function operator())

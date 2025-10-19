@@ -1,0 +1,85 @@
+MASTER_ADDR: lang01
+MASTER_PORT: 12345
+WORLD_SIZE: 1
+RANK: 0
++ echo 'Workdir: /project/nlp-work5/hongyu-s/transformers/examples/pytorch/language-modeling'
+Workdir: /project/nlp-work5/hongyu-s/transformers/examples/pytorch/language-modeling
++ cd /project/nlp-work5/hongyu-s/transformers/examples/pytorch/language-modeling
++ echo 'Launching training/eval command'
+Launching training/eval command
++ echo '================= BEGIN RUN ================='
+================= BEGIN RUN =================
++ torchrun --nproc_per_node=4 ./run_clm.py --model_type gpt2 --tokenizer_name gpt2 --share_freq_across_heads True --learning_rate 1e-4 --per_device_train_batch_size 16 --per_device_eval_batch_size 16 --block_size 512 --dataset_name wikitext --dataset_config_name wikitext-103-raw-v1 --do_train --do_eval --overwrite_output_dir --num_train_epochs 30 --num_harmonics 1 --eval_strategy steps --eval_steps 1000 --logging_dir ./head_wise_1r_w_freq_path_attn_log --logging_steps 1000 --save_steps 5000 --attn_implementation path_attn --path_use_qk_norm false --path_use_low_rank_w true --path_use_w_shortconv false --path_conv_size 3 --warmup_steps 5000 --path_conv_bias false --output_dir runs/head_wise_1r_w_freq_path_attn --gradient_accumulation_steps 1
+W0928 11:27:04.883000 1838223 /project/nlp-work5/hongyu-s/conda/envs/latest_transformers/lib/python3.12/site-packages/torch/distributed/run.py:774] 
+W0928 11:27:04.883000 1838223 /project/nlp-work5/hongyu-s/conda/envs/latest_transformers/lib/python3.12/site-packages/torch/distributed/run.py:774] *****************************************
+W0928 11:27:04.883000 1838223 /project/nlp-work5/hongyu-s/conda/envs/latest_transformers/lib/python3.12/site-packages/torch/distributed/run.py:774] Setting OMP_NUM_THREADS environment variable for each process to be 1 in default, to avoid your system being overloaded, please further tune the variable for optimal performance in your application as needed. 
+W0928 11:27:04.883000 1838223 /project/nlp-work5/hongyu-s/conda/envs/latest_transformers/lib/python3.12/site-packages/torch/distributed/run.py:774] *****************************************
+  File "/project/nlp-work5/hongyu-s/transformers/examples/pytorch/language-modeling/./run_clm.py", line 755
+    callbacks=[UnfreezeBCallback(unfreeze_step=5000, training_args.warmup_steps=5000, base_lr=1e-4)]
+                                                     ^^^^^^^^^^^^^^^^^^^^^^^^^^^
+SyntaxError: expression cannot contain assignment, perhaps you meant "=="?
+  File "/project/nlp-work5/hongyu-s/transformers/examples/pytorch/language-modeling/./run_clm.py", line 755
+    callbacks=[UnfreezeBCallback(unfreeze_step=5000, training_args.warmup_steps=5000, base_lr=1e-4)]
+                                                   File "/project/nlp-work5/hongyu-s/transformers/examples/pytorch/language-modeling/./run_clm.py", line 755
+      callbacks=[UnfreezeBCallback(unfreeze_step=5000, training_args.warmup_steps=5000, base_lr=1e-4)]
+       ^ ^ ^ ^ ^ ^ ^ ^ ^ ^ ^ ^ ^ ^ ^ ^ ^ ^ ^ ^ ^ ^ ^ ^ ^ ^ ^ 
+  SyntaxError :  expression cannot contain assignment, perhaps you meant "=="? 
+                ^^^^^^^^^^^^^^^^^^^^^^^^^^^
+SyntaxError: expression cannot contain assignment, perhaps you meant "=="?
+  File "/project/nlp-work5/hongyu-s/transformers/examples/pytorch/language-modeling/./run_clm.py", line 755
+    callbacks=[UnfreezeBCallback(unfreeze_step=5000, training_args.warmup_steps=5000, base_lr=1e-4)]
+                                                     ^^^^^^^^^^^^^^^^^^^^^^^^^^^
+SyntaxError: expression cannot contain assignment, perhaps you meant "=="?
+E0928 11:27:05.001000 1838223 /project/nlp-work5/hongyu-s/conda/envs/latest_transformers/lib/python3.12/site-packages/torch/distributed/elastic/multiprocessing/api.py:874] failed (exitcode: 1) local_rank: 0 (pid: 1838230) of binary: /cl/work5/hongyu-s/conda/envs/latest_transformers/bin/python3.12
+Traceback (most recent call last):
+  File "/cl/work5/hongyu-s/conda/envs/latest_transformers/bin/torchrun", line 7, in <module>
+    sys.exit(main())
+             ^^^^^^
+  File "/cl/work5/hongyu-s/conda/envs/latest_transformers/lib/python3.12/site-packages/torch/distributed/elastic/multiprocessing/errors/__init__.py", line 357, in wrapper
+    return f(*args, **kwargs)
+           ^^^^^^^^^^^^^^^^^^
+  File "/cl/work5/hongyu-s/conda/envs/latest_transformers/lib/python3.12/site-packages/torch/distributed/run.py", line 901, in main
+    run(args)
+  File "/cl/work5/hongyu-s/conda/envs/latest_transformers/lib/python3.12/site-packages/torch/distributed/run.py", line 892, in run
+    elastic_launch(
+  File "/cl/work5/hongyu-s/conda/envs/latest_transformers/lib/python3.12/site-packages/torch/distributed/launcher/api.py", line 143, in __call__
+    return launch_agent(self._config, self._entrypoint, list(args))
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/cl/work5/hongyu-s/conda/envs/latest_transformers/lib/python3.12/site-packages/torch/distributed/launcher/api.py", line 277, in launch_agent
+    raise ChildFailedError(
+torch.distributed.elastic.multiprocessing.errors.ChildFailedError: 
+============================================================
+./run_clm.py FAILED
+------------------------------------------------------------
+Failures:
+[1]:
+  time      : 2025-09-28_11:27:05
+  host      : lang01.naist.jp
+  rank      : 1 (local_rank: 1)
+  exitcode  : 1 (pid: 1838231)
+  error_file: <N/A>
+  traceback : To enable traceback see: https://pytorch.org/docs/stable/elastic/errors.html
+[2]:
+  time      : 2025-09-28_11:27:05
+  host      : lang01.naist.jp
+  rank      : 2 (local_rank: 2)
+  exitcode  : 1 (pid: 1838232)
+  error_file: <N/A>
+  traceback : To enable traceback see: https://pytorch.org/docs/stable/elastic/errors.html
+[3]:
+  time      : 2025-09-28_11:27:05
+  host      : lang01.naist.jp
+  rank      : 3 (local_rank: 3)
+  exitcode  : 1 (pid: 1838233)
+  error_file: <N/A>
+  traceback : To enable traceback see: https://pytorch.org/docs/stable/elastic/errors.html
+------------------------------------------------------------
+Root Cause (first observed failure):
+[0]:
+  time      : 2025-09-28_11:27:05
+  host      : lang01.naist.jp
+  rank      : 0 (local_rank: 0)
+  exitcode  : 1 (pid: 1838230)
+  error_file: <N/A>
+  traceback : To enable traceback see: https://pytorch.org/docs/stable/elastic/errors.html
+============================================================

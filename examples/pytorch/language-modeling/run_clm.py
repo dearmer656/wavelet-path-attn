@@ -46,7 +46,7 @@ from typing import Optional
 import datasets
 import evaluate
 import torch
-from datasets import IterableDataset, IterableDatasetDict, load_dataset
+from datasets import IterableDataset, IterableDatasetDict, load_dataset, DatasetDict, concatenate_datasets, load_from_disk
 
 import transformers
 from transformers import (
@@ -67,6 +67,8 @@ from transformers.trainer_utils import get_last_checkpoint
 from transformers.utils import check_min_version, send_example_telemetry
 from transformers.utils.versions import require_version
 
+import json, hashlib
+from pathlib import Path 
 
 # Will error if the minimal version of Transformers is not installed. Remove at your own risks.
 check_min_version("4.57.0.dev0")
@@ -92,11 +94,30 @@ class ModelArguments:
             "choices": ["eager", "sdpa", "flash_attention_2", "path_attn", "path_attn_wfreq"],
         },
     )
-
+    pe_method: str = field(
+        default="vanilla",
+        metadata={
+            "help": "Positional encoding method to use: vanilla | rotary.",
+            "choices": ["vanilla", "rotary"],
+        },
+    )
     # ===== PaTHAttention 专用开关（仅在 --_attn_implementation path_attn 时生效） =====
     path_use_forget_gate: bool = field(
         default=False,
         metadata={"help": "Enable forget gate (g) for PaTH attention."},
+    )
+    ### a0=0.7 when theta=0.847, path_attn 初始化为0.8
+    init_theta: float = field(
+        default=0.847,
+        metadata={"help": "Enable forget gate (g) for PaTH attention."},
+    )    
+    wavelet_baseline_use: bool = field(
+        default=False,
+        metadata={"help": "Enable wavelet baseline for PaTH attention."},
+    )
+    use_beta_modulation: bool = field(
+        default=False,
+        metadata={"help": "Whether use freq into beta."},
     )
     path_use_qk_norm: bool = field(
         default=False,
@@ -105,7 +126,7 @@ class ModelArguments:
     share_freq_across_heads: bool = field(
         default=False,
         metadata={"help": "Apply RMSNorm to Q and K in PaTH attention."},
-    )    
+    )
     path_use_low_rank_w: bool = field(
         default=True,
         metadata={"help": "Use low-rank parameterization for W projection (32 bottleneck)."},
@@ -114,6 +135,10 @@ class ModelArguments:
         default=True,
         metadata={"help": "Use ShortConvolution on W path."},
     )
+    single_A_B: bool = field(
+        default=True,
+        metadata={"help": "A B single."},
+    )    
     path_conv_size: int = field(
         default=3,
         metadata={"help": "Kernel size for W ShortConvolution."},
@@ -137,6 +162,14 @@ class ModelArguments:
     model_type: Optional[str] = field(
         default=None,
         metadata={"help": "If training from scratch, pass a model type from the list: " + ", ".join(MODEL_TYPES)},
+    )
+    wavelet_mode: Optional[str] = field(
+        default="additive",
+        metadata={"help": "Wavelet mode to use: additive | softmix."},
+    )
+    use_wavelet_beta: Optional[bool] = field(
+        default=False,
+        metadata={"help": "Whether use wavelet freq into beta (only for path_attn_wfreq)."},
     )
     config_overrides: Optional[str] = field(
         default=None,
@@ -326,7 +359,6 @@ def split_streaming_dataset(
     )
 
     return IterableDatasetDict({"train": train_stream, "validation": validation_stream})
-
 import wandb
 def init_wandb(config, proj_name, run_name=None):
     import os
@@ -342,7 +374,96 @@ def init_wandb(config, proj_name, run_name=None):
         config=config
     )
 from transformers import TrainerCallback
+import torch.nn as nn
+class ParamTrackerCallback(TrainerCallback):
+    def __init__(
+        self,
+        param_name_list,
+        log_every_n_steps: int = 50,
+        tag_prefix: str = "",
+    ):
+        """
+        param_name_list: 需要跟踪的参数名（与 model.named_parameters() 的 name 精确匹配）
+        log_every_n_steps: 每隔多少个 global_step 记录一次（依赖 Trainer 的 logging_steps/on_log 触发）
+        tag_prefix: 日志前缀（可为空），方便区分不同实验
+        """
+        self.param_name_list = list(dict.fromkeys(param_name_list))  # 去重保持顺序
+        self.log_every_n_steps = log_every_n_steps
+        self.tag_prefix = (tag_prefix.rstrip("/") + "/") if tag_prefix else ""
+        self._resolved = None
+        self._warned_missing: bool = False
 
+    # -------- 内部工具 --------
+    def _resolve_params(self, model: nn.Module):
+        name_to_param = dict(model.named_parameters())
+        resolved, missing = {}, []
+        for name in self.param_name_list:
+            p = name_to_param.get(name)
+            if p is not None:
+                resolved[name] = p
+            else:
+                missing.append(name)
+        if missing and not self._warned_missing:
+            self._warned_missing = True
+        return resolved
+
+    def _ensure_resolved(self, model: nn.Module):
+        if self._resolved is None:
+            self._resolved = self._resolve_params(model)
+
+    @torch.no_grad()
+    def _collect_stats(self, p: torch.nn.Parameter):
+        d = p.data
+        return dict(
+            mean=float(d.mean().item()),
+            std=float(d.std(unbiased=False).item()),
+            l2=float(d.norm(2).item()),
+            max_abs=float(d.abs().max().item()),
+        )
+
+    # -------- 训练起始时先解析一次，避免每步开销 --------
+    def on_train_begin(self, args, state, control, **kwargs):
+        model: nn.Module = kwargs["model"]
+        self._ensure_resolved(model)
+
+    # -------- 日志触发点：往 logs 里“就地”塞入自定义指标 --------
+    def on_log(self, args, state, control, logs=None, **kwargs):
+        # HF 会在 _maybe_log_save_evaluate 里构建 logs 并调用 on_log
+        # 我们在这里追加自定义日志（且只在 rank0 打印/记录）
+        if logs is None:
+            return
+        if state.global_step == 0 or (state.global_step % self.log_every_n_steps) != 0:
+            return
+        if hasattr(state, "is_world_process_zero") and not state.is_world_process_zero:
+            return
+
+        model: nn.Module = kwargs["model"]
+        self._ensure_resolved(model)
+
+        # 逐参数统计并注入 logs（这样会被正常写入到 TensorBoard/W&B 等）
+        summary_parts = []
+        for name, p in self._resolved.items():
+            s = self._collect_stats(p)
+            logs[f"{self.tag_prefix}{name}/mean"] = s["mean"]
+            logs[f"{self.tag_prefix}{name}/std"] = s["std"]
+            logs[f"{self.tag_prefix}{name}/l2"] = s["l2"]
+            logs[f"{self.tag_prefix}{name}/max_abs"] = s["max_abs"]
+            summary_parts.append(
+                f"{name}: μ={s['mean']:.6f}, σ={s['std']:.6f}, ‖·‖₂={s['l2']:.6f}, max|·|={s['max_abs']:.6f}"
+            )
+
+    # -------- 可选：在保存前打印一份（on_save 没有 logs 可写）--------
+    def on_save(self, args, state, control, **kwargs):
+        if hasattr(state, "is_world_process_zero") and not state.is_world_process_zero:
+            return
+        if not self._resolved:
+            return
+        summary_parts = []
+        for name, p in self._resolved.items():
+            s = self._collect_stats(p)
+            summary_parts.append(f"{name}: μ(save)={s['mean']:.6f}")
+        if summary_parts:
+            logger.info("[ParamTracker] on_save:\n" + "\n".join(summary_parts))            
 class LrMonitorCallback(TrainerCallback):
     def __init__(self, group_names_expect=("main_decay","main_nodecay","B_decay","B_nodecay")):
         self.expect = set(group_names_expect)
@@ -392,11 +513,100 @@ class LrMonitorCallback(TrainerCallback):
 
         print("[LR]", " | ".join(lines))
         return control
+from transformers import TrainerCallback
+import torch
+import math
+import numpy as np
 
+def _percentiles(x, ps=(0, 25, 50, 75, 100)):
+    x = x.detach().float().reshape(-1).cpu()
+    return {f"p{p}": float(torch.quantile(x, torch.tensor(p/100.0))) for p in ps}
+
+class OmegaPhiMonitorCallback(TrainerCallback):
+    """
+    每隔 every_n_steps:
+      - 遍历模型中所有 PaTHAttentionWfreq 模块
+      - 计算当前有效 ω, φ （用模块的 get_omega()/get_phi()）
+      - 记录均值/最值/分位数；若 report_to 包含 'tensorboard'，同时写 histogram
+    """
+    def __init__(self, every_n_steps=100, hist=False, group_tag="op", ps=(0, 25, 50, 75, 100)):
+        self.every = every_n_steps
+        self.hist = hist
+        self.group_tag = group_tag  # 日志前缀
+        self.ps = ps
+        self.tb = None  # TensorBoard writer（按需惰性获取）
+
+    def _maybe_get_tb(self, trainer):
+        if self.tb is not None:
+            return self.tb
+        # 仅当 report_to 包含 tensorboard 时尝试获取
+        report_to = getattr(trainer.args, "report_to", None) or []
+        if isinstance(report_to, str):
+            report_to = [report_to]
+        if "tensorboard" in report_to:
+            # _get_tb_writer 是私有接口，但目前 HF 最稳定的方式
+            self.tb = getattr(trainer, "_get_tb_writer", lambda: None)()
+        return self.tb
+
+    @torch.no_grad()
+    def on_step_end(self, args, state, control, **kwargs):
+        if state.global_step == 0 or state.global_step % self.every != 0:
+            return
+
+        model = kwargs["model"]
+        trainer = kwargs["trainer"]
+        step = state.global_step
+
+        logs = {}
+        tb = self._maybe_get_tb(trainer)
+
+        for name, m in model.named_modules():
+            # 只抓你的模块；若类名不同，请替换
+            if m.__class__.__name__ != "PaTHAttentionWfreq":
+                continue
+
+            # 计算有效 ω, φ
+            try:
+                omega = m.get_omega()  # [1,1,Hf,r]
+                phi   = m.get_phi()    # [1,1,Hf,r]
+            except Exception as e:
+                # 如果模块还没初始化好/有分支未覆盖，跳过该层
+                continue
+
+            # 统计信息
+            w_stats = {
+                "mean": float(omega.mean()),
+                "min":  float(omega.min()),
+                "max":  float(omega.max()),
+            }
+            w_stats.update(_percentiles(omega, self.ps))
+
+            p_stats = {
+                "mean": float(phi.mean()),
+                "min":  float(phi.min()),
+                "max":  float(phi.max()),
+            }
+            p_stats.update(_percentiles(phi, self.ps))
+
+            # 写到 HF 的 log（控制台/记事本/追踪器都会收到）
+            for k, v in w_stats.items():
+                logs[f"{self.group_tag}/{name}/omega_{k}"] = v
+            for k, v in p_stats.items():
+                logs[f"{self.group_tag}/{name}/phi_{k}"] = v
+
+            # 可选：TensorBoard histogram（更直观）
+            if self.hist and tb is not None:
+                tb.add_histogram(f"{self.group_tag}/{name}/omega_hist", omega.detach().cpu().reshape(-1), step)
+                tb.add_histogram(f"{self.group_tag}/{name}/phi_hist",   phi.detach().cpu().reshape(-1), step)
+
+        if logs:
+            trainer.log(logs)
+import pdb
 def main():
     # See all possible arguments in src/transformers/training_args.py
     # or by passing the --help flag to this script.
     # We now keep distinct sets of args, for a cleaner separation of concerns.
+
     parser = HfArgumentParser((ModelArguments, DataTrainingArguments, SupplyTrainingArguments))
     if len(sys.argv) == 2 and sys.argv[1].endswith(".json"):
         # If we pass only one argument to the script and it's the path to a json file,
@@ -570,6 +780,8 @@ def main():
         "token": model_args.token,
         "trust_remote_code": model_args.trust_remote_code,
     }
+
+    
     if model_args.config_name:
         config = AutoConfig.from_pretrained(model_args.config_name, **config_kwargs)
     elif model_args.model_name_or_path:
@@ -607,30 +819,18 @@ def main():
     config.path_conv_bias = model_args.path_conv_bias
     config.num_harmonics = model_args.num_harmonics
     config.share_freq_across_heads = model_args.share_freq_across_heads
+    config.pe_method = model_args.pe_method
+    config.use_beta_modulation = model_args.use_beta_modulation
+    config.wavelet_mode = model_args.wavelet_mode
+    config.use_wavelet_beta = model_args.use_wavelet_beta
+    config.logging_steps = training_args.logging_steps
+    config.wavelet_baseline_use = model_args.wavelet_baseline_use
+    config.init_theta = model_args.init_theta    
     if torch.cuda.current_device() == 0:
-        init_wandb(config, 'gpt2 with path attn')    
-    if model_args.model_name_or_path:
-        dtype = model_args.dtype if model_args.dtype in ["auto", None] else getattr(torch, model_args.dtype)
-        model = AutoModelForCausalLM.from_pretrained(
-            model_args.model_name_or_path,
-            from_tf=bool(".ckpt" in model_args.model_name_or_path),
-            config=config,
-            cache_dir=model_args.cache_dir,
-            revision=model_args.model_revision,
-            token=model_args.token,
-            trust_remote_code=model_args.trust_remote_code,
-            dtype=dtype,
-        )
-    else:
-        model = AutoModelForCausalLM.from_config(config, trust_remote_code=model_args.trust_remote_code)
-        n_params = sum({p.data_ptr(): p.numel() for p in model.parameters()}.values())
-        logger.info(f"Training new model from scratch - Total size={n_params / 2**20:.2f}M params")
+        init_wandb(config, 'gpt2 with path attn')        
 
     # We resize the embeddings only when necessary to avoid index errors. If you are creating a model from scratch
     # on a small vocab and want a smaller embedding size, remove this test.
-    embedding_size = model.get_input_embeddings().weight.shape[0]
-    if len(tokenizer) > embedding_size:
-        model.resize_token_embeddings(len(tokenizer))
 
     # Preprocessing the datasets.
     # First we tokenize all the texts.
@@ -653,23 +853,6 @@ def main():
                 " before being passed to the model."
             )
         return output
-
-    with training_args.main_process_first(desc="dataset map tokenization"):
-        if not data_args.streaming:
-            tokenized_datasets = raw_datasets.map(
-                tokenize_function,
-                batched=True,
-                num_proc=data_args.preprocessing_num_workers,
-                remove_columns=column_names,
-                load_from_cache_file=not data_args.overwrite_cache,
-                desc="Running tokenizer on dataset",
-            )
-        else:
-            tokenized_datasets = raw_datasets.map(
-                tokenize_function,
-                batched=True,
-                remove_columns=column_names,
-            )
     if hasattr(config, "max_position_embeddings"):
         max_pos_embeddings = config.max_position_embeddings
     else:
@@ -695,47 +878,223 @@ def main():
             )
         # block_size = min(data_args.block_size, tokenizer.model_max_length)
         block_size = data_args.block_size
-    # Main data processing function that will concatenate all texts from our dataset and generate chunks of block_size.
-    def group_texts(examples):
-        # Concatenate all texts.
-        concatenated_examples = {k: list(chain(*examples[k])) for k in examples}
-        total_length = len(concatenated_examples[list(examples.keys())[0]])
-        # We drop the small remainder, and if the total_length < block_size  we exclude this batch and return an empty dict.
-        # We could add padding if the model supported it instead of this drop, you can customize this part to your needs.
-        total_length = (total_length // block_size) * block_size
-        # Split by chunks of max_len.
-        result = {
-            k: [t[i : i + block_size] for i in range(0, total_length, block_size)]
-            for k, t in concatenated_examples.items()
-        }
-        result["labels"] = result["input_ids"].copy()
-        return result
+    config.block_size = block_size
+    config.rope_theta = 10000
+    if model_args.model_name_or_path:
+        dtype = model_args.dtype if model_args.dtype in ["auto", None] else getattr(torch, model_args.dtype)
+        model = AutoModelForCausalLM.from_pretrained(
+            model_args.model_name_or_path,
+            from_tf=bool(".ckpt" in model_args.model_name_or_path),
+            config=config,
+            cache_dir=model_args.cache_dir,
+            revision=model_args.model_revision,
+            token=model_args.token,
+            trust_remote_code=model_args.trust_remote_code,
+            dtype=dtype,
+        )
+    else:
+        model = AutoModelForCausalLM.from_config(config, trust_remote_code=model_args.trust_remote_code)
+        n_params = sum({p.data_ptr(): p.numel() for p in model.parameters()}.values())
+        logger.info(f"Training new model from scratch - Total size={n_params / 2**20:.2f}M params")    
+    embedding_size = model.get_input_embeddings().weight.shape[0]
+    if len(tokenizer) > embedding_size:
+        model.resize_token_embeddings(len(tokenizer))
+    if data_args.dataset_name != 'xsum':
+        with training_args.main_process_first(desc="dataset map tokenization"):
+            if not data_args.streaming:
+                tokenized_datasets = raw_datasets.map(
+                    tokenize_function,
+                    batched=True,
+                    num_proc=data_args.preprocessing_num_workers,
+                    remove_columns=column_names,
+                    load_from_cache_file=not data_args.overwrite_cache,
+                    desc="Running tokenizer on dataset",
+                )
+            else:
+                tokenized_datasets = raw_datasets.map(
+                    tokenize_function,
+                    batched=True,
+                    remove_columns=column_names,
+                )
+ 
+        # Main data processing function that will concatenate all texts from our dataset and generate chunks of block_size.
+        def group_texts(examples):
+            # Concatenate all texts.
+            concatenated_examples = {k: list(chain(*examples[k])) for k in examples}
+            total_length = len(concatenated_examples[list(examples.keys())[0]])
+            # We drop the small remainder, and if the total_length < block_size  we exclude this batch and return an empty dict.
+            # We could add padding if the model supported it instead of this drop, you can customize this part to your needs.
+            total_length = (total_length // block_size) * block_size
+            # Split by chunks of max_len.
+            result = {
+                k: [t[i : i + block_size] for i in range(0, total_length, block_size)]
+                for k, t in concatenated_examples.items()
+            }
+            result["labels"] = result["input_ids"].copy()
+            return result
 
-    # Note that with `batched=True`, this map processes 1,000 texts together, so group_texts throws away a remainder
-    # for each of those groups of 1,000 texts. You can adjust that batch_size here but a higher value might be slower
-    # to preprocess.
-    #
-    # To speed up this part, we use multiprocessing. See the documentation of the map method for more information:
-    # https://huggingface.co/docs/datasets/process#map
+        # Note that with `batched=True`, this map processes 1,000 texts together, so group_texts throws away a remainder
+        # for each of those groups of 1,000 texts. You can adjust that batch_size here but a higher value might be slower
+        # to preprocess.
+        #
+        # To speed up this part, we use multiprocessing. See the documentation of the map method for more information:
+        # https://huggingface.co/docs/datasets/process#map
 
-    with training_args.main_process_first(desc="grouping texts together"):
-        if not data_args.streaming:
-            lm_datasets = tokenized_datasets.map(
-                group_texts,
-                batched=True,
-                num_proc=data_args.preprocessing_num_workers,
-                load_from_cache_file=not data_args.overwrite_cache,
-                desc=f"Grouping texts in chunks of {block_size}",
-            )
-        else:
-            lm_datasets = tokenized_datasets.map(
-                group_texts,
-                batched=True,
-            )
+        with training_args.main_process_first(desc="grouping texts together"):
+            if not data_args.streaming:
+                lm_datasets = tokenized_datasets.map(
+                    group_texts,
+                    batched=True,
+                    num_proc=data_args.preprocessing_num_workers,
+                    load_from_cache_file=not data_args.overwrite_cache,
+                    desc=f"Grouping texts in chunks of {block_size}",
+                )
+            else:
+                lm_datasets = tokenized_datasets.map(
+                    group_texts,
+                    batched=True,
+                )
+    else:
+                PROMPT_TPL     = "Summarize the following document:\n{doc}\n\nSummary:"
+                MAX_TRAIN_DOC  = 512
+                BUCKET_STEP    = 512
+                UPPER          = 8192
+                def _lm_cache_fingerprint():
+                    key = {
+                        "dataset": "xsum_prefixlm_v1",
+                        "tok_name": getattr(tokenizer, "name_or_path", None),
+                        "block_size": data_args.block_size,
+                        "eos_id": tokenizer.eos_token_id,
+                        "pad_id": tokenizer.pad_token_id,
+                        # 如需更严谨，可把数据源版本号/筛选规则也放进来
+                    }
+                    return hashlib.sha1(json.dumps(key, sort_keys=True).encode("utf-8")).hexdigest()[:12]
+                LM_CACHE_ROOT = Path(
+                    getattr(data_args, "cache_dir", None) or os.path.expanduser("~/.cache/xsum_prefixlm")
+                ) / "lm_datasets_cache"
+                LM_CACHE_ROOT.mkdir(parents=True, exist_ok=True)
+                LM_CACHE_DIR = LM_CACHE_ROOT / f"xsum_prefixlm_{_lm_cache_fingerprint()}"
+                # pdb.set_trace()
+                if LM_CACHE_DIR.exists():
+                    lm_datasets = load_from_disk(str(LM_CACHE_DIR))
 
+                    # 先丢弃 discard 行（如果你的 map 里可能返回了 discard 标记）
+                    for split in list(lm_datasets.keys()):
+                        lm_datasets[split] = lm_datasets[split].filter(lambda ex: not ex.get("discard", False))
+
+                    if training_args.do_train:
+                        train_hi = int(512)  # 或 int(MAX_TRAIN_DOC)
+                        lm_datasets["train"] = lm_datasets["train"].filter(lambda ex: ex["hi"] == train_hi)
+
+                    if training_args.do_eval:
+                        val_hi = int(data_args.block_size)
+                        lm_datasets["validation"] = lm_datasets["validation"].filter(lambda ex: ex["hi"] == val_hi)
+
+                    # 只保留需要的列并固定返回 dict
+                    need_cols = ["input_ids", "attention_mask", "labels"]
+                    for split in ("train", "validation"):
+                        if split in lm_datasets:
+                            cols = [c for c in need_cols if c in lm_datasets[split].column_names]
+                            lm_datasets[split].set_format(type="python", columns=cols)
+
+                    # 自检（可留可删）
+                    for split in ("train", "validation"):
+                        if split in lm_datasets:
+                            assert len(lm_datasets[split]) > 0, f"{split} bucket empty"
+                            x = lm_datasets[split][0]
+                            assert isinstance(x, dict) and all(k in x for k in ["input_ids","attention_mask","labels"])
+
+                # ====== 无缓存 => 执行你原有逻辑并缓存 ======
+                else:
+                    if tokenizer.pad_token_id is None and tokenizer.eos_token_id is not None:
+                        tokenizer.pad_token_id = tokenizer.eos_token_id
+                    if tokenizer.pad_token_id is None and tokenizer.eos_token_id is not None:
+                        tokenizer.pad_token_id = tokenizer.eos_token_id
+
+                    assert not data_args.streaming, "XSUM prefix-LM 分支暂不支持 streaming=True"
+
+                    from collections import defaultdict
+                    IDX_BY_HI_ORIGIN = {"train": defaultdict(list), "validation": defaultdict(list)}
+                    IDX_BY_HI_ORIGIN_FROM_TRAIN = {"validation": defaultdict(list)}
+                    xsum_proc = {}
+                    def build_and_index_factory(split_name):
+                        def build_and_index(ex, idx):
+                            enc_prompt = tokenizer(PROMPT_TPL.format(doc=ex["document"]), add_special_tokens=True, truncation=False)
+                            enc_summ   = tokenizer(ex["summary"], add_special_tokens=False, truncation=False)
+
+                            ids    = enc_prompt["input_ids"] + enc_summ["input_ids"] + [tokenizer.eos_token_id]
+                            labels = ([-100] * len(enc_prompt["input_ids"])) + enc_summ["input_ids"] + [tokenizer.eos_token_id]
+                            L = len(ids)
+                            if L <= 1 or len(enc_summ["input_ids"]) == 0:
+                                return {"discard": True}
+
+                            if L <= MAX_TRAIN_DOC:
+                                hi = MAX_TRAIN_DOC
+                            else:
+                                hi = ((L - 1) // BUCKET_STEP + 1) * BUCKET_STEP
+                                hi = min(hi, UPPER)
+                            pad_len = hi - L
+                            if pad_len > 0:
+                                ids    = ids    + [tokenizer.eos_token_id] * pad_len
+                                labels = labels + [-100] * pad_len
+                                attn   = [1] * L + [0] * pad_len
+                            else:
+                                attn   = [1] * hi
+
+                            if L > MAX_TRAIN_DOC and split_name == 'train':
+                                IDX_BY_HI_ORIGIN_FROM_TRAIN['validation'][hi].append(idx)
+                            else:
+                                IDX_BY_HI_ORIGIN[split_name][hi].append(idx)
+
+                            return {
+                                "input_ids": ids,
+                                "labels": labels,
+                                "attention_mask": attn,
+                                "total_token_len": L,
+                                "hi": hi,
+                            }
+                        return build_and_index
+                    # —— 一次 map：构造 + pad 到桶 hi + 建索引 —— #
+                    if training_args.do_train:
+                        raw_datasets['train'] = raw_datasets['train']
+                    raw_datasets['validation'] = raw_datasets['validation']
+                    raw_datasets['test'] = raw_datasets['test']
+
+                    with training_args.main_process_first(desc="XSUM build+pad+index (by hi)"):
+                        for split in raw_datasets.keys():
+                            if split not in ("train", "validation"):
+                                continue
+                            # if not training_args.do_train and split == 'train':
+                                # continue
+                            xsum_proc[split] = raw_datasets[split].map(
+                                build_and_index_factory(split),
+                                with_indices=True,
+                                remove_columns=column_names,
+                                num_proc=1,
+                                desc=f"Tokenize & bucket (split={split})",
+                                load_from_cache_file=False,
+                            )
+                    lm_datasets = DatasetDict()
+                    if training_args.do_train:
+                        lm_datasets["train"] = xsum_proc["train"].select(IDX_BY_HI_ORIGIN["train"][MAX_TRAIN_DOC])
+                    if training_args.do_eval:
+                        val_from_train = xsum_proc["train"].select(
+                            IDX_BY_HI_ORIGIN_FROM_TRAIN["validation"][data_args.block_size]
+                        )
+                        val_from_val = xsum_proc["validation"].select(
+                            IDX_BY_HI_ORIGIN["validation"][data_args.block_size]
+                        )                        
+                        lm_datasets["validation"] = concatenate_datasets([val_from_train, val_from_val])
+                        # pdb.set_trace()
+                    # —— 缓存到磁盘（仅主进程写，其他进程等待） —— #
+                    # pdb.set_trace()
+                    with training_args.main_process_first(desc="save lm_datasets to disk"):
+                        # 只有主进程实际写盘；main_process_first 会屏障其它进程
+                        if getattr(training_args, "process_index", 0) == 0:
+                            lm_datasets.save_to_disk(str(LM_CACHE_DIR))
     if training_args.do_train:
-        if "train" not in tokenized_datasets:
-            raise ValueError("--do_train requires a train dataset")
+        # if "train" not in tokenized_datasets:
+        #     raise ValueError("--do_train requires a train dataset")
         train_dataset = lm_datasets["train"]
         if data_args.max_train_samples is not None:
             if data_args.streaming:
@@ -745,8 +1104,8 @@ def main():
                 train_dataset = train_dataset.select(range(max_train_samples))
 
     if training_args.do_eval:
-        if "validation" not in tokenized_datasets:
-            raise ValueError("--do_eval requires a validation dataset")
+        # if "validation" not in tokenized_datasets:
+        #     raise ValueError("--do_eval requires a validation dataset")
         eval_dataset = lm_datasets["validation"]
         if data_args.max_eval_samples is not None:
             if data_args.streaming:
@@ -763,15 +1122,87 @@ def main():
             return logits.argmax(dim=-1)
 
         metric = evaluate.load("accuracy", cache_dir=model_args.cache_dir)
-
+        IS_XSUM = (data_args.dataset_name == "xsum")
+        rouge_metric = evaluate.load("rouge") if IS_XSUM else None
+        bleu_metric  = evaluate.load("bleu")  if IS_XSUM else None
+        bertscore_metric  = evaluate.load("bertscore")  if IS_XSUM else None
         def compute_metrics(eval_preds):
             preds, labels = eval_preds
             # preds have the same shape as the labels, after the argmax(-1) has been calculated
             # by preprocess_logits_for_metrics but we need to shift the labels
-            labels = labels[:, 1:].reshape(-1)
-            preds = preds[:, :-1].reshape(-1)
-            return metric.compute(predictions=preds, references=labels)
+            if not IS_XSUM:
+                labels = labels[:, 1:].reshape(-1)
+                preds = preds[:, :-1].reshape(-1)
+                return metric.compute(predictions=preds, references=labels)
+                # XSum：只评 summary（label != -100）的片段，计算 ROUGE 与 BLEU1-4
+                # 先做 causal 的对齐（和你原来一致）
+            labels_shift = labels[:, 1:]
+            preds_shift  = preds[:, :-1]
+            pred_texts, ref_texts = [], []
+            for i in range(labels_shift.shape[0]):
+                mask = labels_shift[i] != -100
+                if mask.sum() == 0:
+                    continue
+                ref_ids  = labels_shift[i][mask].tolist()
+                pred_ids = preds_shift[i][mask].tolist()
+                ref_texts.append(tokenizer.decode(ref_ids,  skip_special_tokens=True))
+                pred_texts.append(tokenizer.decode(pred_ids, skip_special_tokens=True))
+                # print(ref_texts)
+                # print('!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!boundary,boundary,boundary,boundary!!!!!!!!!!!!!!!!!!!!!!')
+                # print(pred_texts)
+                # pdb.set_trace()
+            # 计算 ROUGE（rouge1/2/L）与 BLEU（含 precisions -> BLEU1-4）
+            rouge = rouge_metric.compute(predictions=pred_texts, references=ref_texts, use_stemmer=True)
+            bleu  = bleu_metric.compute(predictions=pred_texts, references=[[r] for r in ref_texts])
+            if not training_args.do_train:
+                bertscore = bertscore_metric.compute(predictions=pred_texts, references=ref_texts, lang="en")
+                out = {
+                    "rouge1": float(rouge.get("rouge1", 0.0)),
+                    "rouge2": float(rouge.get("rouge2", 0.0)),
+                    "rougeL": float(rouge.get("rougeL", 0.0)),
+                    "bleu":   float(bleu.get("bleu", 0.0)),
+                    "bertscore": float(np.mean(bertscore['f1'])),
+                    "count":  len(pred_texts),
+                }
+            else:
+                out = {
+                    "rouge1": float(rouge.get("rouge1", 0.0)),
+                    "rouge2": float(rouge.get("rouge2", 0.0)),
+                    "rougeL": float(rouge.get("rougeL", 0.0)),
+                    "bleu":   float(bleu.get("bleu", 0.0)),
+                    "count":  len(pred_texts),
+                }
+            # BLEU1-4：evaluate 的 "bleu" 会返回 n-gram precisions（通常是百分数）
+            if "precisions" in bleu and len(bleu["precisions"]) >= 4:
+                p = bleu["precisions"]
+                out.update({
+                    "bleu1": float(p[0]),
+                    "bleu2": float(p[1]),
+                    "bleu3": float(p[2]),
+                    "bleu4": float(p[3]),
+                })
+            # pdb.set_trace()
+            # if not training_args.do_train:
+            #     p_ents = [ents(p) for p in pred_texts]
+            #     r_ents = [ents(r) for r in ref_texts]
 
+            #     tp = sum(len(pe & re) for pe, re in zip(p_ents, r_ents))
+            #     fp = sum(len(pe - re) for pe, re in zip(p_ents, r_ents))
+            #     fn = sum(len(re - pe) for pe, re in zip(p_ents, r_ents))
+
+            #     precision = tp / (tp + fp + 1e-9)
+            #     recall    = tp / (tp + fn + 1e-9)
+            #     f1        = 2 * precision * recall / (precision + recall + 1e-9)
+
+            #     out.update({
+            #         "entity_precision": float(precision),
+            #         "entity_recall":    float(recall),
+            #         "entity_f1":        float(f1),
+            #         "entity_tp":        int(tp),
+            #         "entity_fp":        int(fp),
+            #         "entity_fn":        int(fn),
+            #     })
+            return out
     # Initialize our Trainer
     trainer = Trainer(
         model=model,
@@ -785,21 +1216,11 @@ def main():
         preprocess_logits_for_metrics=preprocess_logits_for_metrics
         if training_args.do_eval and not is_torch_xla_available()
         else None,
+        callbacks = [
+            LrMonitorCallback(group_names_expect=("main_decay","main_nodecay","B_decay","B_nodecay")),
+            ParamTrackerCallback(['phi_raw', 'omega_raw'], training_args.logging_steps)
+        ],
     )
-    # trainer = Trainer(
-    #     model=model,
-    #     args=training_args,
-    #     train_dataset=train_dataset if training_args.do_train else None,
-    #     eval_dataset=eval_dataset if training_args.do_eval else None,
-    #     processing_class=tokenizer,
-    #     # Data collator will default to DataCollatorWithPadding, so we change it.
-    #     data_collator=default_data_collator,
-    #     compute_metrics=compute_metrics if training_args.do_eval and not is_torch_xla_available() else None,
-    #     preprocess_logits_for_metrics=preprocess_logits_for_metrics
-    #     if training_args.do_eval and not is_torch_xla_available()
-    #     else None,
-    #     callbacks=[LrMonitorCallback(group_names_expect=("main_decay","main_nodecay","B_decay","B_nodecay"))],
-    # )    
 
     # Training
     if training_args.do_train:

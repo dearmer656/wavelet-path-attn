@@ -49,13 +49,18 @@ from ...utils.deprecation import deprecate_kwarg
 from ...utils.model_parallel_utils import assert_device_map, get_device_map
 from .configuration_gpt2 import GPT2Config
 
-# try:
-#     from fla.layers.path_attn import PaTHAttention as _PaTHAttention
-#     from fla.layers.path_attn import PaTHAttentionWfreq as _PaTHAttentionWfreq
-# except Exception as _e:
-#     _PaTHAttention = None
-#     _PaTHAttentionWfreq = None
-from fla.layers.path_attn import PaTHAttention as _PaTHAttention
+from transformers.models.llama.modeling_llama import LlamaRotaryEmbedding
+from transformers.models.llama.modeling_llama import apply_rotary_pos_emb
+
+from einops import rearrange
+
+try:
+    from fla.layers.path_attn import PaTHAttention as _PaTHAttention
+    from fla.layers.path_attn import PaTHAttentionWfreq as _PaTHAttentionWfreq
+except Exception as _e:
+    _PaTHAttention = None
+    _PaTHAttentionWfreq = None
+# from fla.layers.path_attn import PaTHAttention as _PaTHAttention
 logger = logging.get_logger(__name__)
 
 
@@ -132,6 +137,10 @@ class GPT2PaTHAttention(nn.Module):
                 conv_bias=getattr(config, "path_conv_bias", False),
                 num_harmonics=getattr(config, "num_harmonics", 2),
                 share_freq_across_heads=getattr(config, "share_freq_across_heads", False),
+                single_A_B=getattr(config, "single_A_B", False),
+                use_beta_modulation=getattr(config, "use_beta_modulation", False),
+                use_wavelet_beta=getattr(config, "use_wavelet_beta", False),
+                wavelet_mode=getattr(config, "wavelet_mode", "additive"),
             )
         elif getattr(config, "attn_implementation", None) == "path_attn":
             self.core = _PaTHAttention(
@@ -146,6 +155,13 @@ class GPT2PaTHAttention(nn.Module):
                 use_w_shortconv=getattr(config, "path_use_w_shortconv", True),
                 conv_size=getattr(config, "path_conv_size", 3),
                 conv_bias=getattr(config, "path_conv_bias", False),
+                num_harmonics=getattr(config, "num_harmonics", 2),
+                use_wavelet_beta=getattr(config, "use_wavelet_beta", False),
+                wavelet_mode=getattr(config, "wavelet_mode", "additive"),
+                logging_steps = config.logging_steps,
+                wavelet_baseline_use = config.wavelet_baseline_use,
+                attn_pdrop = config.attn_pdrop,
+                init_theta = config.init_theta,   # initial theta for path attention ratio
             )
         self.resid_dropout = nn.Dropout(config.resid_pdrop)
 
@@ -161,6 +177,7 @@ class GPT2PaTHAttention(nn.Module):
         use_cache: Optional[bool] = False,
         output_attentions: Optional[bool] = False,
         attention_mask_2d: Optional[torch.Tensor] = None,   # 我们在 GPT2Model 额外传入的 2D 0/1 mask
+        wavelet_decay_table: Optional[torch.Tensor] = None, # 我们在 GPT2Model 额外传入的 wavelet 衰减表
         **kwargs,
     ):
         if encoder_hidden_states is not None:
@@ -184,6 +201,7 @@ class GPT2PaTHAttention(nn.Module):
             past_key_values=path_cache,      # PaTH 自己的 cache（dict）
             output_attentions=output_attentions,
             use_cache=use_cache,
+            wavelet_decay_table=wavelet_decay_table,
         )
         if use_cache:
             self._path_cache = path_cache
@@ -191,7 +209,7 @@ class GPT2PaTHAttention(nn.Module):
         attn_out = self.resid_dropout(attn_out)
         # GPT2Block 期望返回 (attn_output, attn_weights)
         return attn_out, None
-
+from rotary_embedding_torch import RotaryEmbedding
 class GPT2Attention(nn.Module):
     def __init__(self, config, is_cross_attention=False, layer_idx=None):
         super().__init__()
@@ -234,7 +252,8 @@ class GPT2Attention(nn.Module):
         self.attn_dropout = nn.Dropout(config.attn_pdrop)
         self.resid_dropout = nn.Dropout(config.resid_pdrop)
         self.is_causal = True
-
+        if config.pe_method == 'rotary':
+            self.rotary_emb = RotaryEmbedding(dim = 32)
         self.pruned_heads = set()
 
     def prune_heads(self, heads):
@@ -316,6 +335,7 @@ class GPT2Attention(nn.Module):
         encoder_hidden_states: Optional[torch.Tensor] = None,
         encoder_attention_mask: Optional[torch.FloatTensor] = None,
         output_attentions: Optional[bool] = False,
+        rope=None,
         **kwargs,
     ) -> tuple[Union[torch.Tensor, tuple[torch.Tensor]], ...]:
         is_cross_attention = encoder_hidden_states is not None
@@ -373,10 +393,15 @@ class GPT2Attention(nn.Module):
 
         using_eager = self.config._attn_implementation == "eager"
         attention_interface: Callable = eager_attention_forward
-        if self.config._attn_implementation != "eager":
+        if self.config._attn_implementation != "eager" and self.config.pe_method != 'rotary':
             attention_interface = ALL_ATTENTION_FUNCTIONS[self.config._attn_implementation]
+        if self.config.pe_method == 'rotary':
+            query_states = self.rotary_emb.rotate_queries_or_keys(query_states)
+            key_states = self.rotary_emb.rotate_queries_or_keys(key_states)
+            # query_states = query_states.permute(0, 2, 1, 3)
+            # key_states = key_states.permute(0, 2, 1, 3)
 
-        if using_eager and self.reorder_and_upcast_attn:
+        if using_eager and self.reorder_and_upcast_attn and self.config.pe_method!='rotary':
             attn_output, attn_weights = self._upcast_and_reordered_attn(
                 query_states, key_states, value_states, attention_mask, head_mask
             )
@@ -392,7 +417,6 @@ class GPT2Attention(nn.Module):
                 is_causal=is_causal,
                 **kwargs,
             )
-
         attn_output = attn_output.reshape(*attn_output.shape[:-2], -1).contiguous()
         attn_output = self.c_proj(attn_output)
         attn_output = self.resid_dropout(attn_output)
@@ -448,6 +472,8 @@ class GPT2Block(GradientCheckpointingLayer):
         encoder_attention_mask: Optional[torch.FloatTensor] = None,
         use_cache: Optional[bool] = False,
         output_attentions: Optional[bool] = False,
+        rope=None,
+        wavelet_decay_table=None,
         **kwargs,
     ) -> Union[tuple[torch.Tensor], Optional[tuple[torch.Tensor, tuple[torch.FloatTensor, ...]]]]:
         residual = hidden_states
@@ -462,6 +488,8 @@ class GPT2Block(GradientCheckpointingLayer):
             head_mask=head_mask,
             use_cache=use_cache,
             output_attentions=output_attentions,
+            rope=rope,
+            wavelet_decay_table=wavelet_decay_table,
             **kwargs,
         )
         # residual connection
@@ -740,7 +768,8 @@ class GPT2Model(GPT2PreTrainedModel):
         self.embed_dim = config.hidden_size
 
         self.wte = nn.Embedding(config.vocab_size, self.embed_dim)
-        self.wpe = nn.Embedding(config.max_position_embeddings, self.embed_dim)
+        if config.pe_method != 'rotary' and config.attn_implementation == 'eager':
+            self.wpe = nn.Embedding(config.max_position_embeddings, self.embed_dim)
 
         self.drop = nn.Dropout(config.embd_pdrop)
         self.h = nn.ModuleList([GPT2Block(config, layer_idx=i) for i in range(config.num_hidden_layers)])
@@ -754,7 +783,65 @@ class GPT2Model(GPT2PreTrainedModel):
 
         # Initialize weights and apply final processing
         self.post_init()
+        self.d_m = None
+        if config.wavelet_baseline_use:
+            self.s_tensor, self.beta_tensor = self.make_scale_shift_vectors()
+            self.d_m = self.make_decay_per_dim_custom(64, config.block_size, self.s_tensor, self.beta_tensor)
+    def make_scale_shift_vectors(self):
+        """
+        1) 定义 scale_list = [2^1, 2^2, ..., 2^15]  共 15 个值
+        2) 定义 shift_list = [0, 32, 64, 96]         共 4 个值
+        3) 组合成 d_h=15*4=60 维的 s 向量与 beta 向量:
+        s = [2^1,2^1,2^1,2^1, 2^2,2^2,2^2,2^2, …, 2^15,2^15,2^15,2^15]
+        beta = [0,32,64,96, 0,32,64,96, …, 0,32,64,96]
+        返回:
+        - s_tensor:  shape=(d_h,) dtype=float32
+        - beta_tensor:shape=(d_h,) dtype=float32
+        """
+        # scale_list = [0.01 + i*0.01286 for i in range(8)]
+        # scale_list = [self.config.decay_rate for _ in range(8)]
+        # scale_list = list(np.linspace(0.0001, 0.005, 8))
+        scale_list = [2**i for i in range(8)]  # [2^1, 2^2, …, 2^15]
+        # scale_list = [0 for _ in range(8)]
+        # scale_list = [1 / (2 * k) for k in range(5, 21)]   # [2^1, 2^2, …, 2^15]
+        # scale_list = [1] + scale_list
+        shift_list = [0, 1, 2, 3, 4, 5, 6, 7]
+        # shift_list = [0, 0, 0, 0, 0, 0, 0, 0]
+        # shift_list = [0, 32, 64, 96, 128, 160, 192, 224]
+        s = []
+        beta = []
+        for sc in scale_list:
+            for sh in shift_list:
+                s.append(float(sc))
+                beta.append(float(sh))
 
+        # 现在 len(s) == len(beta) == 15*4 = 60
+        s_tensor = torch.tensor(s, dtype=torch.float32, device='cuda')
+        beta_tensor = torch.tensor(beta, dtype=torch.float32, device='cuda')
+        return s_tensor, beta_tensor
+
+    def make_decay_per_dim_custom(self, d_h: int, L: int, s: torch.Tensor, beta: torch.Tensor, device='cuda'):
+        """
+         改造后直接输出 p_{m,n} 矩阵，shape=(d_h, L, L)
+        """
+         # 1) 构造位置差 diff_{m,n} = m - n
+        idx = torch.arange(L, device=device).float()             # (L,)
+        m = idx.view(L, 1)                                      # (L,1)
+        n = idx.view(1, L)                                      # (1,L)
+        diff = m - n                                            # (L,L)
+
+         # 2) 扩展 scale a 和 shift b 到 (d_h,1,1)
+        a = s.view(d_h, 1, 1)                                   # (d_h,1,1)
+        b = beta.view(d_h, 1, 1)                                # (d_h,1,1)
+
+         # 3) 计算 u = (diff - b) / a
+        u = (diff.unsqueeze(0) - b) / a                         # (d_h,L,L)
+
+         # 4) 公式 p_{m,n} = (1 - u^2) * exp(-0.5 * u^2)
+        p = (1 - u**2) * torch.exp(-0.5 * u**2)                 # (d_h,L,L)
+
+         # 返回 shape=(d_h, L, L)，自注意力里再做 sqrt(d) 缩放和合并
+        return p
     @add_start_docstrings(PARALLELIZE_DOCSTRING)
     def parallelize(self, device_map=None):
         # Check validity of device_map
@@ -900,14 +987,18 @@ class GPT2Model(GPT2PreTrainedModel):
             cache_position = torch.arange(
                 past_seen_tokens, past_seen_tokens + inputs_embeds.shape[1], device=inputs_embeds.device
             )
+        rope = None
         if position_ids is None:
             position_ids = cache_position.unsqueeze(0)
         if self.config.attn_implementation in ['path_attn', 'path_attn_wfreq']:
             hidden_states = inputs_embeds
+        elif self.config.pe_method == 'rotary':
+            assert self.config.attn_implementation == "eager", "only in eager mode you can use rotary."
+            hidden_states = inputs_embeds   
         else:
             position_embeds = self.wpe(position_ids)
             hidden_states = inputs_embeds + position_embeds.to(inputs_embeds.device)
-
+            
         # Attention mask.
         # ._update_causal_mask() and ._prepare_4d_causal_attention_mask_with_cache_position() copied from LlamaModel
         if attention_mask is not None and attention_mask.ndim < 4:
@@ -976,6 +1067,8 @@ class GPT2Model(GPT2PreTrainedModel):
                 use_cache=use_cache,
                 output_attentions=output_attentions,
                 attention_mask_2d=attention_mask,  # ← 传给 PaTH 用的 2D 0/1 mask；其他实现会忽略
+                rope=rope,
+                wavelet_decay_table=self.d_m,
                 **kwargs,
             )
 

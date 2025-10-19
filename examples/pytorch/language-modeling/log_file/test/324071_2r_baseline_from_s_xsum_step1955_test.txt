@@ -1,0 +1,287 @@
+MASTER_ADDR: elm63
+MASTER_PORT: 12345
+WORLD_SIZE: 1
+RANK: 0
++ echo 'Workdir: /project/nlp-work5/hongyu-s/transformers/examples/pytorch/language-modeling'
+Workdir: /project/nlp-work5/hongyu-s/transformers/examples/pytorch/language-modeling
++ cd /project/nlp-work5/hongyu-s/transformers/examples/pytorch/language-modeling
++ echo 'Launching training/eval command'
+Launching training/eval command
++ echo '================= BEGIN RUN ================='
+================= BEGIN RUN =================
++ torchrun --nproc_per_node=2 --master_port=12425 ./run_clm.py --model_type gpt2 --tokenizer_name gpt2 --model_name_or_path ./runs/2r_baseline_from_s_xsum/checkpoint-1955 --share_freq_across_heads True --learning_rate 1e-4 --per_device_train_batch_size 1 --per_device_eval_batch_size 1 --block_size 512 --dataset_name xsum --dataset_config_name wikitext-103-raw-v1 --do_eval --overwrite_output_dir --num_train_epochs 30 --output_dir ./2r_baseline_from_s_xsum --eval_strategy steps --logging_dir ./2r_baseline_from_s_xsum_log --logging_steps 250 --save_steps 2500 --attn_implementation path_attn --path_use_qk_norm false --path_use_low_rank_w true --path_use_w_shortconv false --path_conv_size 3 --warmup_steps 5000 --path_conv_bias false --output_dir runs/2r_baseline_from_s_xsum --gradient_accumulation_steps 2 --num_harmonics 2 --single_A_B False --use_beta_modulation True
+W1010 09:43:51.803000 2841786 /project/nlp-work5/hongyu-s/conda/envs/latest_transformers/lib/python3.12/site-packages/torch/distributed/run.py:774] 
+W1010 09:43:51.803000 2841786 /project/nlp-work5/hongyu-s/conda/envs/latest_transformers/lib/python3.12/site-packages/torch/distributed/run.py:774] *****************************************
+W1010 09:43:51.803000 2841786 /project/nlp-work5/hongyu-s/conda/envs/latest_transformers/lib/python3.12/site-packages/torch/distributed/run.py:774] Setting OMP_NUM_THREADS environment variable for each process to be 1 in default, to avoid your system being overloaded, please further tune the variable for optimal performance in your application as needed. 
+W1010 09:43:51.803000 2841786 /project/nlp-work5/hongyu-s/conda/envs/latest_transformers/lib/python3.12/site-packages/torch/distributed/run.py:774] *****************************************
+10/10/2025 09:44:06 - WARNING - __main__ - Process rank: 1, device: cuda:1, n_gpu: 1, distributed training: True, 16-bits training: False
+10/10/2025 09:44:06 - WARNING - __main__ - Process rank: 0, device: cuda:0, n_gpu: 1, distributed training: True, 16-bits training: False
+10/10/2025 09:44:06 - INFO - __main__ - Training/evaluation parameters SupplyTrainingArguments(
+_n_gpu=1,
+accelerator_config={'split_batches': False, 'dispatch_batches': None, 'even_batches': True, 'use_seedable_sampler': True, 'non_blocking': False, 'gradient_accumulation_kwargs': None, 'use_configured_state': False},
+adafactor=False,
+adam_beta1=0.9,
+adam_beta2=0.999,
+adam_epsilon=1e-08,
+auto_find_batch_size=False,
+average_tokens_across_devices=True,
+b_unfreeze_step=5000,
+batch_eval_metrics=False,
+bf16=False,
+bf16_full_eval=False,
+data_seed=None,
+dataloader_drop_last=False,
+dataloader_num_workers=0,
+dataloader_persistent_workers=False,
+dataloader_pin_memory=True,
+dataloader_prefetch_factor=None,
+ddp_backend=None,
+ddp_broadcast_buffers=None,
+ddp_bucket_cap_mb=None,
+ddp_find_unused_parameters=None,
+ddp_timeout=1800,
+debug=[],
+deepspeed=None,
+disable_tqdm=False,
+do_eval=True,
+do_predict=False,
+do_train=False,
+eval_accumulation_steps=None,
+eval_delay=0,
+eval_do_concat_batches=True,
+eval_on_start=False,
+eval_steps=250,
+eval_strategy=IntervalStrategy.STEPS,
+eval_use_gather_object=False,
+fp16=False,
+fp16_backend=auto,
+fp16_full_eval=False,
+fp16_opt_level=O1,
+fsdp=[],
+fsdp_config={'min_num_params': 0, 'xla': False, 'xla_fsdp_v2': False, 'xla_fsdp_grad_ckpt': False},
+fsdp_min_num_params=0,
+fsdp_transformer_layer_cls_to_wrap=None,
+full_determinism=False,
+gradient_accumulation_steps=2,
+gradient_checkpointing=False,
+gradient_checkpointing_kwargs=None,
+greater_is_better=None,
+group_by_length=False,
+half_precision_backend=auto,
+hub_always_push=False,
+hub_model_id=None,
+hub_private_repo=None,
+hub_revision=None,
+hub_strategy=HubStrategy.EVERY_SAVE,
+hub_token=<HUB_TOKEN>,
+ignore_data_skip=False,
+include_for_metrics=[],
+include_inputs_for_metrics=False,
+include_num_input_tokens_seen=no,
+include_tokens_per_second=False,
+jit_mode_eval=False,
+label_names=None,
+label_smoothing_factor=0.0,
+learning_rate=0.0001,
+length_column_name=length,
+liger_kernel_config=None,
+load_best_model_at_end=False,
+local_rank=0,
+log_level=passive,
+log_level_replica=warning,
+log_on_each_node=True,
+logging_dir=./2r_baseline_from_s_xsum_log,
+logging_first_step=False,
+logging_nan_inf_filter=True,
+logging_steps=250,
+logging_strategy=IntervalStrategy.STEPS,
+lr_scheduler_kwargs={},
+lr_scheduler_type=SchedulerType.LINEAR,
+max_grad_norm=1.0,
+max_steps=-1,
+metric_for_best_model=None,
+mp_parameters=,
+neftune_noise_alpha=None,
+no_cuda=False,
+num_train_epochs=30.0,
+optim=OptimizerNames.ADAMW_TORCH_FUSED,
+optim_args=None,
+optim_target_modules=None,
+output_dir=runs/2r_baseline_from_s_xsum,
+overwrite_output_dir=True,
+parallelism_config=None,
+past_index=-1,
+per_device_eval_batch_size=1,
+per_device_train_batch_size=1,
+prediction_loss_only=False,
+push_to_hub=False,
+push_to_hub_model_id=None,
+push_to_hub_organization=None,
+push_to_hub_token=<PUSH_TO_HUB_TOKEN>,
+ray_scope=last,
+remove_unused_columns=True,
+report_to=['tensorboard', 'wandb'],
+restore_callback_states_from_checkpoint=False,
+resume_from_checkpoint=None,
+run_name=None,
+save_on_each_node=False,
+save_only_model=False,
+save_safetensors=True,
+save_steps=2500,
+save_strategy=SaveStrategy.STEPS,
+save_total_limit=None,
+seed=42,
+skip_memory_metrics=True,
+tf32=None,
+torch_compile=False,
+torch_compile_backend=None,
+torch_compile_mode=None,
+torch_empty_cache_steps=None,
+torchdynamo=None,
+tpu_metrics_debug=False,
+tpu_num_cores=None,
+use_cpu=False,
+use_legacy_prediction_loop=False,
+use_liger_kernel=False,
+use_mps_device=False,
+warmup_ratio=0.0,
+warmup_steps=5000,
+weight_decay=0.0,
+)
+Using the latest cached version of the dataset since xsum couldn't be found on the Hugging Face Hub
+10/10/2025 09:44:07 - WARNING - datasets.load - Using the latest cached version of the dataset since xsum couldn't be found on the Hugging Face Hub
+Found the latest cached dataset configuration 'wikitext-103-raw-v1' at /cl/work5/hongyu-s/huggingfac/datasets/xsum/wikitext-103-raw-v1/1.2.0/082863bf4754ee058a5b6f6525d0cb2b18eadb62c7b370b095d1364050a52b71 (last modified on Wed Sep 10 20:57:16 2025).
+10/10/2025 09:44:07 - WARNING - datasets.packaged_modules.cache.cache - Found the latest cached dataset configuration 'wikitext-103-raw-v1' at /cl/work5/hongyu-s/huggingfac/datasets/xsum/wikitext-103-raw-v1/1.2.0/082863bf4754ee058a5b6f6525d0cb2b18eadb62c7b370b095d1364050a52b71 (last modified on Wed Sep 10 20:57:16 2025).
+[rank1]: Traceback (most recent call last):
+[rank1]:   File "/project/nlp-work5/hongyu-s/transformers/src/transformers/utils/hub.py", line 476, in cached_files
+[rank1]:     hf_hub_download(
+[rank1]:   File "/cl/work5/hongyu-s/conda/envs/latest_transformers/lib/python3.12/site-packages/huggingface_hub/utils/_validators.py", line 106, in _inner_fn
+[rank1]:     validate_repo_id(arg_value)
+[rank1]:   File "/cl/work5/hongyu-s/conda/envs/latest_transformers/lib/python3.12/site-packages/huggingface_hub/utils/_validators.py", line 154, in validate_repo_id
+[rank1]:     raise HFValidationError(
+[rank1]: huggingface_hub.errors.HFValidationError: Repo id must be in the form 'repo_name' or 'namespace/repo_name': './runs/2r_baseline_from_s_xsum/checkpoint-1955'. Use `repo_type` argument if needed.
+
+[rank1]: During handling of the above exception, another exception occurred:
+
+[rank1]: Traceback (most recent call last):
+[rank1]:   File "/project/nlp-work5/hongyu-s/transformers/src/transformers/configuration_utils.py", line 715, in _get_config_dict
+[rank1]:     resolved_config_file = cached_file(
+[rank1]:                            ^^^^^^^^^^^^
+[rank1]:   File "/project/nlp-work5/hongyu-s/transformers/src/transformers/utils/hub.py", line 319, in cached_file
+[rank1]:     file = cached_files(path_or_repo_id=path_or_repo_id, filenames=[filename], **kwargs)
+[rank1]:            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+[rank1]:   File "/project/nlp-work5/hongyu-s/transformers/src/transformers/utils/hub.py", line 529, in cached_files
+[rank1]:     _get_cache_file_to_return(path_or_repo_id, filename, cache_dir, revision, repo_type)
+[rank1]:   File "/project/nlp-work5/hongyu-s/transformers/src/transformers/utils/hub.py", line 142, in _get_cache_file_to_return
+[rank1]:     resolved_file = try_to_load_from_cache(
+[rank1]:                     ^^^^^^^^^^^^^^^^^^^^^^^
+[rank1]:   File "/cl/work5/hongyu-s/conda/envs/latest_transformers/lib/python3.12/site-packages/huggingface_hub/utils/_validators.py", line 106, in _inner_fn
+[rank1]:     validate_repo_id(arg_value)
+[rank1]:   File "/cl/work5/hongyu-s/conda/envs/latest_transformers/lib/python3.12/site-packages/huggingface_hub/utils/_validators.py", line 154, in validate_repo_id
+[rank1]:     raise HFValidationError(
+[rank1]: huggingface_hub.errors.HFValidationError: Repo id must be in the form 'repo_name' or 'namespace/repo_name': './runs/2r_baseline_from_s_xsum/checkpoint-1955'. Use `repo_type` argument if needed.
+
+[rank1]: During handling of the above exception, another exception occurred:
+
+[rank1]: Traceback (most recent call last):
+[rank1]:   File "/project/nlp-work5/hongyu-s/transformers/examples/pytorch/language-modeling/./run_clm.py", line 1263, in <module>
+[rank1]:     main()
+[rank1]:   File "/project/nlp-work5/hongyu-s/transformers/examples/pytorch/language-modeling/./run_clm.py", line 765, in main
+[rank1]:     config = AutoConfig.from_pretrained(model_args.model_name_or_path, **config_kwargs)
+[rank1]:              ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+[rank1]:   File "/project/nlp-work5/hongyu-s/transformers/src/transformers/models/auto/configuration_auto.py", line 1318, in from_pretrained
+[rank1]:     config_dict, unused_kwargs = PretrainedConfig.get_config_dict(pretrained_model_name_or_path, **kwargs)
+[rank1]:                                  ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+[rank1]:   File "/project/nlp-work5/hongyu-s/transformers/src/transformers/configuration_utils.py", line 656, in get_config_dict
+[rank1]:     config_dict, kwargs = cls._get_config_dict(pretrained_model_name_or_path, **kwargs)
+[rank1]:                           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+[rank1]:   File "/project/nlp-work5/hongyu-s/transformers/src/transformers/configuration_utils.py", line 738, in _get_config_dict
+[rank1]:     raise OSError(
+[rank1]: OSError: Can't load the configuration of './runs/2r_baseline_from_s_xsum/checkpoint-1955'. If you were trying to load it from 'https://huggingface.co/models', make sure you don't have a local directory with the same name. Otherwise, make sure './runs/2r_baseline_from_s_xsum/checkpoint-1955' is the correct path to a directory containing a config.json file
+Using the latest cached version of the dataset since xsum couldn't be found on the Hugging Face Hub
+10/10/2025 09:44:07 - WARNING - datasets.load - Using the latest cached version of the dataset since xsum couldn't be found on the Hugging Face Hub
+Found the latest cached dataset configuration 'wikitext-103-raw-v1' at /cl/work5/hongyu-s/huggingfac/datasets/xsum/wikitext-103-raw-v1/1.2.0/082863bf4754ee058a5b6f6525d0cb2b18eadb62c7b370b095d1364050a52b71 (last modified on Wed Sep 10 20:57:16 2025).
+10/10/2025 09:44:07 - WARNING - datasets.packaged_modules.cache.cache - Found the latest cached dataset configuration 'wikitext-103-raw-v1' at /cl/work5/hongyu-s/huggingfac/datasets/xsum/wikitext-103-raw-v1/1.2.0/082863bf4754ee058a5b6f6525d0cb2b18eadb62c7b370b095d1364050a52b71 (last modified on Wed Sep 10 20:57:16 2025).
+Using custom data configuration wikitext-103-raw-v1
+10/10/2025 09:44:07 - INFO - datasets.builder - Using custom data configuration wikitext-103-raw-v1
+[rank0]: Traceback (most recent call last):
+[rank0]:   File "/project/nlp-work5/hongyu-s/transformers/src/transformers/utils/hub.py", line 476, in cached_files
+[rank0]:     hf_hub_download(
+[rank0]:   File "/cl/work5/hongyu-s/conda/envs/latest_transformers/lib/python3.12/site-packages/huggingface_hub/utils/_validators.py", line 106, in _inner_fn
+[rank0]:     validate_repo_id(arg_value)
+[rank0]:   File "/cl/work5/hongyu-s/conda/envs/latest_transformers/lib/python3.12/site-packages/huggingface_hub/utils/_validators.py", line 154, in validate_repo_id
+[rank0]:     raise HFValidationError(
+[rank0]: huggingface_hub.errors.HFValidationError: Repo id must be in the form 'repo_name' or 'namespace/repo_name': './runs/2r_baseline_from_s_xsum/checkpoint-1955'. Use `repo_type` argument if needed.
+
+[rank0]: During handling of the above exception, another exception occurred:
+
+[rank0]: Traceback (most recent call last):
+[rank0]:   File "/project/nlp-work5/hongyu-s/transformers/src/transformers/configuration_utils.py", line 715, in _get_config_dict
+[rank0]:     resolved_config_file = cached_file(
+[rank0]:                            ^^^^^^^^^^^^
+[rank0]:   File "/project/nlp-work5/hongyu-s/transformers/src/transformers/utils/hub.py", line 319, in cached_file
+[rank0]:     file = cached_files(path_or_repo_id=path_or_repo_id, filenames=[filename], **kwargs)
+[rank0]:            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+[rank0]:   File "/project/nlp-work5/hongyu-s/transformers/src/transformers/utils/hub.py", line 529, in cached_files
+[rank0]:     _get_cache_file_to_return(path_or_repo_id, filename, cache_dir, revision, repo_type)
+[rank0]:   File "/project/nlp-work5/hongyu-s/transformers/src/transformers/utils/hub.py", line 142, in _get_cache_file_to_return
+[rank0]:     resolved_file = try_to_load_from_cache(
+[rank0]:                     ^^^^^^^^^^^^^^^^^^^^^^^
+[rank0]:   File "/cl/work5/hongyu-s/conda/envs/latest_transformers/lib/python3.12/site-packages/huggingface_hub/utils/_validators.py", line 106, in _inner_fn
+[rank0]:     validate_repo_id(arg_value)
+[rank0]:   File "/cl/work5/hongyu-s/conda/envs/latest_transformers/lib/python3.12/site-packages/huggingface_hub/utils/_validators.py", line 154, in validate_repo_id
+[rank0]:     raise HFValidationError(
+[rank0]: huggingface_hub.errors.HFValidationError: Repo id must be in the form 'repo_name' or 'namespace/repo_name': './runs/2r_baseline_from_s_xsum/checkpoint-1955'. Use `repo_type` argument if needed.
+
+[rank0]: During handling of the above exception, another exception occurred:
+
+[rank0]: Traceback (most recent call last):
+[rank0]:   File "/project/nlp-work5/hongyu-s/transformers/examples/pytorch/language-modeling/./run_clm.py", line 1263, in <module>
+[rank0]:     main()
+[rank0]:   File "/project/nlp-work5/hongyu-s/transformers/examples/pytorch/language-modeling/./run_clm.py", line 765, in main
+[rank0]:     config = AutoConfig.from_pretrained(model_args.model_name_or_path, **config_kwargs)
+[rank0]:              ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+[rank0]:   File "/project/nlp-work5/hongyu-s/transformers/src/transformers/models/auto/configuration_auto.py", line 1318, in from_pretrained
+[rank0]:     config_dict, unused_kwargs = PretrainedConfig.get_config_dict(pretrained_model_name_or_path, **kwargs)
+[rank0]:                                  ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+[rank0]:   File "/project/nlp-work5/hongyu-s/transformers/src/transformers/configuration_utils.py", line 656, in get_config_dict
+[rank0]:     config_dict, kwargs = cls._get_config_dict(pretrained_model_name_or_path, **kwargs)
+[rank0]:                           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+[rank0]:   File "/project/nlp-work5/hongyu-s/transformers/src/transformers/configuration_utils.py", line 738, in _get_config_dict
+[rank0]:     raise OSError(
+[rank0]: OSError: Can't load the configuration of './runs/2r_baseline_from_s_xsum/checkpoint-1955'. If you were trying to load it from 'https://huggingface.co/models', make sure you don't have a local directory with the same name. Otherwise, make sure './runs/2r_baseline_from_s_xsum/checkpoint-1955' is the correct path to a directory containing a config.json file
+[rank0]:[W1010 09:44:07.521466540 ProcessGroupNCCL.cpp:1538] Warning: WARNING: destroy_process_group() was not called before program exit, which can leak resources. For more info, please see https://pytorch.org/docs/stable/distributed.html#shutdown (function operator())
+W1010 09:44:08.132000 2841786 /project/nlp-work5/hongyu-s/conda/envs/latest_transformers/lib/python3.12/site-packages/torch/distributed/elastic/multiprocessing/api.py:900] Sending process 2841791 closing signal SIGTERM
+E1010 09:44:08.397000 2841786 /project/nlp-work5/hongyu-s/conda/envs/latest_transformers/lib/python3.12/site-packages/torch/distributed/elastic/multiprocessing/api.py:874] failed (exitcode: 1) local_rank: 1 (pid: 2841792) of binary: /cl/work5/hongyu-s/conda/envs/latest_transformers/bin/python3.12
+Traceback (most recent call last):
+  File "/cl/work5/hongyu-s/conda/envs/latest_transformers/bin/torchrun", line 7, in <module>
+    sys.exit(main())
+             ^^^^^^
+  File "/cl/work5/hongyu-s/conda/envs/latest_transformers/lib/python3.12/site-packages/torch/distributed/elastic/multiprocessing/errors/__init__.py", line 357, in wrapper
+    return f(*args, **kwargs)
+           ^^^^^^^^^^^^^^^^^^
+  File "/cl/work5/hongyu-s/conda/envs/latest_transformers/lib/python3.12/site-packages/torch/distributed/run.py", line 901, in main
+    run(args)
+  File "/cl/work5/hongyu-s/conda/envs/latest_transformers/lib/python3.12/site-packages/torch/distributed/run.py", line 892, in run
+    elastic_launch(
+  File "/cl/work5/hongyu-s/conda/envs/latest_transformers/lib/python3.12/site-packages/torch/distributed/launcher/api.py", line 143, in __call__
+    return launch_agent(self._config, self._entrypoint, list(args))
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/cl/work5/hongyu-s/conda/envs/latest_transformers/lib/python3.12/site-packages/torch/distributed/launcher/api.py", line 277, in launch_agent
+    raise ChildFailedError(
+torch.distributed.elastic.multiprocessing.errors.ChildFailedError: 
+============================================================
+./run_clm.py FAILED
+------------------------------------------------------------
+Failures:
+  <NO_OTHER_FAILURES>
+------------------------------------------------------------
+Root Cause (first observed failure):
+[0]:
+  time      : 2025-10-10_09:44:08
+  host      : elm63.naist.jp
+  rank      : 1 (local_rank: 1)
+  exitcode  : 1 (pid: 2841792)
+  error_file: <N/A>
+  traceback : To enable traceback see: https://pytorch.org/docs/stable/elastic/errors.html
+============================================================

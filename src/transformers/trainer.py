@@ -1297,132 +1297,65 @@ class Trainer:
         forbidden_name_patterns = [r"bias", r"layernorm", r"rmsnorm", r"(?:^|\.)norm(?:$|\.)", r"_norm(?:$|\.)"]
         decay_parameters = get_parameter_names(model, [nn.LayerNorm], forbidden_name_patterns)
         return decay_parameters
-    # def create_optimizer(self):
-    #     """
-    #     方案1：起步就把 B 分支注册到 optimizer（可先 requires_grad=False 冻结，回调里再解冻）。
-    #     - 分四组：main_decay / main_nodecay / B_decay / B_nodecay
-    #     - 每组带 name，便于日志监控；可选 b_lr（若不设则用默认 lr）
-    #     """
-    #     opt_model = self.model_wrapped if is_sagemaker_mp_enabled() else self.model
-
-    #     if self.optimizer is None:
-    #         decay_parameters = self.get_decay_parameter_names(opt_model)
-
-    #         # —— 按名字判定是否属于 B 分支（按你的模块路径微调这里）——
-    #         def is_B_param(name: str) -> bool:
-    #             return (".wB_proj" in name) or (".wB_conv1d" in name)
-
-    #         # 不再用 requires_grad 过滤；即便冻结了也先注册进 optimizer，便于后续解冻与监控
-    #         params_decay_main, params_nodecay_main = [], []
-    #         params_decay_B,    params_nodecay_B    = [], []
-
-    #         for n, p in opt_model.named_parameters():
-    #             if is_B_param(n):
-    #                 (params_decay_B if n in decay_parameters else params_nodecay_B).append(p)
-    #             else:
-    #                 (params_decay_main if n in decay_parameters else params_nodecay_main).append(p)
-
-    #         optimizer_grouped_parameters = [
-    #             {"params": params_decay_main,   "weight_decay": self.args.weight_decay, "name": "main_decay"},
-    #             {"params": params_nodecay_main, "weight_decay": 0.0,                    "name": "main_nodecay"},
-    #         ]
-
-    #         # B 分支两个组（可选单独学习率 b_lr；不设则用默认 lr）
-    #         if len(params_decay_B) + len(params_nodecay_B) > 0:
-    #             b_lr = getattr(self.args, "b_lr", None)  # 例如在 TrainingArguments 里加一个 b_lr
-    #             gB_decay   = {"params": params_decay_B,   "weight_decay": self.args.weight_decay, "name": "B_decay"}
-    #             gB_nodecay = {"params": params_nodecay_B, "weight_decay": 0.0,                    "name": "B_nodecay"}
-    #             if b_lr is not None:
-    #                 gB_decay["lr"]   = float(b_lr)
-    #                 gB_nodecay["lr"] = float(b_lr)
-    #             optimizer_grouped_parameters.extend([gB_decay, gB_nodecay])
-
-    #         # —— 以下保留原始逻辑（支持自定义优化器/kwargs/特殊优化器）——
-    #         if self.optimizer_cls_and_kwargs is not None:
-    #             optimizer_cls, optimizer_kwargs = self.optimizer_cls_and_kwargs
-    #         else:
-    #             optimizer_cls, optimizer_kwargs = self.get_optimizer_cls_and_kwargs(self.args, opt_model)
-
-    #         if "params" in optimizer_kwargs:
-    #             optimizer_grouped_parameters = optimizer_kwargs.pop("params")
-    #         if "model" in optimizer_kwargs:
-    #             optimizer_grouped_parameters = optimizer_kwargs.pop("model")
-    #         if "optimizer_dict" in optimizer_kwargs:
-    #             optimizer_grouped_parameters = optimizer_kwargs.pop("optimizer_dict")
-
-    #         self.optimizer = optimizer_cls(optimizer_grouped_parameters, **optimizer_kwargs)
-
-    #         # bitsandbytes 兼容段：保持不变
-    #         if "bitsandbytes" in str(optimizer_cls) and optimizer_kwargs.get("optim_bits", None) == 8:
-    #             import bitsandbytes
-    #             manager = bitsandbytes.optim.GlobalOptimManager.get_instance()
-    #             skipped = 0
-    #             for module in opt_model.modules():
-    #                 if isinstance(module, nn.Embedding):
-    #                     skipped += sum({p.data_ptr(): p.numel() for p in module.parameters()}.values())
-    #                     logger.info(f"skipped {module}: {skipped / 2**20}M params")
-    #                     manager.register_module_override(module, "weight", {"optim_bits": 32})
-    #                     logger.debug(f"bitsandbytes: will optimize {module} in fp32")
-    #             logger.info(f"skipped: {skipped / 2**20}M params")
-
-    #     if is_sagemaker_mp_enabled():
-    #         self.optimizer = smp.DistributedOptimizer(self.optimizer)
-
-    #     return self.optimizer
-
     def create_optimizer(self):
         """
-        Setup the optimizer.
-
-        We provide a reasonable default that works well. If you want to use something else, you can pass a tuple in the
-        Trainer's init through `optimizers`, or subclass and override this method in a subclass.
+        方案1：起步就把 B 分支注册到 optimizer（可先 requires_grad=False 冻结，回调里再解冻）。
+        - 分四组：main_decay / main_nodecay / B_decay / B_nodecay
+        - 每组带 name，便于日志监控；可选 b_lr（若不设则用默认 lr）
         """
         opt_model = self.model_wrapped if is_sagemaker_mp_enabled() else self.model
 
         if self.optimizer is None:
             decay_parameters = self.get_decay_parameter_names(opt_model)
+
+            # —— 按名字判定是否属于 B 分支（按你的模块路径微调这里）——
+            def is_B_param(name: str) -> bool:
+                return (".wB_proj" in name) or (".wB_conv1d" in name)
+
+            # 不再用 requires_grad 过滤；即便冻结了也先注册进 optimizer，便于后续解冻与监控
+            params_decay_main, params_nodecay_main = [], []
+            params_decay_B,    params_nodecay_B    = [], []
+
+            for n, p in opt_model.named_parameters():
+                if is_B_param(n):
+                    (params_decay_B if n in decay_parameters else params_nodecay_B).append(p)
+                else:
+                    (params_decay_main if n in decay_parameters else params_nodecay_main).append(p)
+
             optimizer_grouped_parameters = [
-                {
-                    "params": [
-                        p for n, p in opt_model.named_parameters() if (n in decay_parameters and p.requires_grad)
-                    ],
-                    "weight_decay": self.args.weight_decay,
-                },
-                {
-                    "params": [
-                        p for n, p in opt_model.named_parameters() if (n not in decay_parameters and p.requires_grad)
-                    ],
-                    "weight_decay": 0.0,
-                },
+                {"params": params_decay_main,   "weight_decay": self.args.weight_decay, "name": "main_decay"},
+                {"params": params_nodecay_main, "weight_decay": 0.0,                    "name": "main_nodecay"},
             ]
 
+            # B 分支两个组（可选单独学习率 b_lr；不设则用默认 lr）
+            if len(params_decay_B) + len(params_nodecay_B) > 0:
+                b_lr = getattr(self.args, "b_lr", None)  # 例如在 TrainingArguments 里加一个 b_lr
+                gB_decay   = {"params": params_decay_B,   "weight_decay": self.args.weight_decay, "name": "B_decay"}
+                gB_nodecay = {"params": params_nodecay_B, "weight_decay": 0.0,                    "name": "B_nodecay"}
+                if b_lr is not None:
+                    gB_decay["lr"]   = float(b_lr)
+                    gB_nodecay["lr"] = float(b_lr)
+                optimizer_grouped_parameters.extend([gB_decay, gB_nodecay])
+
+            # —— 以下保留原始逻辑（支持自定义优化器/kwargs/特殊优化器）——
             if self.optimizer_cls_and_kwargs is not None:
                 optimizer_cls, optimizer_kwargs = self.optimizer_cls_and_kwargs
             else:
                 optimizer_cls, optimizer_kwargs = self.get_optimizer_cls_and_kwargs(self.args, opt_model)
 
-            # Overwrite `params` in case it's created by `get_optimizer_cls_and_kwargs`
-            # e.g. for GaLore optimizer.
             if "params" in optimizer_kwargs:
                 optimizer_grouped_parameters = optimizer_kwargs.pop("params")
-
-            # Overwrite `model` in case it's created by `get_optimizer_cls_and_kwargs`
-            # e.g. for LOMO optimizer.
             if "model" in optimizer_kwargs:
                 optimizer_grouped_parameters = optimizer_kwargs.pop("model")
-
-            # For layer-wise dummy optimizers we overwrite optimizer_grouped_parameters with `optimizer_dict`
-            # to avoid arguments conflicts.
             if "optimizer_dict" in optimizer_kwargs:
                 optimizer_grouped_parameters = optimizer_kwargs.pop("optimizer_dict")
 
             self.optimizer = optimizer_cls(optimizer_grouped_parameters, **optimizer_kwargs)
 
+            # bitsandbytes 兼容段：保持不变
             if "bitsandbytes" in str(optimizer_cls) and optimizer_kwargs.get("optim_bits", None) == 8:
                 import bitsandbytes
-
                 manager = bitsandbytes.optim.GlobalOptimManager.get_instance()
-
                 skipped = 0
                 for module in opt_model.modules():
                     if isinstance(module, nn.Embedding):
@@ -1436,6 +1369,73 @@ class Trainer:
             self.optimizer = smp.DistributedOptimizer(self.optimizer)
 
         return self.optimizer
+
+    # def create_optimizer(self):
+    #     """
+    #     Setup the optimizer.
+
+    #     We provide a reasonable default that works well. If you want to use something else, you can pass a tuple in the
+    #     Trainer's init through `optimizers`, or subclass and override this method in a subclass.
+    #     """
+    #     opt_model = self.model_wrapped if is_sagemaker_mp_enabled() else self.model
+
+    #     if self.optimizer is None:
+    #         decay_parameters = self.get_decay_parameter_names(opt_model)
+    #         optimizer_grouped_parameters = [
+    #             {
+    #                 "params": [
+    #                     p for n, p in opt_model.named_parameters() if (n in decay_parameters and p.requires_grad)
+    #                 ],
+    #                 "weight_decay": self.args.weight_decay,
+    #             },
+    #             {
+    #                 "params": [
+    #                     p for n, p in opt_model.named_parameters() if (n not in decay_parameters and p.requires_grad)
+    #                 ],
+    #                 "weight_decay": 0.0,
+    #             },
+    #         ]
+
+    #         if self.optimizer_cls_and_kwargs is not None:
+    #             optimizer_cls, optimizer_kwargs = self.optimizer_cls_and_kwargs
+    #         else:
+    #             optimizer_cls, optimizer_kwargs = self.get_optimizer_cls_and_kwargs(self.args, opt_model)
+
+    #         # Overwrite `params` in case it's created by `get_optimizer_cls_and_kwargs`
+    #         # e.g. for GaLore optimizer.
+    #         if "params" in optimizer_kwargs:
+    #             optimizer_grouped_parameters = optimizer_kwargs.pop("params")
+
+    #         # Overwrite `model` in case it's created by `get_optimizer_cls_and_kwargs`
+    #         # e.g. for LOMO optimizer.
+    #         if "model" in optimizer_kwargs:
+    #             optimizer_grouped_parameters = optimizer_kwargs.pop("model")
+
+    #         # For layer-wise dummy optimizers we overwrite optimizer_grouped_parameters with `optimizer_dict`
+    #         # to avoid arguments conflicts.
+    #         if "optimizer_dict" in optimizer_kwargs:
+    #             optimizer_grouped_parameters = optimizer_kwargs.pop("optimizer_dict")
+
+    #         self.optimizer = optimizer_cls(optimizer_grouped_parameters, **optimizer_kwargs)
+
+    #         if "bitsandbytes" in str(optimizer_cls) and optimizer_kwargs.get("optim_bits", None) == 8:
+    #             import bitsandbytes
+
+    #             manager = bitsandbytes.optim.GlobalOptimManager.get_instance()
+
+    #             skipped = 0
+    #             for module in opt_model.modules():
+    #                 if isinstance(module, nn.Embedding):
+    #                     skipped += sum({p.data_ptr(): p.numel() for p in module.parameters()}.values())
+    #                     logger.info(f"skipped {module}: {skipped / 2**20}M params")
+    #                     manager.register_module_override(module, "weight", {"optim_bits": 32})
+    #                     logger.debug(f"bitsandbytes: will optimize {module} in fp32")
+    #             logger.info(f"skipped: {skipped / 2**20}M params")
+
+    #     if is_sagemaker_mp_enabled():
+    #         self.optimizer = smp.DistributedOptimizer(self.optimizer)
+
+    #     return self.optimizer
 
         #     if self.optimizer_cls_and_kwargs is not None:
         #         optimizer_cls, optimizer_kwargs = self.optimizer_cls_and_kwargs
@@ -1975,80 +1975,80 @@ class Trainer:
         else:
             raise ValueError(f"Trainer cannot instantiate unsupported optimizer: {args.optim}")
         return optimizer_cls, optimizer_kwargs
-    # def create_scheduler(self, num_training_steps: int, optimizer: torch.optim.Optimizer = None):
-    #     """
-    #     Setup the scheduler. Adds per-group LambdaLR to keep B-branch lr=0 before unfreeze, then follow main schedule.
-    #     Expects your optimizer.param_groups 用了 name 字段，比如 "main_decay", "main_nodecay", "B_decay", "B_nodecay".
-    #     可配置项（放到 TrainingArguments）:
-    #     - b_unfreeze_step: int = 5000
-    #     - b_group_names: Tuple[str,...] = ("B_decay","B_nodecay")
-    #     """
-    #     if self.lr_scheduler is not None:
-    #         return self.lr_scheduler
-
-    #     opt = self.optimizer if optimizer is None else optimizer
-
-    #     # 先尝试用我们自建的 per-group LambdaLR（仅支持 linear / cosine）
-    #     sched_type = str(self.args.lr_scheduler_type).lower()
-    #     warmup_steps = self.args.get_warmup_steps(num_training_steps)
-    #     main_lambda = _build_main_lambda(sched_type, warmup_steps, num_training_steps)
-
-    #     b_unfreeze_step = getattr(self.args, "b_unfreeze_step", None)
-    #     b_group_names = tuple(getattr(self.args, "b_group_names", ("B_decay", "B_nodecay")))
-
-    #     can_use_lambda = (main_lambda is not None) and (b_unfreeze_step is not None)
-    #     if can_use_lambda:
-    #         # 找到哪些 param_group 是 B 组（按 name 匹配；匹配不到就当作主组处理）
-    #         b_group_ids = set()
-    #         for i, pg in enumerate(opt.param_groups):
-    #             name = pg.get("name", f"group_{i}")
-    #             if name in b_group_names:
-    #                 b_group_ids.add(i)
-
-    #         # 为每个 param_group 构建自己的 lambda（主组: main；B 组: mask * main）
-    #         def make_lambda_for_group(i):
-    #             if i in b_group_ids:
-    #                 def lambda_B(step):
-    #                     if step < b_unfreeze_step:
-    #                         return 0.0      # 0～N 步：lr=0
-    #                     return main_lambda(step)  # 之后按主计划
-    #                 return lambda_B
-    #             else:
-    #                 return main_lambda
-
-    #         lr_lambdas = [make_lambda_for_group(i) for i in range(len(opt.param_groups))]
-    #         self.lr_scheduler = LambdaLR(opt, lr_lambda=lr_lambdas)
-    #         self._created_lr_scheduler = True
-    #         return self.lr_scheduler
-
-    #     # 回退：维持原有 get_scheduler 行为（所有组同一计划）
-    #     self.lr_scheduler = get_scheduler(
-    #         self.args.lr_scheduler_type,
-    #         optimizer=opt,
-    #         num_warmup_steps=self.args.get_warmup_steps(num_training_steps),
-    #         num_training_steps=num_training_steps,
-    #         scheduler_specific_kwargs=self.args.lr_scheduler_kwargs,
-    #     )
-    #     self._created_lr_scheduler = True
-    #     return self.lr_scheduler
     def create_scheduler(self, num_training_steps: int, optimizer: torch.optim.Optimizer = None):
         """
-        Setup the scheduler. The optimizer of the trainer must have been set up either before this method is called or
-        passed as an argument.
-
-        Args:
-            num_training_steps (int): The number of training steps to do.
+        Setup the scheduler. Adds per-group LambdaLR to keep B-branch lr=0 before unfreeze, then follow main schedule.
+        Expects your optimizer.param_groups 用了 name 字段，比如 "main_decay", "main_nodecay", "B_decay", "B_nodecay".
+        可配置项（放到 TrainingArguments）:
+        - b_unfreeze_step: int = 5000
+        - b_group_names: Tuple[str,...] = ("B_decay","B_nodecay")
         """
-        if self.lr_scheduler is None:
-            self.lr_scheduler = get_scheduler(
-                self.args.lr_scheduler_type,
-                optimizer=self.optimizer if optimizer is None else optimizer,
-                num_warmup_steps=self.args.get_warmup_steps(num_training_steps),
-                num_training_steps=num_training_steps,
-                scheduler_specific_kwargs=self.args.lr_scheduler_kwargs,
-            )
+        if self.lr_scheduler is not None:
+            return self.lr_scheduler
+
+        opt = self.optimizer if optimizer is None else optimizer
+
+        # 先尝试用我们自建的 per-group LambdaLR（仅支持 linear / cosine）
+        sched_type = str(self.args.lr_scheduler_type).lower()
+        warmup_steps = self.args.get_warmup_steps(num_training_steps)
+        main_lambda = _build_main_lambda(sched_type, warmup_steps, num_training_steps)
+
+        b_unfreeze_step = getattr(self.args, "b_unfreeze_step", None)
+        b_group_names = tuple(getattr(self.args, "b_group_names", ("B_decay", "B_nodecay")))
+
+        can_use_lambda = (main_lambda is not None) and (b_unfreeze_step is not None)
+        if can_use_lambda:
+            # 找到哪些 param_group 是 B 组（按 name 匹配；匹配不到就当作主组处理）
+            b_group_ids = set()
+            for i, pg in enumerate(opt.param_groups):
+                name = pg.get("name", f"group_{i}")
+                if name in b_group_names:
+                    b_group_ids.add(i)
+
+            # 为每个 param_group 构建自己的 lambda（主组: main；B 组: mask * main）
+            def make_lambda_for_group(i):
+                if i in b_group_ids:
+                    def lambda_B(step):
+                        if step < b_unfreeze_step:
+                            return 0.0      # 0～N 步：lr=0
+                        return main_lambda(step)  # 之后按主计划
+                    return lambda_B
+                else:
+                    return main_lambda
+
+            lr_lambdas = [make_lambda_for_group(i) for i in range(len(opt.param_groups))]
+            self.lr_scheduler = LambdaLR(opt, lr_lambda=lr_lambdas)
             self._created_lr_scheduler = True
+            return self.lr_scheduler
+
+        # 回退：维持原有 get_scheduler 行为（所有组同一计划）
+        self.lr_scheduler = get_scheduler(
+            self.args.lr_scheduler_type,
+            optimizer=opt,
+            num_warmup_steps=self.args.get_warmup_steps(num_training_steps),
+            num_training_steps=num_training_steps,
+            scheduler_specific_kwargs=self.args.lr_scheduler_kwargs,
+        )
+        self._created_lr_scheduler = True
         return self.lr_scheduler
+    # def create_scheduler(self, num_training_steps: int, optimizer: torch.optim.Optimizer = None):
+    #     """
+    #     Setup the scheduler. The optimizer of the trainer must have been set up either before this method is called or
+    #     passed as an argument.
+
+    #     Args:
+    #         num_training_steps (int): The number of training steps to do.
+    #     """
+    #     if self.lr_scheduler is None:
+    #         self.lr_scheduler = get_scheduler(
+    #             self.args.lr_scheduler_type,
+    #             optimizer=self.optimizer if optimizer is None else optimizer,
+    #             num_warmup_steps=self.args.get_warmup_steps(num_training_steps),
+    #             num_training_steps=num_training_steps,
+    #             scheduler_specific_kwargs=self.args.lr_scheduler_kwargs,
+    #         )
+    #         self._created_lr_scheduler = True
+    #     return self.lr_scheduler
 
     def num_examples(self, dataloader: DataLoader) -> int:
         """

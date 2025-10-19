@@ -1,0 +1,472 @@
+MASTER_ADDR: elm26
+MASTER_PORT: 12345
+WORLD_SIZE: 1
+RANK: 0
++ echo 'Workdir: /project/nlp-work5/hongyu-s/transformers/examples/pytorch/language-modeling'
+Workdir: /project/nlp-work5/hongyu-s/transformers/examples/pytorch/language-modeling
++ cd /project/nlp-work5/hongyu-s/transformers/examples/pytorch/language-modeling
++ echo 'Launching training/eval command'
+Launching training/eval command
++ echo '================= BEGIN RUN ================='
+================= BEGIN RUN =================
++ torchrun --nproc_per_node=2 ./run_clm.py --model_type gpt2 --tokenizer_name gpt2 --share_freq_across_heads True --learning_rate 1e-4 --per_device_train_batch_size 16 --per_device_eval_batch_size 16 --block_size 512 --dataset_name wikitext --dataset_config_name wikitext-103-raw-v1 --do_train --do_eval --overwrite_output_dir --num_train_epochs 30 --num_harmonics 1 --eval_strategy steps --eval_steps 1000 --logging_dir ./degradate_test_log --logging_steps 1000 --save_steps 5000 --attn_implementation path_attn_wfreq --path_use_qk_norm false --path_use_low_rank_w true --path_use_w_shortconv false --path_conv_size 3 --warmup_steps 5000 --path_conv_bias false --output_dir runs/degradate_test --gradient_accumulation_steps 2 --b_unfreeze_step 5000
+W0929 11:49:37.825000 537186 /project/nlp-work5/hongyu-s/conda/envs/latest_transformers/lib/python3.12/site-packages/torch/distributed/run.py:774] 
+W0929 11:49:37.825000 537186 /project/nlp-work5/hongyu-s/conda/envs/latest_transformers/lib/python3.12/site-packages/torch/distributed/run.py:774] *****************************************
+W0929 11:49:37.825000 537186 /project/nlp-work5/hongyu-s/conda/envs/latest_transformers/lib/python3.12/site-packages/torch/distributed/run.py:774] Setting OMP_NUM_THREADS environment variable for each process to be 1 in default, to avoid your system being overloaded, please further tune the variable for optimal performance in your application as needed. 
+W0929 11:49:37.825000 537186 /project/nlp-work5/hongyu-s/conda/envs/latest_transformers/lib/python3.12/site-packages/torch/distributed/run.py:774] *****************************************
+09/29/2025 11:49:54 - WARNING - __main__ - Process rank: 0, device: cuda:0, n_gpu: 1, distributed training: True, 16-bits training: False
+09/29/2025 11:49:54 - INFO - __main__ - Training/evaluation parameters SupplyTrainingArguments(
+_n_gpu=1,
+accelerator_config={'split_batches': False, 'dispatch_batches': None, 'even_batches': True, 'use_seedable_sampler': True, 'non_blocking': False, 'gradient_accumulation_kwargs': None, 'use_configured_state': False},
+adafactor=False,
+adam_beta1=0.9,
+adam_beta2=0.999,
+adam_epsilon=1e-08,
+auto_find_batch_size=False,
+average_tokens_across_devices=True,
+b_unfreeze_step=5000,
+batch_eval_metrics=False,
+bf16=False,
+bf16_full_eval=False,
+data_seed=None,
+dataloader_drop_last=False,
+dataloader_num_workers=0,
+dataloader_persistent_workers=False,
+dataloader_pin_memory=True,
+dataloader_prefetch_factor=None,
+ddp_backend=None,
+ddp_broadcast_buffers=None,
+ddp_bucket_cap_mb=None,
+ddp_find_unused_parameters=None,
+ddp_timeout=1800,
+debug=[],
+deepspeed=None,
+disable_tqdm=False,
+do_eval=True,
+do_predict=False,
+do_train=True,
+eval_accumulation_steps=None,
+eval_delay=0,
+eval_do_concat_batches=True,
+eval_on_start=False,
+eval_steps=1000,
+eval_strategy=IntervalStrategy.STEPS,
+eval_use_gather_object=False,
+fp16=False,
+fp16_backend=auto,
+fp16_full_eval=False,
+fp16_opt_level=O1,
+fsdp=[],
+fsdp_config={'min_num_params': 0, 'xla': False, 'xla_fsdp_v2': False, 'xla_fsdp_grad_ckpt': False},
+fsdp_min_num_params=0,
+fsdp_transformer_layer_cls_to_wrap=None,
+full_determinism=False,
+gradient_accumulation_steps=2,
+gradient_checkpointing=False,
+gradient_checkpointing_kwargs=None,
+greater_is_better=None,
+group_by_length=False,
+half_precision_backend=auto,
+hub_always_push=False,
+hub_model_id=None,
+hub_private_repo=None,
+hub_revision=None,
+hub_strategy=HubStrategy.EVERY_SAVE,
+hub_token=<HUB_TOKEN>,
+ignore_data_skip=False,
+include_for_metrics=[],
+include_inputs_for_metrics=False,
+include_num_input_tokens_seen=no,
+include_tokens_per_second=False,
+jit_mode_eval=False,
+label_names=None,
+label_smoothing_factor=0.0,
+learning_rate=0.0001,
+length_column_name=length,
+liger_kernel_config=None,
+load_best_model_at_end=False,
+local_rank=0,
+log_level=passive,
+log_level_replica=warning,
+log_on_each_node=True,
+logging_dir=./degradate_test_log,
+logging_first_step=False,
+logging_nan_inf_filter=True,
+logging_steps=1000,
+logging_strategy=IntervalStrategy.STEPS,
+lr_scheduler_kwargs={},
+lr_scheduler_type=SchedulerType.LINEAR,
+max_grad_norm=1.0,
+max_steps=-1,
+metric_for_best_model=None,
+mp_parameters=,
+neftune_noise_alpha=None,
+no_cuda=False,
+num_train_epochs=30.0,
+optim=OptimizerNames.ADAMW_TORCH_FUSED,
+optim_args=None,
+optim_target_modules=None,
+output_dir=runs/degradate_test,
+overwrite_output_dir=True,
+parallelism_config=None,
+past_index=-1,
+per_device_eval_batch_size=16,
+per_device_train_batch_size=16,
+prediction_loss_only=False,
+push_to_hub=False,
+push_to_hub_model_id=None,
+push_to_hub_organization=None,
+push_to_hub_token=<PUSH_TO_HUB_TOKEN>,
+ray_scope=last,
+remove_unused_columns=True,
+report_to=['tensorboard', 'wandb'],
+restore_callback_states_from_checkpoint=False,
+resume_from_checkpoint=None,
+run_name=None,
+save_on_each_node=False,
+save_only_model=False,
+save_safetensors=True,
+save_steps=5000,
+save_strategy=SaveStrategy.STEPS,
+save_total_limit=None,
+seed=42,
+skip_memory_metrics=True,
+tf32=None,
+torch_compile=False,
+torch_compile_backend=None,
+torch_compile_mode=None,
+torch_empty_cache_steps=None,
+torchdynamo=None,
+tpu_metrics_debug=False,
+tpu_num_cores=None,
+use_cpu=False,
+use_legacy_prediction_loop=False,
+use_liger_kernel=False,
+use_mps_device=False,
+warmup_ratio=0.0,
+warmup_steps=5000,
+weight_decay=0.0,
+)
+09/29/2025 11:49:54 - WARNING - __main__ - Process rank: 1, device: cuda:1, n_gpu: 1, distributed training: True, 16-bits training: False
+Found cached dataset wikitext (/cl/work5/hongyu-s/huggingfac/datasets/wikitext/wikitext-103-raw-v1/0.0.0/b08601e04326c79dfdd32d625aee71d232d685c3)
+09/29/2025 11:49:58 - INFO - datasets.builder - Found cached dataset wikitext (/cl/work5/hongyu-s/huggingfac/datasets/wikitext/wikitext-103-raw-v1/0.0.0/b08601e04326c79dfdd32d625aee71d232d685c3)
+09/29/2025 11:49:59 - WARNING - __main__ - You are instantiating a new config instance from scratch.
+09/29/2025 11:49:59 - WARNING - __main__ - You are instantiating a new config instance from scratch.
+[INFO|configuration_utils.py:759] 2025-09-29 11:49:59,318 >> loading configuration file config.json from cache at /cl/work5/hongyu-s/huggingfac/hub/models--gpt2/snapshots/607a30d783dfa663caf39e06633721c8d4cfcd7e/config.json
+[INFO|configuration_utils.py:833] 2025-09-29 11:49:59,320 >> Model config GPT2Config {
+  "activation_function": "gelu_new",
+  "architectures": [
+    "GPT2LMHeadModel"
+  ],
+  "attn_pdrop": 0.1,
+  "bos_token_id": 50256,
+  "embd_pdrop": 0.1,
+  "eos_token_id": 50256,
+  "initializer_range": 0.02,
+  "layer_norm_epsilon": 1e-05,
+  "model_type": "gpt2",
+  "n_ctx": 1024,
+  "n_embd": 768,
+  "n_head": 12,
+  "n_inner": null,
+  "n_layer": 12,
+  "n_positions": 1024,
+  "reorder_and_upcast_attn": false,
+  "resid_pdrop": 0.1,
+  "scale_attn_by_inverse_layer_idx": false,
+  "scale_attn_weights": true,
+  "summary_activation": null,
+  "summary_first_dropout": 0.1,
+  "summary_proj_to_labels": true,
+  "summary_type": "cls_index",
+  "summary_use_proj": true,
+  "task_specific_params": {
+    "text-generation": {
+      "do_sample": true,
+      "max_length": 50
+    }
+  },
+  "transformers_version": "4.57.0.dev0",
+  "use_cache": true,
+  "vocab_size": 50257
+}
+
+[INFO|tokenization_utils_base.py:2057] 2025-09-29 11:49:59,743 >> loading file vocab.json from cache at /cl/work5/hongyu-s/huggingfac/hub/models--gpt2/snapshots/607a30d783dfa663caf39e06633721c8d4cfcd7e/vocab.json
+[INFO|tokenization_utils_base.py:2057] 2025-09-29 11:49:59,743 >> loading file merges.txt from cache at /cl/work5/hongyu-s/huggingfac/hub/models--gpt2/snapshots/607a30d783dfa663caf39e06633721c8d4cfcd7e/merges.txt
+[INFO|tokenization_utils_base.py:2057] 2025-09-29 11:49:59,743 >> loading file tokenizer.json from cache at /cl/work5/hongyu-s/huggingfac/hub/models--gpt2/snapshots/607a30d783dfa663caf39e06633721c8d4cfcd7e/tokenizer.json
+[INFO|tokenization_utils_base.py:2057] 2025-09-29 11:49:59,743 >> loading file added_tokens.json from cache at None
+[INFO|tokenization_utils_base.py:2057] 2025-09-29 11:49:59,744 >> loading file special_tokens_map.json from cache at None
+[INFO|tokenization_utils_base.py:2057] 2025-09-29 11:49:59,744 >> loading file tokenizer_config.json from cache at /cl/work5/hongyu-s/huggingfac/hub/models--gpt2/snapshots/607a30d783dfa663caf39e06633721c8d4cfcd7e/tokenizer_config.json
+[INFO|tokenization_utils_base.py:2057] 2025-09-29 11:49:59,744 >> loading file chat_template.jinja from cache at None
+[INFO|configuration_utils.py:759] 2025-09-29 11:49:59,746 >> loading configuration file config.json from cache at /cl/work5/hongyu-s/huggingfac/hub/models--gpt2/snapshots/607a30d783dfa663caf39e06633721c8d4cfcd7e/config.json
+[INFO|configuration_utils.py:833] 2025-09-29 11:49:59,748 >> Model config GPT2Config {
+  "activation_function": "gelu_new",
+  "architectures": [
+    "GPT2LMHeadModel"
+  ],
+  "attn_pdrop": 0.1,
+  "bos_token_id": 50256,
+  "embd_pdrop": 0.1,
+  "eos_token_id": 50256,
+  "initializer_range": 0.02,
+  "layer_norm_epsilon": 1e-05,
+  "model_type": "gpt2",
+  "n_ctx": 1024,
+  "n_embd": 768,
+  "n_head": 12,
+  "n_inner": null,
+  "n_layer": 12,
+  "n_positions": 1024,
+  "reorder_and_upcast_attn": false,
+  "resid_pdrop": 0.1,
+  "scale_attn_by_inverse_layer_idx": false,
+  "scale_attn_weights": true,
+  "summary_activation": null,
+  "summary_first_dropout": 0.1,
+  "summary_proj_to_labels": true,
+  "summary_type": "cls_index",
+  "summary_use_proj": true,
+  "task_specific_params": {
+    "text-generation": {
+      "do_sample": true,
+      "max_length": 50
+    }
+  },
+  "transformers_version": "4.57.0.dev0",
+  "use_cache": true,
+  "vocab_size": 50257
+}
+
+wandb: Currently logged in as: hongyu-s-aa-titech (hongyu-s-aa-titech-nara-institute-of-science-and-technology) to https://api.wandb.ai. Use `wandb login --relogin` to force relogin
+wandb: creating run
+wandb: Tracking run with wandb version 0.22.0
+wandb: Run data is saved locally in /project/nlp-work5/hongyu-s/transformers/examples/pytorch/language-modeling/wandb/run-20250929_115000-esjx8woy
+wandb: Run `wandb offline` to turn off syncing.
+wandb: Syncing run worthy-sunset-100
+wandb: ⭐️ View project at https://wandb.ai/hongyu-s-aa-titech-nara-institute-of-science-and-technology/gpt2%20with%20path%20attn
+wandb: 🚀 View run at https://wandb.ai/hongyu-s-aa-titech-nara-institute-of-science-and-technology/gpt2%20with%20path%20attn/runs/esjx8woy
+[INFO|configuration_utils.py:986] 2025-09-29 11:50:06,256 >> Generate config GenerationConfig {
+  "bos_token_id": 50256,
+  "eos_token_id": 50256
+}
+
+/cl/work5/hongyu-s/conda/envs/latest_transformers/lib/python3.12/site-packages/torch/distributed/distributed_c10d.py:4807: UserWarning: No device id is provided via `init_process_group` or `barrier `. Using the current device set by the user. 
+  warnings.warn(  # warn only once
+[rank1]:[W929 11:50:07.531209776 ProcessGroupNCCL.cpp:5023] [PG ID 0 PG GUID 0 Rank 1]  using GPU 1 as device used by this process is currently unknown. This can potentially cause a hang if this rank to GPU mapping is incorrect. You can specify device_id in init_process_group() to force use of a particular device.
+09/29/2025 11:50:08 - INFO - __main__ - Training new model from scratch - Total size=119.87M params
+Loading cached processed dataset at /cl/work5/hongyu-s/huggingfac/datasets/wikitext/wikitext-103-raw-v1/0.0.0/b08601e04326c79dfdd32d625aee71d232d685c3/cache-78d56f068833be52_*_of_00001.arrow
+09/29/2025 11:50:08 - INFO - datasets.arrow_dataset - Loading cached processed dataset at /cl/work5/hongyu-s/huggingfac/datasets/wikitext/wikitext-103-raw-v1/0.0.0/b08601e04326c79dfdd32d625aee71d232d685c3/cache-78d56f068833be52_*_of_00001.arrow
+Loading cached processed dataset at /cl/work5/hongyu-s/huggingfac/datasets/wikitext/wikitext-103-raw-v1/0.0.0/b08601e04326c79dfdd32d625aee71d232d685c3/cache-4aa64ec0866d64bf_*_of_00001.arrow
+09/29/2025 11:50:08 - INFO - datasets.arrow_dataset - Loading cached processed dataset at /cl/work5/hongyu-s/huggingfac/datasets/wikitext/wikitext-103-raw-v1/0.0.0/b08601e04326c79dfdd32d625aee71d232d685c3/cache-4aa64ec0866d64bf_*_of_00001.arrow
+Loading cached processed dataset at /cl/work5/hongyu-s/huggingfac/datasets/wikitext/wikitext-103-raw-v1/0.0.0/b08601e04326c79dfdd32d625aee71d232d685c3/cache-dd72d81b3872e8ad_*_of_00001.arrow
+09/29/2025 11:50:08 - INFO - datasets.arrow_dataset - Loading cached processed dataset at /cl/work5/hongyu-s/huggingfac/datasets/wikitext/wikitext-103-raw-v1/0.0.0/b08601e04326c79dfdd32d625aee71d232d685c3/cache-dd72d81b3872e8ad_*_of_00001.arrow
+/cl/work5/hongyu-s/conda/envs/latest_transformers/lib/python3.12/site-packages/torch/distributed/distributed_c10d.py:4807: UserWarning: No device id is provided via `init_process_group` or `barrier `. Using the current device set by the user. 
+  warnings.warn(  # warn only once
+[rank0]:[W929 11:50:08.067073918 ProcessGroupNCCL.cpp:5023] [PG ID 0 PG GUID 0 Rank 0]  using GPU 0 as device used by this process is currently unknown. This can potentially cause a hang if this rank to GPU mapping is incorrect. You can specify device_id in init_process_group() to force use of a particular device.
+Loading cached processed dataset at /cl/work5/hongyu-s/huggingfac/datasets/wikitext/wikitext-103-raw-v1/0.0.0/b08601e04326c79dfdd32d625aee71d232d685c3/cache-6c45e581cfd12e15_*_of_00001.arrow
+09/29/2025 11:50:08 - INFO - datasets.arrow_dataset - Loading cached processed dataset at /cl/work5/hongyu-s/huggingfac/datasets/wikitext/wikitext-103-raw-v1/0.0.0/b08601e04326c79dfdd32d625aee71d232d685c3/cache-6c45e581cfd12e15_*_of_00001.arrow
+Loading cached processed dataset at /cl/work5/hongyu-s/huggingfac/datasets/wikitext/wikitext-103-raw-v1/0.0.0/b08601e04326c79dfdd32d625aee71d232d685c3/cache-f4b57832a890a927_*_of_00001.arrow
+09/29/2025 11:50:08 - INFO - datasets.arrow_dataset - Loading cached processed dataset at /cl/work5/hongyu-s/huggingfac/datasets/wikitext/wikitext-103-raw-v1/0.0.0/b08601e04326c79dfdd32d625aee71d232d685c3/cache-f4b57832a890a927_*_of_00001.arrow
+Loading cached processed dataset at /cl/work5/hongyu-s/huggingfac/datasets/wikitext/wikitext-103-raw-v1/0.0.0/b08601e04326c79dfdd32d625aee71d232d685c3/cache-5e0edde0740173f5_*_of_00001.arrow
+09/29/2025 11:50:08 - INFO - datasets.arrow_dataset - Loading cached processed dataset at /cl/work5/hongyu-s/huggingfac/datasets/wikitext/wikitext-103-raw-v1/0.0.0/b08601e04326c79dfdd32d625aee71d232d685c3/cache-5e0edde0740173f5_*_of_00001.arrow
+[INFO|trainer.py:2710] 2025-09-29 11:50:10,670 >> ***** Running training *****
+[INFO|trainer.py:2711] 2025-09-29 11:50:10,670 >>   Num examples = 229,395
+[INFO|trainer.py:2712] 2025-09-29 11:50:10,670 >>   Num Epochs = 30
+[INFO|trainer.py:2713] 2025-09-29 11:50:10,670 >>   Instantaneous batch size per device = 16
+[INFO|trainer.py:2716] 2025-09-29 11:50:10,670 >>   Total train batch size (w. parallel, distributed & accumulation) = 64
+[INFO|trainer.py:2717] 2025-09-29 11:50:10,671 >>   Gradient Accumulation steps = 2
+[INFO|trainer.py:2718] 2025-09-29 11:50:10,671 >>   Total optimization steps = 107,550
+[INFO|trainer.py:2719] 2025-09-29 11:50:10,671 >>   Number of trainable parameters = 125,693,352
+[INFO|integration_utils.py:858] 2025-09-29 11:50:10,677 >> Automatic Weights & Biases logging enabled, to disable set os.environ["WANDB_DISABLED"] = "true"
+  0%|          | 0/107550 [00:00<?, ?it/s][WARNING|logging.py:328] 2025-09-29 11:50:11,855 >> `loss_type=None` was set in the config but it is unrecognized. Using the default loss: `ForCausalLMLoss`.
+[WARNING|logging.py:328] 2025-09-29 11:50:11,855 >> `loss_type=None` was set in the config but it is unrecognized. Using the default loss: `ForCausalLMLoss`.
+Traceback (most recent call last):
+  File "/project/nlp-work5/hongyu-s/transformers/examples/pytorch/language-modeling/./run_clm.py", line 857, in <module>
+    main()
+  File "/project/nlp-work5/hongyu-s/transformers/examples/pytorch/language-modeling/./run_clm.py", line 798, in main
+    train_result = trainer.train(resume_from_checkpoint=checkpoint)
+                   ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/project/nlp-work5/hongyu-s/transformers/src/transformers/trainer.py", line 2516, in train
+    return inner_training_loop(
+           ^^^^^^^^^^^^^^^^^^^^
+  File "/project/nlp-work5/hongyu-s/transformers/src/transformers/trainer.py", line 2865, in _inner_training_loop
+    tr_loss_step = self.training_step(model, inputs, num_items_in_batch)
+                   ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/project/nlp-work5/hongyu-s/transformers/src/transformers/trainer.py", line 4261, in training_step
+    self.accelerator.backward(loss, **kwargs)
+  File "/cl/work5/hongyu-s/conda/envs/latest_transformers/lib/python3.12/site-packages/accelerate/accelerator.py", line 2734, in backward
+    loss.backward(**kwargs)
+  File "/cl/work5/hongyu-s/conda/envs/latest_transformers/lib/python3.12/site-packages/torch/_tensor.py", line 647, in backward
+    torch.autograd.backward(
+  File "/cl/work5/hongyu-s/conda/envs/latest_transformers/lib/python3.12/site-packages/torch/autograd/__init__.py", line 354, in backward
+    _engine_run_backward(
+  File "/cl/work5/hongyu-s/conda/envs/latest_transformers/lib/python3.12/site-packages/torch/autograd/graph.py", line 829, in _engine_run_backward
+    return Variable._execution_engine.run_backward(  # Calls into the C++ engine to run the backward pass
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/cl/work5/hongyu-s/conda/envs/latest_transformers/lib/python3.12/site-packages/torch/autograd/function.py", line 311, in apply
+    return user_fn(self, *args)
+           ^^^^^^^^^^^^^^^^^^^^
+  File "/project/nlp-work5/hongyu-s/flash-linear-attention/fla/utils.py", line 164, in wrapper
+    return fn(*contiguous_args, **contiguous_kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/cl/work5/hongyu-s/conda/envs/latest_transformers/lib/python3.12/site-packages/torch/amp/autocast_mode.py", line 563, in decorate_bwd
+    return bwd(*args, **kwargs)
+           ^^^^^^^^^^^^^^^^^^^^
+  File "/project/nlp-work5/hongyu-s/flash-linear-attention/fla/ops/path_attn/parallel.py", line 183, in backward
+    dq, dk, dbeta, dw = intra_chunk_preprocess_bwd_fn(
+                        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/project/nlp-work5/hongyu-s/flash-linear-attention/fla/ops/path_attn/intra_chunk_preprocess_bwd.py", line 131, in intra_chunk_preprocess_bwd_fn
+    intra_chunk_preprocess_bwd_kernel[grid](
+  File "/cl/work5/hongyu-s/conda/envs/latest_transformers/lib/python3.12/site-packages/triton/runtime/jit.py", line 390, in <lambda>
+    return lambda *args, **kwargs: self.run(grid=grid, warmup=False, *args, **kwargs)
+                                   ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/cl/work5/hongyu-s/conda/envs/latest_transformers/lib/python3.12/site-packages/triton/runtime/autotuner.py", line 453, in run
+    return self.fn.run(*args, **kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/cl/work5/hongyu-s/conda/envs/latest_transformers/lib/python3.12/site-packages/triton/runtime/jit.py", line 617, in run
+    kernel.run(grid_0, grid_1, grid_2, stream, kernel.function, kernel.packed_metadata, launch_metadata,
+    ^^^^^^^^^^
+  File "/cl/work5/hongyu-s/conda/envs/latest_transformers/lib/python3.12/site-packages/triton/compiler/compiler.py", line 498, in __getattribute__
+    self._init_handles()
+  File "/cl/work5/hongyu-s/conda/envs/latest_transformers/lib/python3.12/site-packages/triton/compiler/compiler.py", line 483, in _init_handles
+    raise OutOfResources(self.metadata.shared, max_shared, "shared memory")
+triton.runtime.errors.OutOfResources: out of resource: shared memory, Required: 69632, Hardware limit: 65536. Reducing block sizes or `num_stages` may help.
+[rank1]: Traceback (most recent call last):
+[rank1]:   File "/project/nlp-work5/hongyu-s/transformers/examples/pytorch/language-modeling/./run_clm.py", line 857, in <module>
+[rank1]:     main()
+[rank1]:   File "/project/nlp-work5/hongyu-s/transformers/examples/pytorch/language-modeling/./run_clm.py", line 798, in main
+[rank1]:     train_result = trainer.train(resume_from_checkpoint=checkpoint)
+[rank1]:                    ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+[rank1]:   File "/project/nlp-work5/hongyu-s/transformers/src/transformers/trainer.py", line 2516, in train
+[rank1]:     return inner_training_loop(
+[rank1]:            ^^^^^^^^^^^^^^^^^^^^
+[rank1]:   File "/project/nlp-work5/hongyu-s/transformers/src/transformers/trainer.py", line 2865, in _inner_training_loop
+[rank1]:     tr_loss_step = self.training_step(model, inputs, num_items_in_batch)
+[rank1]:                    ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+[rank1]:   File "/project/nlp-work5/hongyu-s/transformers/src/transformers/trainer.py", line 4261, in training_step
+[rank1]:     self.accelerator.backward(loss, **kwargs)
+[rank1]:   File "/cl/work5/hongyu-s/conda/envs/latest_transformers/lib/python3.12/site-packages/accelerate/accelerator.py", line 2734, in backward
+[rank1]:     loss.backward(**kwargs)
+[rank1]:   File "/cl/work5/hongyu-s/conda/envs/latest_transformers/lib/python3.12/site-packages/torch/_tensor.py", line 647, in backward
+[rank1]:     torch.autograd.backward(
+[rank1]:   File "/cl/work5/hongyu-s/conda/envs/latest_transformers/lib/python3.12/site-packages/torch/autograd/__init__.py", line 354, in backward
+[rank1]:     _engine_run_backward(
+[rank1]:   File "/cl/work5/hongyu-s/conda/envs/latest_transformers/lib/python3.12/site-packages/torch/autograd/graph.py", line 829, in _engine_run_backward
+[rank1]:     return Variable._execution_engine.run_backward(  # Calls into the C++ engine to run the backward pass
+[rank1]:            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+[rank1]:   File "/cl/work5/hongyu-s/conda/envs/latest_transformers/lib/python3.12/site-packages/torch/autograd/function.py", line 311, in apply
+[rank1]:     return user_fn(self, *args)
+[rank1]:            ^^^^^^^^^^^^^^^^^^^^
+[rank1]:   File "/project/nlp-work5/hongyu-s/flash-linear-attention/fla/utils.py", line 164, in wrapper
+[rank1]:     return fn(*contiguous_args, **contiguous_kwargs)
+[rank1]:            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+[rank1]:   File "/cl/work5/hongyu-s/conda/envs/latest_transformers/lib/python3.12/site-packages/torch/amp/autocast_mode.py", line 563, in decorate_bwd
+[rank1]:     return bwd(*args, **kwargs)
+[rank1]:            ^^^^^^^^^^^^^^^^^^^^
+[rank1]:   File "/project/nlp-work5/hongyu-s/flash-linear-attention/fla/ops/path_attn/parallel.py", line 183, in backward
+[rank1]:     dq, dk, dbeta, dw = intra_chunk_preprocess_bwd_fn(
+[rank1]:                         ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+[rank1]:   File "/project/nlp-work5/hongyu-s/flash-linear-attention/fla/ops/path_attn/intra_chunk_preprocess_bwd.py", line 131, in intra_chunk_preprocess_bwd_fn
+[rank1]:     intra_chunk_preprocess_bwd_kernel[grid](
+[rank1]:   File "/cl/work5/hongyu-s/conda/envs/latest_transformers/lib/python3.12/site-packages/triton/runtime/jit.py", line 390, in <lambda>
+[rank1]:     return lambda *args, **kwargs: self.run(grid=grid, warmup=False, *args, **kwargs)
+[rank1]:                                    ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+[rank1]:   File "/cl/work5/hongyu-s/conda/envs/latest_transformers/lib/python3.12/site-packages/triton/runtime/autotuner.py", line 453, in run
+[rank1]:     return self.fn.run(*args, **kwargs)
+[rank1]:            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+[rank1]:   File "/cl/work5/hongyu-s/conda/envs/latest_transformers/lib/python3.12/site-packages/triton/runtime/jit.py", line 617, in run
+[rank1]:     kernel.run(grid_0, grid_1, grid_2, stream, kernel.function, kernel.packed_metadata, launch_metadata,
+[rank1]:     ^^^^^^^^^^
+[rank1]:   File "/cl/work5/hongyu-s/conda/envs/latest_transformers/lib/python3.12/site-packages/triton/compiler/compiler.py", line 498, in __getattribute__
+[rank1]:     self._init_handles()
+[rank1]:   File "/cl/work5/hongyu-s/conda/envs/latest_transformers/lib/python3.12/site-packages/triton/compiler/compiler.py", line 483, in _init_handles
+[rank1]:     raise OutOfResources(self.metadata.shared, max_shared, "shared memory")
+[rank1]: triton.runtime.errors.OutOfResources: out of resource: shared memory, Required: 69632, Hardware limit: 65536. Reducing block sizes or `num_stages` may help.
+[rank0]: Traceback (most recent call last):
+[rank0]:   File "/project/nlp-work5/hongyu-s/transformers/examples/pytorch/language-modeling/./run_clm.py", line 857, in <module>
+[rank0]:     main()
+[rank0]:   File "/project/nlp-work5/hongyu-s/transformers/examples/pytorch/language-modeling/./run_clm.py", line 798, in main
+[rank0]:     train_result = trainer.train(resume_from_checkpoint=checkpoint)
+[rank0]:                    ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+[rank0]:   File "/project/nlp-work5/hongyu-s/transformers/src/transformers/trainer.py", line 2516, in train
+[rank0]:     return inner_training_loop(
+[rank0]:            ^^^^^^^^^^^^^^^^^^^^
+[rank0]:   File "/project/nlp-work5/hongyu-s/transformers/src/transformers/trainer.py", line 2865, in _inner_training_loop
+[rank0]:     tr_loss_step = self.training_step(model, inputs, num_items_in_batch)
+[rank0]:                    ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+[rank0]:   File "/project/nlp-work5/hongyu-s/transformers/src/transformers/trainer.py", line 4261, in training_step
+[rank0]:     self.accelerator.backward(loss, **kwargs)
+[rank0]:   File "/cl/work5/hongyu-s/conda/envs/latest_transformers/lib/python3.12/site-packages/accelerate/accelerator.py", line 2734, in backward
+[rank0]:     loss.backward(**kwargs)
+[rank0]:   File "/cl/work5/hongyu-s/conda/envs/latest_transformers/lib/python3.12/site-packages/torch/_tensor.py", line 647, in backward
+[rank0]:     torch.autograd.backward(
+[rank0]:   File "/cl/work5/hongyu-s/conda/envs/latest_transformers/lib/python3.12/site-packages/torch/autograd/__init__.py", line 354, in backward
+[rank0]:     _engine_run_backward(
+[rank0]:   File "/cl/work5/hongyu-s/conda/envs/latest_transformers/lib/python3.12/site-packages/torch/autograd/graph.py", line 829, in _engine_run_backward
+[rank0]:     return Variable._execution_engine.run_backward(  # Calls into the C++ engine to run the backward pass
+[rank0]:            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+[rank0]:   File "/cl/work5/hongyu-s/conda/envs/latest_transformers/lib/python3.12/site-packages/torch/autograd/function.py", line 311, in apply
+[rank0]:     return user_fn(self, *args)
+[rank0]:            ^^^^^^^^^^^^^^^^^^^^
+[rank0]:   File "/project/nlp-work5/hongyu-s/flash-linear-attention/fla/utils.py", line 164, in wrapper
+[rank0]:     return fn(*contiguous_args, **contiguous_kwargs)
+[rank0]:            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+[rank0]:   File "/cl/work5/hongyu-s/conda/envs/latest_transformers/lib/python3.12/site-packages/torch/amp/autocast_mode.py", line 563, in decorate_bwd
+[rank0]:     return bwd(*args, **kwargs)
+[rank0]:            ^^^^^^^^^^^^^^^^^^^^
+[rank0]:   File "/project/nlp-work5/hongyu-s/flash-linear-attention/fla/ops/path_attn/parallel.py", line 183, in backward
+[rank0]:     dq, dk, dbeta, dw = intra_chunk_preprocess_bwd_fn(
+[rank0]:                         ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+[rank0]:   File "/project/nlp-work5/hongyu-s/flash-linear-attention/fla/ops/path_attn/intra_chunk_preprocess_bwd.py", line 131, in intra_chunk_preprocess_bwd_fn
+[rank0]:     intra_chunk_preprocess_bwd_kernel[grid](
+[rank0]:   File "/cl/work5/hongyu-s/conda/envs/latest_transformers/lib/python3.12/site-packages/triton/runtime/jit.py", line 390, in <lambda>
+[rank0]:     return lambda *args, **kwargs: self.run(grid=grid, warmup=False, *args, **kwargs)
+[rank0]:                                    ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+[rank0]:   File "/cl/work5/hongyu-s/conda/envs/latest_transformers/lib/python3.12/site-packages/triton/runtime/autotuner.py", line 453, in run
+[rank0]:     return self.fn.run(*args, **kwargs)
+[rank0]:            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+[rank0]:   File "/cl/work5/hongyu-s/conda/envs/latest_transformers/lib/python3.12/site-packages/triton/runtime/jit.py", line 617, in run
+[rank0]:     kernel.run(grid_0, grid_1, grid_2, stream, kernel.function, kernel.packed_metadata, launch_metadata,
+[rank0]:     ^^^^^^^^^^
+[rank0]:   File "/cl/work5/hongyu-s/conda/envs/latest_transformers/lib/python3.12/site-packages/triton/compiler/compiler.py", line 498, in __getattribute__
+[rank0]:     self._init_handles()
+[rank0]:   File "/cl/work5/hongyu-s/conda/envs/latest_transformers/lib/python3.12/site-packages/triton/compiler/compiler.py", line 483, in _init_handles
+[rank0]:     raise OutOfResources(self.metadata.shared, max_shared, "shared memory")
+[rank0]: triton.runtime.errors.OutOfResources: out of resource: shared memory, Required: 69632, Hardware limit: 65536. Reducing block sizes or `num_stages` may help.
+[1;34mwandb[0m: 
+[1;34mwandb[0m: 🚀 View run [33mworthy-sunset-100[0m at: [34m[0m
+[1;34mwandb[0m: Find logs at: [1;35mwandb/run-20250929_115000-esjx8woy/logs[0m
+W0929 11:50:15.211000 537186 /project/nlp-work5/hongyu-s/conda/envs/latest_transformers/lib/python3.12/site-packages/torch/distributed/elastic/multiprocessing/api.py:900] Sending process 537196 closing signal SIGTERM
+E0929 11:50:15.528000 537186 /project/nlp-work5/hongyu-s/conda/envs/latest_transformers/lib/python3.12/site-packages/torch/distributed/elastic/multiprocessing/api.py:874] failed (exitcode: 1) local_rank: 1 (pid: 537197) of binary: /cl/work5/hongyu-s/conda/envs/latest_transformers/bin/python3.12
+Traceback (most recent call last):
+  File "/cl/work5/hongyu-s/conda/envs/latest_transformers/bin/torchrun", line 7, in <module>
+    sys.exit(main())
+             ^^^^^^
+  File "/cl/work5/hongyu-s/conda/envs/latest_transformers/lib/python3.12/site-packages/torch/distributed/elastic/multiprocessing/errors/__init__.py", line 357, in wrapper
+    return f(*args, **kwargs)
+           ^^^^^^^^^^^^^^^^^^
+  File "/cl/work5/hongyu-s/conda/envs/latest_transformers/lib/python3.12/site-packages/torch/distributed/run.py", line 901, in main
+    run(args)
+  File "/cl/work5/hongyu-s/conda/envs/latest_transformers/lib/python3.12/site-packages/torch/distributed/run.py", line 892, in run
+    elastic_launch(
+  File "/cl/work5/hongyu-s/conda/envs/latest_transformers/lib/python3.12/site-packages/torch/distributed/launcher/api.py", line 143, in __call__
+    return launch_agent(self._config, self._entrypoint, list(args))
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/cl/work5/hongyu-s/conda/envs/latest_transformers/lib/python3.12/site-packages/torch/distributed/launcher/api.py", line 277, in launch_agent
+    raise ChildFailedError(
+torch.distributed.elastic.multiprocessing.errors.ChildFailedError: 
+============================================================
+./run_clm.py FAILED
+------------------------------------------------------------
+Failures:
+  <NO_OTHER_FAILURES>
+------------------------------------------------------------
+Root Cause (first observed failure):
+[0]:
+  time      : 2025-09-29_11:50:15
+  host      : elm26.naist.jp
+  rank      : 1 (local_rank: 1)
+  exitcode  : 1 (pid: 537197)
+  error_file: <N/A>
+  traceback : To enable traceback see: https://pytorch.org/docs/stable/elastic/errors.html
+============================================================

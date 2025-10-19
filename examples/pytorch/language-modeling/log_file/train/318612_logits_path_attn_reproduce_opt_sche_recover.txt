@@ -1,0 +1,381 @@
+MASTER_ADDR: elm42
+MASTER_PORT: 12345
+WORLD_SIZE: 1
+RANK: 0
++ echo 'Workdir: /project/nlp-work5/hongyu-s/transformers/examples/pytorch/language-modeling'
+Workdir: /project/nlp-work5/hongyu-s/transformers/examples/pytorch/language-modeling
++ cd /project/nlp-work5/hongyu-s/transformers/examples/pytorch/language-modeling
++ echo 'Launching training/eval command'
+Launching training/eval command
++ echo '================= BEGIN RUN ================='
+================= BEGIN RUN =================
++ torchrun --nproc_per_node=4 --master_port=12430 ./run_clm.py --model_name_or_path gpt2 --tokenizer_name gpt2 --share_freq_across_heads True --learning_rate 1e-4 --per_device_train_batch_size 16 --per_device_eval_batch_size 16 --block_size 512 --dataset_name wikitext --dataset_config_name wikitext-103-raw-v1 --do_train --do_eval --num_train_epochs 30 --num_harmonics 1 --eval_strategy steps --eval_steps 250 --logging_dir ./logits_path_attn_reproduce_opt_sche_recover_log --logging_steps 250 --save_steps 5000 --attn_implementation path_attn --path_use_qk_norm false --path_use_low_rank_w true --path_use_w_shortconv false --path_conv_size 3 --warmup_steps 5000 --path_conv_bias false --output_dir runs/logits_path_attn_reproduce_opt_sche_recover --gradient_accumulation_steps 1 --b_unfreeze_step 5000
+W1002 00:08:53.165000 75845 /project/nlp-work5/hongyu-s/conda/envs/latest_transformers/lib/python3.12/site-packages/torch/distributed/run.py:774] 
+W1002 00:08:53.165000 75845 /project/nlp-work5/hongyu-s/conda/envs/latest_transformers/lib/python3.12/site-packages/torch/distributed/run.py:774] *****************************************
+W1002 00:08:53.165000 75845 /project/nlp-work5/hongyu-s/conda/envs/latest_transformers/lib/python3.12/site-packages/torch/distributed/run.py:774] Setting OMP_NUM_THREADS environment variable for each process to be 1 in default, to avoid your system being overloaded, please further tune the variable for optimal performance in your application as needed. 
+W1002 00:08:53.165000 75845 /project/nlp-work5/hongyu-s/conda/envs/latest_transformers/lib/python3.12/site-packages/torch/distributed/run.py:774] *****************************************
+10/02/2025 00:09:16 - WARNING - __main__ - Process rank: 2, device: cuda:2, n_gpu: 1, distributed training: True, 16-bits training: False
+10/02/2025 00:09:16 - WARNING - __main__ - Process rank: 0, device: cuda:0, n_gpu: 1, distributed training: True, 16-bits training: False
+10/02/2025 00:09:16 - INFO - __main__ - Training/evaluation parameters SupplyTrainingArguments(
+_n_gpu=1,
+accelerator_config={'split_batches': False, 'dispatch_batches': None, 'even_batches': True, 'use_seedable_sampler': True, 'non_blocking': False, 'gradient_accumulation_kwargs': None, 'use_configured_state': False},
+adafactor=False,
+adam_beta1=0.9,
+adam_beta2=0.999,
+adam_epsilon=1e-08,
+auto_find_batch_size=False,
+average_tokens_across_devices=True,
+b_unfreeze_step=5000,
+batch_eval_metrics=False,
+bf16=False,
+bf16_full_eval=False,
+data_seed=None,
+dataloader_drop_last=False,
+dataloader_num_workers=0,
+dataloader_persistent_workers=False,
+dataloader_pin_memory=True,
+dataloader_prefetch_factor=None,
+ddp_backend=None,
+ddp_broadcast_buffers=None,
+ddp_bucket_cap_mb=None,
+ddp_find_unused_parameters=None,
+ddp_timeout=1800,
+debug=[],
+deepspeed=None,
+disable_tqdm=False,
+do_eval=True,
+do_predict=False,
+do_train=True,
+eval_accumulation_steps=None,
+eval_delay=0,
+eval_do_concat_batches=True,
+eval_on_start=False,
+eval_steps=250,
+eval_strategy=IntervalStrategy.STEPS,
+eval_use_gather_object=False,
+fp16=False,
+fp16_backend=auto,
+fp16_full_eval=False,
+fp16_opt_level=O1,
+fsdp=[],
+fsdp_config={'min_num_params': 0, 'xla': False, 'xla_fsdp_v2': False, 'xla_fsdp_grad_ckpt': False},
+fsdp_min_num_params=0,
+fsdp_transformer_layer_cls_to_wrap=None,
+full_determinism=False,
+gradient_accumulation_steps=1,
+gradient_checkpointing=False,
+gradient_checkpointing_kwargs=None,
+greater_is_better=None,
+group_by_length=False,
+half_precision_backend=auto,
+hub_always_push=False,
+hub_model_id=None,
+hub_private_repo=None,
+hub_revision=None,
+hub_strategy=HubStrategy.EVERY_SAVE,
+hub_token=<HUB_TOKEN>,
+ignore_data_skip=False,
+include_for_metrics=[],
+include_inputs_for_metrics=False,
+include_num_input_tokens_seen=no,
+include_tokens_per_second=False,
+jit_mode_eval=False,
+label_names=None,
+label_smoothing_factor=0.0,
+learning_rate=0.0001,
+length_column_name=length,
+liger_kernel_config=None,
+load_best_model_at_end=False,
+local_rank=0,
+log_level=passive,
+log_level_replica=warning,
+log_on_each_node=True,
+logging_dir=./logits_path_attn_reproduce_opt_sche_recover_log,
+logging_first_step=False,
+logging_nan_inf_filter=True,
+logging_steps=250,
+logging_strategy=IntervalStrategy.STEPS,
+lr_scheduler_kwargs={},
+lr_scheduler_type=SchedulerType.LINEAR,
+max_grad_norm=1.0,
+max_steps=-1,
+metric_for_best_model=None,
+mp_parameters=,
+neftune_noise_alpha=None,
+no_cuda=False,
+num_train_epochs=30.0,
+optim=OptimizerNames.ADAMW_TORCH_FUSED,
+optim_args=None,
+optim_target_modules=None,
+output_dir=runs/logits_path_attn_reproduce_opt_sche_recover,
+overwrite_output_dir=False,
+parallelism_config=None,
+past_index=-1,
+per_device_eval_batch_size=16,
+per_device_train_batch_size=16,
+prediction_loss_only=False,
+push_to_hub=False,
+push_to_hub_model_id=None,
+push_to_hub_organization=None,
+push_to_hub_token=<PUSH_TO_HUB_TOKEN>,
+ray_scope=last,
+remove_unused_columns=True,
+report_to=['tensorboard', 'wandb'],
+restore_callback_states_from_checkpoint=False,
+resume_from_checkpoint=None,
+run_name=None,
+save_on_each_node=False,
+save_only_model=False,
+save_safetensors=True,
+save_steps=5000,
+save_strategy=SaveStrategy.STEPS,
+save_total_limit=None,
+seed=42,
+skip_memory_metrics=True,
+tf32=None,
+torch_compile=False,
+torch_compile_backend=None,
+torch_compile_mode=None,
+torch_empty_cache_steps=None,
+torchdynamo=None,
+tpu_metrics_debug=False,
+tpu_num_cores=None,
+use_cpu=False,
+use_legacy_prediction_loop=False,
+use_liger_kernel=False,
+use_mps_device=False,
+warmup_ratio=0.0,
+warmup_steps=5000,
+weight_decay=0.0,
+)
+10/02/2025 00:09:21 - WARNING - __main__ - Process rank: 1, device: cuda:1, n_gpu: 1, distributed training: True, 16-bits training: False
+Found cached dataset wikitext (/cl/work5/hongyu-s/huggingfac/datasets/wikitext/wikitext-103-raw-v1/0.0.0/b08601e04326c79dfdd32d625aee71d232d685c3)
+10/02/2025 00:09:21 - INFO - datasets.builder - Found cached dataset wikitext (/cl/work5/hongyu-s/huggingfac/datasets/wikitext/wikitext-103-raw-v1/0.0.0/b08601e04326c79dfdd32d625aee71d232d685c3)
+[INFO|configuration_utils.py:759] 2025-10-02 00:09:21,899 >> loading configuration file config.json from cache at /cl/work5/hongyu-s/huggingfac/hub/models--gpt2/snapshots/607a30d783dfa663caf39e06633721c8d4cfcd7e/config.json
+[INFO|configuration_utils.py:833] 2025-10-02 00:09:21,900 >> Model config GPT2Config {
+  "activation_function": "gelu_new",
+  "architectures": [
+    "GPT2LMHeadModel"
+  ],
+  "attn_pdrop": 0.1,
+  "bos_token_id": 50256,
+  "embd_pdrop": 0.1,
+  "eos_token_id": 50256,
+  "initializer_range": 0.02,
+  "layer_norm_epsilon": 1e-05,
+  "model_type": "gpt2",
+  "n_ctx": 1024,
+  "n_embd": 768,
+  "n_head": 12,
+  "n_inner": null,
+  "n_layer": 12,
+  "n_positions": 1024,
+  "reorder_and_upcast_attn": false,
+  "resid_pdrop": 0.1,
+  "scale_attn_by_inverse_layer_idx": false,
+  "scale_attn_weights": true,
+  "summary_activation": null,
+  "summary_first_dropout": 0.1,
+  "summary_proj_to_labels": true,
+  "summary_type": "cls_index",
+  "summary_use_proj": true,
+  "task_specific_params": {
+    "text-generation": {
+      "do_sample": true,
+      "max_length": 50
+    }
+  },
+  "transformers_version": "4.57.0.dev0",
+  "use_cache": true,
+  "vocab_size": 50257
+}
+
+[INFO|configuration_utils.py:759] 2025-10-02 00:09:22,093 >> loading configuration file config.json from cache at /cl/work5/hongyu-s/huggingfac/hub/models--gpt2/snapshots/607a30d783dfa663caf39e06633721c8d4cfcd7e/config.json
+[INFO|configuration_utils.py:833] 2025-10-02 00:09:22,094 >> Model config GPT2Config {
+  "activation_function": "gelu_new",
+  "architectures": [
+    "GPT2LMHeadModel"
+  ],
+  "attn_pdrop": 0.1,
+  "bos_token_id": 50256,
+  "embd_pdrop": 0.1,
+  "eos_token_id": 50256,
+  "initializer_range": 0.02,
+  "layer_norm_epsilon": 1e-05,
+  "model_type": "gpt2",
+  "n_ctx": 1024,
+  "n_embd": 768,
+  "n_head": 12,
+  "n_inner": null,
+  "n_layer": 12,
+  "n_positions": 1024,
+  "reorder_and_upcast_attn": false,
+  "resid_pdrop": 0.1,
+  "scale_attn_by_inverse_layer_idx": false,
+  "scale_attn_weights": true,
+  "summary_activation": null,
+  "summary_first_dropout": 0.1,
+  "summary_proj_to_labels": true,
+  "summary_type": "cls_index",
+  "summary_use_proj": true,
+  "task_specific_params": {
+    "text-generation": {
+      "do_sample": true,
+      "max_length": 50
+    }
+  },
+  "transformers_version": "4.57.0.dev0",
+  "use_cache": true,
+  "vocab_size": 50257
+}
+
+[INFO|tokenization_utils_base.py:2057] 2025-10-02 00:09:22,474 >> loading file vocab.json from cache at /cl/work5/hongyu-s/huggingfac/hub/models--gpt2/snapshots/607a30d783dfa663caf39e06633721c8d4cfcd7e/vocab.json
+[INFO|tokenization_utils_base.py:2057] 2025-10-02 00:09:22,474 >> loading file merges.txt from cache at /cl/work5/hongyu-s/huggingfac/hub/models--gpt2/snapshots/607a30d783dfa663caf39e06633721c8d4cfcd7e/merges.txt
+[INFO|tokenization_utils_base.py:2057] 2025-10-02 00:09:22,474 >> loading file tokenizer.json from cache at /cl/work5/hongyu-s/huggingfac/hub/models--gpt2/snapshots/607a30d783dfa663caf39e06633721c8d4cfcd7e/tokenizer.json
+[INFO|tokenization_utils_base.py:2057] 2025-10-02 00:09:22,474 >> loading file added_tokens.json from cache at None
+[INFO|tokenization_utils_base.py:2057] 2025-10-02 00:09:22,474 >> loading file special_tokens_map.json from cache at None
+[INFO|tokenization_utils_base.py:2057] 2025-10-02 00:09:22,474 >> loading file tokenizer_config.json from cache at /cl/work5/hongyu-s/huggingfac/hub/models--gpt2/snapshots/607a30d783dfa663caf39e06633721c8d4cfcd7e/tokenizer_config.json
+[INFO|tokenization_utils_base.py:2057] 2025-10-02 00:09:22,474 >> loading file chat_template.jinja from cache at None
+[INFO|configuration_utils.py:759] 2025-10-02 00:09:22,477 >> loading configuration file config.json from cache at /cl/work5/hongyu-s/huggingfac/hub/models--gpt2/snapshots/607a30d783dfa663caf39e06633721c8d4cfcd7e/config.json
+[INFO|configuration_utils.py:833] 2025-10-02 00:09:22,477 >> Model config GPT2Config {
+  "activation_function": "gelu_new",
+  "architectures": [
+    "GPT2LMHeadModel"
+  ],
+  "attn_pdrop": 0.1,
+  "bos_token_id": 50256,
+  "embd_pdrop": 0.1,
+  "eos_token_id": 50256,
+  "initializer_range": 0.02,
+  "layer_norm_epsilon": 1e-05,
+  "model_type": "gpt2",
+  "n_ctx": 1024,
+  "n_embd": 768,
+  "n_head": 12,
+  "n_inner": null,
+  "n_layer": 12,
+  "n_positions": 1024,
+  "reorder_and_upcast_attn": false,
+  "resid_pdrop": 0.1,
+  "scale_attn_by_inverse_layer_idx": false,
+  "scale_attn_weights": true,
+  "summary_activation": null,
+  "summary_first_dropout": 0.1,
+  "summary_proj_to_labels": true,
+  "summary_type": "cls_index",
+  "summary_use_proj": true,
+  "task_specific_params": {
+    "text-generation": {
+      "do_sample": true,
+      "max_length": 50
+    }
+  },
+  "transformers_version": "4.57.0.dev0",
+  "use_cache": true,
+  "vocab_size": 50257
+}
+
+wandb: Currently logged in as: hongyu-s-aa-titech (hongyu-s-aa-titech-nara-institute-of-science-and-technology) to https://api.wandb.ai. Use `wandb login --relogin` to force relogin
+10/02/2025 00:09:23 - WARNING - __main__ - Process rank: 3, device: cuda:3, n_gpu: 1, distributed training: True, 16-bits training: False
+wandb: creating run
+wandb: Tracking run with wandb version 0.22.0
+wandb: Run data is saved locally in /project/nlp-work5/hongyu-s/transformers/examples/pytorch/language-modeling/wandb/run-20251002_000922-2b9jxwja
+wandb: Run `wandb offline` to turn off syncing.
+wandb: Syncing run fresh-sun-181
+wandb: ⭐️ View project at https://wandb.ai/hongyu-s-aa-titech-nara-institute-of-science-and-technology/gpt2%20with%20path%20attn
+wandb: 🚀 View run at https://wandb.ai/hongyu-s-aa-titech-nara-institute-of-science-and-technology/gpt2%20with%20path%20attn/runs/2b9jxwja
+[WARNING|modeling_utils.py:5560] 2025-10-02 00:09:29,427 >> Some weights of the model checkpoint at gpt2 were not used when initializing GPT2LMHeadModel: ['transformer.h.0.attn.bias', 'transformer.h.0.attn.c_attn.bias', 'transformer.h.0.attn.c_attn.weight', 'transformer.h.0.attn.c_proj.bias', 'transformer.h.0.attn.c_proj.weight', 'transformer.h.1.attn.bias', 'transformer.h.1.attn.c_attn.bias', 'transformer.h.1.attn.c_attn.weight', 'transformer.h.1.attn.c_proj.bias', 'transformer.h.1.attn.c_proj.weight', 'transformer.h.10.attn.bias', 'transformer.h.10.attn.c_attn.bias', 'transformer.h.10.attn.c_attn.weight', 'transformer.h.10.attn.c_proj.bias', 'transformer.h.10.attn.c_proj.weight', 'transformer.h.11.attn.bias', 'transformer.h.11.attn.c_attn.bias', 'transformer.h.11.attn.c_attn.weight', 'transformer.h.11.attn.c_proj.bias', 'transformer.h.11.attn.c_proj.weight', 'transformer.h.2.attn.bias', 'transformer.h.2.attn.c_attn.bias', 'transformer.h.2.attn.c_attn.weight', 'transformer.h.2.attn.c_proj.bias', 'transformer.h.2.attn.c_proj.weight', 'transformer.h.3.attn.bias', 'transformer.h.3.attn.c_attn.bias', 'transformer.h.3.attn.c_attn.weight', 'transformer.h.3.attn.c_proj.bias', 'transformer.h.3.attn.c_proj.weight', 'transformer.h.4.attn.bias', 'transformer.h.4.attn.c_attn.bias', 'transformer.h.4.attn.c_attn.weight', 'transformer.h.4.attn.c_proj.bias', 'transformer.h.4.attn.c_proj.weight', 'transformer.h.5.attn.bias', 'transformer.h.5.attn.c_attn.bias', 'transformer.h.5.attn.c_attn.weight', 'transformer.h.5.attn.c_proj.bias', 'transformer.h.5.attn.c_proj.weight', 'transformer.h.6.attn.bias', 'transformer.h.6.attn.c_attn.bias', 'transformer.h.6.attn.c_attn.weight', 'transformer.h.6.attn.c_proj.bias', 'transformer.h.6.attn.c_proj.weight', 'transformer.h.7.attn.bias', 'transformer.h.7.attn.c_attn.bias', 'transformer.h.7.attn.c_attn.weight', 'transformer.h.7.attn.c_proj.bias', 'transformer.h.7.attn.c_proj.weight', 'transformer.h.8.attn.bias', 'transformer.h.8.attn.c_attn.bias', 'transformer.h.8.attn.c_attn.weight', 'transformer.h.8.attn.c_proj.bias', 'transformer.h.8.attn.c_proj.weight', 'transformer.h.9.attn.bias', 'transformer.h.9.attn.c_attn.bias', 'transformer.h.9.attn.c_attn.weight', 'transformer.h.9.attn.c_proj.bias', 'transformer.h.9.attn.c_proj.weight']
+- This IS expected if you are initializing GPT2LMHeadModel from the checkpoint of a model trained on another task or with another architecture (e.g. initializing a BertForSequenceClassification model from a BertForPreTraining model).
+- This IS NOT expected if you are initializing GPT2LMHeadModel from the checkpoint of a model that you expect to be exactly identical (initializing a BertForSequenceClassification model from a BertForSequenceClassification model).
+[WARNING|modeling_utils.py:5572] 2025-10-02 00:09:29,427 >> Some weights of GPT2LMHeadModel were not initialized from the model checkpoint at gpt2 and are newly initialized: ['transformer.h.0.attn.core.bt_proj.bias', 'transformer.h.0.attn.core.bt_proj.weight', 'transformer.h.0.attn.core.k_proj.weight', 'transformer.h.0.attn.core.o_proj.weight', 'transformer.h.0.attn.core.q_proj.weight', 'transformer.h.0.attn.core.v_proj.weight', 'transformer.h.0.attn.core.w_proj.0.weight', 'transformer.h.0.attn.core.w_proj.1.weight', 'transformer.h.1.attn.core.bt_proj.bias', 'transformer.h.1.attn.core.bt_proj.weight', 'transformer.h.1.attn.core.k_proj.weight', 'transformer.h.1.attn.core.o_proj.weight', 'transformer.h.1.attn.core.q_proj.weight', 'transformer.h.1.attn.core.v_proj.weight', 'transformer.h.1.attn.core.w_proj.0.weight', 'transformer.h.1.attn.core.w_proj.1.weight', 'transformer.h.10.attn.core.bt_proj.bias', 'transformer.h.10.attn.core.bt_proj.weight', 'transformer.h.10.attn.core.k_proj.weight', 'transformer.h.10.attn.core.o_proj.weight', 'transformer.h.10.attn.core.q_proj.weight', 'transformer.h.10.attn.core.v_proj.weight', 'transformer.h.10.attn.core.w_proj.0.weight', 'transformer.h.10.attn.core.w_proj.1.weight', 'transformer.h.11.attn.core.bt_proj.bias', 'transformer.h.11.attn.core.bt_proj.weight', 'transformer.h.11.attn.core.k_proj.weight', 'transformer.h.11.attn.core.o_proj.weight', 'transformer.h.11.attn.core.q_proj.weight', 'transformer.h.11.attn.core.v_proj.weight', 'transformer.h.11.attn.core.w_proj.0.weight', 'transformer.h.11.attn.core.w_proj.1.weight', 'transformer.h.2.attn.core.bt_proj.bias', 'transformer.h.2.attn.core.bt_proj.weight', 'transformer.h.2.attn.core.k_proj.weight', 'transformer.h.2.attn.core.o_proj.weight', 'transformer.h.2.attn.core.q_proj.weight', 'transformer.h.2.attn.core.v_proj.weight', 'transformer.h.2.attn.core.w_proj.0.weight', 'transformer.h.2.attn.core.w_proj.1.weight', 'transformer.h.3.attn.core.bt_proj.bias', 'transformer.h.3.attn.core.bt_proj.weight', 'transformer.h.3.attn.core.k_proj.weight', 'transformer.h.3.attn.core.o_proj.weight', 'transformer.h.3.attn.core.q_proj.weight', 'transformer.h.3.attn.core.v_proj.weight', 'transformer.h.3.attn.core.w_proj.0.weight', 'transformer.h.3.attn.core.w_proj.1.weight', 'transformer.h.4.attn.core.bt_proj.bias', 'transformer.h.4.attn.core.bt_proj.weight', 'transformer.h.4.attn.core.k_proj.weight', 'transformer.h.4.attn.core.o_proj.weight', 'transformer.h.4.attn.core.q_proj.weight', 'transformer.h.4.attn.core.v_proj.weight', 'transformer.h.4.attn.core.w_proj.0.weight', 'transformer.h.4.attn.core.w_proj.1.weight', 'transformer.h.5.attn.core.bt_proj.bias', 'transformer.h.5.attn.core.bt_proj.weight', 'transformer.h.5.attn.core.k_proj.weight', 'transformer.h.5.attn.core.o_proj.weight', 'transformer.h.5.attn.core.q_proj.weight', 'transformer.h.5.attn.core.v_proj.weight', 'transformer.h.5.attn.core.w_proj.0.weight', 'transformer.h.5.attn.core.w_proj.1.weight', 'transformer.h.6.attn.core.bt_proj.bias', 'transformer.h.6.attn.core.bt_proj.weight', 'transformer.h.6.attn.core.k_proj.weight', 'transformer.h.6.attn.core.o_proj.weight', 'transformer.h.6.attn.core.q_proj.weight', 'transformer.h.6.attn.core.v_proj.weight', 'transformer.h.6.attn.core.w_proj.0.weight', 'transformer.h.6.attn.core.w_proj.1.weight', 'transformer.h.7.attn.core.bt_proj.bias', 'transformer.h.7.attn.core.bt_proj.weight', 'transformer.h.7.attn.core.k_proj.weight', 'transformer.h.7.attn.core.o_proj.weight', 'transformer.h.7.attn.core.q_proj.weight', 'transformer.h.7.attn.core.v_proj.weight', 'transformer.h.7.attn.core.w_proj.0.weight', 'transformer.h.7.attn.core.w_proj.1.weight', 'transformer.h.8.attn.core.bt_proj.bias', 'transformer.h.8.attn.core.bt_proj.weight', 'transformer.h.8.attn.core.k_proj.weight', 'transformer.h.8.attn.core.o_proj.weight', 'transformer.h.8.attn.core.q_proj.weight', 'transformer.h.8.attn.core.v_proj.weight', 'transformer.h.8.attn.core.w_proj.0.weight', 'transformer.h.8.attn.core.w_proj.1.weight', 'transformer.h.9.attn.core.bt_proj.bias', 'transformer.h.9.attn.core.bt_proj.weight', 'transformer.h.9.attn.core.k_proj.weight', 'transformer.h.9.attn.core.o_proj.weight', 'transformer.h.9.attn.core.q_proj.weight', 'transformer.h.9.attn.core.v_proj.weight', 'transformer.h.9.attn.core.w_proj.0.weight', 'transformer.h.9.attn.core.w_proj.1.weight']
+You should probably TRAIN this model on a down-stream task to be able to use it for predictions and inference.
+[INFO|modeling_utils.py:1205] 2025-10-02 00:09:29,630 >> loading weights file model.safetensors from cache at /cl/work5/hongyu-s/huggingfac/hub/models--gpt2/snapshots/607a30d783dfa663caf39e06633721c8d4cfcd7e/model.safetensors
+[INFO|configuration_utils.py:986] 2025-10-02 00:09:29,634 >> Generate config GenerationConfig {
+  "bos_token_id": 50256,
+  "eos_token_id": 50256
+}
+
+/cl/work5/hongyu-s/conda/envs/latest_transformers/lib/python3.12/site-packages/torch/distributed/distributed_c10d.py:4807: UserWarning: No device id is provided via `init_process_group` or `barrier `. Using the current device set by the user. 
+  warnings.warn(  # warn only once
+[rank2]:[W1002 00:09:29.717102368 ProcessGroupNCCL.cpp:5023] [PG ID 0 PG GUID 0 Rank 2]  using GPU 2 as device used by this process is currently unknown. This can potentially cause a hang if this rank to GPU mapping is incorrect. You can specify device_id in init_process_group() to force use of a particular device.
+[WARNING|modeling_utils.py:5560] 2025-10-02 00:09:29,870 >> Some weights of the model checkpoint at gpt2 were not used when initializing GPT2LMHeadModel: ['transformer.h.0.attn.bias', 'transformer.h.0.attn.c_attn.bias', 'transformer.h.0.attn.c_attn.weight', 'transformer.h.0.attn.c_proj.bias', 'transformer.h.0.attn.c_proj.weight', 'transformer.h.1.attn.bias', 'transformer.h.1.attn.c_attn.bias', 'transformer.h.1.attn.c_attn.weight', 'transformer.h.1.attn.c_proj.bias', 'transformer.h.1.attn.c_proj.weight', 'transformer.h.10.attn.bias', 'transformer.h.10.attn.c_attn.bias', 'transformer.h.10.attn.c_attn.weight', 'transformer.h.10.attn.c_proj.bias', 'transformer.h.10.attn.c_proj.weight', 'transformer.h.11.attn.bias', 'transformer.h.11.attn.c_attn.bias', 'transformer.h.11.attn.c_attn.weight', 'transformer.h.11.attn.c_proj.bias', 'transformer.h.11.attn.c_proj.weight', 'transformer.h.2.attn.bias', 'transformer.h.2.attn.c_attn.bias', 'transformer.h.2.attn.c_attn.weight', 'transformer.h.2.attn.c_proj.bias', 'transformer.h.2.attn.c_proj.weight', 'transformer.h.3.attn.bias', 'transformer.h.3.attn.c_attn.bias', 'transformer.h.3.attn.c_attn.weight', 'transformer.h.3.attn.c_proj.bias', 'transformer.h.3.attn.c_proj.weight', 'transformer.h.4.attn.bias', 'transformer.h.4.attn.c_attn.bias', 'transformer.h.4.attn.c_attn.weight', 'transformer.h.4.attn.c_proj.bias', 'transformer.h.4.attn.c_proj.weight', 'transformer.h.5.attn.bias', 'transformer.h.5.attn.c_attn.bias', 'transformer.h.5.attn.c_attn.weight', 'transformer.h.5.attn.c_proj.bias', 'transformer.h.5.attn.c_proj.weight', 'transformer.h.6.attn.bias', 'transformer.h.6.attn.c_attn.bias', 'transformer.h.6.attn.c_attn.weight', 'transformer.h.6.attn.c_proj.bias', 'transformer.h.6.attn.c_proj.weight', 'transformer.h.7.attn.bias', 'transformer.h.7.attn.c_attn.bias', 'transformer.h.7.attn.c_attn.weight', 'transformer.h.7.attn.c_proj.bias', 'transformer.h.7.attn.c_proj.weight', 'transformer.h.8.attn.bias', 'transformer.h.8.attn.c_attn.bias', 'transformer.h.8.attn.c_attn.weight', 'transformer.h.8.attn.c_proj.bias', 'transformer.h.8.attn.c_proj.weight', 'transformer.h.9.attn.bias', 'transformer.h.9.attn.c_attn.bias', 'transformer.h.9.attn.c_attn.weight', 'transformer.h.9.attn.c_proj.bias', 'transformer.h.9.attn.c_proj.weight']
+- This IS expected if you are initializing GPT2LMHeadModel from the checkpoint of a model trained on another task or with another architecture (e.g. initializing a BertForSequenceClassification model from a BertForPreTraining model).
+- This IS NOT expected if you are initializing GPT2LMHeadModel from the checkpoint of a model that you expect to be exactly identical (initializing a BertForSequenceClassification model from a BertForSequenceClassification model).
+[WARNING|modeling_utils.py:5572] 2025-10-02 00:09:29,871 >> Some weights of GPT2LMHeadModel were not initialized from the model checkpoint at gpt2 and are newly initialized: ['transformer.h.0.attn.core.bt_proj.bias', 'transformer.h.0.attn.core.bt_proj.weight', 'transformer.h.0.attn.core.k_proj.weight', 'transformer.h.0.attn.core.o_proj.weight', 'transformer.h.0.attn.core.q_proj.weight', 'transformer.h.0.attn.core.v_proj.weight', 'transformer.h.0.attn.core.w_proj.0.weight', 'transformer.h.0.attn.core.w_proj.1.weight', 'transformer.h.1.attn.core.bt_proj.bias', 'transformer.h.1.attn.core.bt_proj.weight', 'transformer.h.1.attn.core.k_proj.weight', 'transformer.h.1.attn.core.o_proj.weight', 'transformer.h.1.attn.core.q_proj.weight', 'transformer.h.1.attn.core.v_proj.weight', 'transformer.h.1.attn.core.w_proj.0.weight', 'transformer.h.1.attn.core.w_proj.1.weight', 'transformer.h.10.attn.core.bt_proj.bias', 'transformer.h.10.attn.core.bt_proj.weight', 'transformer.h.10.attn.core.k_proj.weight', 'transformer.h.10.attn.core.o_proj.weight', 'transformer.h.10.attn.core.q_proj.weight', 'transformer.h.10.attn.core.v_proj.weight', 'transformer.h.10.attn.core.w_proj.0.weight', 'transformer.h.10.attn.core.w_proj.1.weight', 'transformer.h.11.attn.core.bt_proj.bias', 'transformer.h.11.attn.core.bt_proj.weight', 'transformer.h.11.attn.core.k_proj.weight', 'transformer.h.11.attn.core.o_proj.weight', 'transformer.h.11.attn.core.q_proj.weight', 'transformer.h.11.attn.core.v_proj.weight', 'transformer.h.11.attn.core.w_proj.0.weight', 'transformer.h.11.attn.core.w_proj.1.weight', 'transformer.h.2.attn.core.bt_proj.bias', 'transformer.h.2.attn.core.bt_proj.weight', 'transformer.h.2.attn.core.k_proj.weight', 'transformer.h.2.attn.core.o_proj.weight', 'transformer.h.2.attn.core.q_proj.weight', 'transformer.h.2.attn.core.v_proj.weight', 'transformer.h.2.attn.core.w_proj.0.weight', 'transformer.h.2.attn.core.w_proj.1.weight', 'transformer.h.3.attn.core.bt_proj.bias', 'transformer.h.3.attn.core.bt_proj.weight', 'transformer.h.3.attn.core.k_proj.weight', 'transformer.h.3.attn.core.o_proj.weight', 'transformer.h.3.attn.core.q_proj.weight', 'transformer.h.3.attn.core.v_proj.weight', 'transformer.h.3.attn.core.w_proj.0.weight', 'transformer.h.3.attn.core.w_proj.1.weight', 'transformer.h.4.attn.core.bt_proj.bias', 'transformer.h.4.attn.core.bt_proj.weight', 'transformer.h.4.attn.core.k_proj.weight', 'transformer.h.4.attn.core.o_proj.weight', 'transformer.h.4.attn.core.q_proj.weight', 'transformer.h.4.attn.core.v_proj.weight', 'transformer.h.4.attn.core.w_proj.0.weight', 'transformer.h.4.attn.core.w_proj.1.weight', 'transformer.h.5.attn.core.bt_proj.bias', 'transformer.h.5.attn.core.bt_proj.weight', 'transformer.h.5.attn.core.k_proj.weight', 'transformer.h.5.attn.core.o_proj.weight', 'transformer.h.5.attn.core.q_proj.weight', 'transformer.h.5.attn.core.v_proj.weight', 'transformer.h.5.attn.core.w_proj.0.weight', 'transformer.h.5.attn.core.w_proj.1.weight', 'transformer.h.6.attn.core.bt_proj.bias', 'transformer.h.6.attn.core.bt_proj.weight', 'transformer.h.6.attn.core.k_proj.weight', 'transformer.h.6.attn.core.o_proj.weight', 'transformer.h.6.attn.core.q_proj.weight', 'transformer.h.6.attn.core.v_proj.weight', 'transformer.h.6.attn.core.w_proj.0.weight', 'transformer.h.6.attn.core.w_proj.1.weight', 'transformer.h.7.attn.core.bt_proj.bias', 'transformer.h.7.attn.core.bt_proj.weight', 'transformer.h.7.attn.core.k_proj.weight', 'transformer.h.7.attn.core.o_proj.weight', 'transformer.h.7.attn.core.q_proj.weight', 'transformer.h.7.attn.core.v_proj.weight', 'transformer.h.7.attn.core.w_proj.0.weight', 'transformer.h.7.attn.core.w_proj.1.weight', 'transformer.h.8.attn.core.bt_proj.bias', 'transformer.h.8.attn.core.bt_proj.weight', 'transformer.h.8.attn.core.k_proj.weight', 'transformer.h.8.attn.core.o_proj.weight', 'transformer.h.8.attn.core.q_proj.weight', 'transformer.h.8.attn.core.v_proj.weight', 'transformer.h.8.attn.core.w_proj.0.weight', 'transformer.h.8.attn.core.w_proj.1.weight', 'transformer.h.9.attn.core.bt_proj.bias', 'transformer.h.9.attn.core.bt_proj.weight', 'transformer.h.9.attn.core.k_proj.weight', 'transformer.h.9.attn.core.o_proj.weight', 'transformer.h.9.attn.core.q_proj.weight', 'transformer.h.9.attn.core.v_proj.weight', 'transformer.h.9.attn.core.w_proj.0.weight', 'transformer.h.9.attn.core.w_proj.1.weight']
+You should probably TRAIN this model on a down-stream task to be able to use it for predictions and inference.
+[INFO|configuration_utils.py:941] 2025-10-02 00:09:30,088 >> loading configuration file generation_config.json from cache at /cl/work5/hongyu-s/huggingfac/hub/models--gpt2/snapshots/607a30d783dfa663caf39e06633721c8d4cfcd7e/generation_config.json
+[INFO|configuration_utils.py:986] 2025-10-02 00:09:30,089 >> Generate config GenerationConfig {
+  "bos_token_id": 50256,
+  "eos_token_id": 50256
+}
+
+Loading cached processed dataset at /cl/work5/hongyu-s/huggingfac/datasets/wikitext/wikitext-103-raw-v1/0.0.0/b08601e04326c79dfdd32d625aee71d232d685c3/cache-78d56f068833be52_*_of_00001.arrow
+10/02/2025 00:09:30 - INFO - datasets.arrow_dataset - Loading cached processed dataset at /cl/work5/hongyu-s/huggingfac/datasets/wikitext/wikitext-103-raw-v1/0.0.0/b08601e04326c79dfdd32d625aee71d232d685c3/cache-78d56f068833be52_*_of_00001.arrow
+Loading cached processed dataset at /cl/work5/hongyu-s/huggingfac/datasets/wikitext/wikitext-103-raw-v1/0.0.0/b08601e04326c79dfdd32d625aee71d232d685c3/cache-4aa64ec0866d64bf_*_of_00001.arrow
+10/02/2025 00:09:30 - INFO - datasets.arrow_dataset - Loading cached processed dataset at /cl/work5/hongyu-s/huggingfac/datasets/wikitext/wikitext-103-raw-v1/0.0.0/b08601e04326c79dfdd32d625aee71d232d685c3/cache-4aa64ec0866d64bf_*_of_00001.arrow
+Loading cached processed dataset at /cl/work5/hongyu-s/huggingfac/datasets/wikitext/wikitext-103-raw-v1/0.0.0/b08601e04326c79dfdd32d625aee71d232d685c3/cache-dd72d81b3872e8ad_*_of_00001.arrow
+10/02/2025 00:09:30 - INFO - datasets.arrow_dataset - Loading cached processed dataset at /cl/work5/hongyu-s/huggingfac/datasets/wikitext/wikitext-103-raw-v1/0.0.0/b08601e04326c79dfdd32d625aee71d232d685c3/cache-dd72d81b3872e8ad_*_of_00001.arrow
+/cl/work5/hongyu-s/conda/envs/latest_transformers/lib/python3.12/site-packages/torch/distributed/distributed_c10d.py:4807: UserWarning: No device id is provided via `init_process_group` or `barrier `. Using the current device set by the user. 
+  warnings.warn(  # warn only once
+[rank0]:[W1002 00:09:30.293447307 ProcessGroupNCCL.cpp:5023] [PG ID 0 PG GUID 0 Rank 0]  using GPU 0 as device used by this process is currently unknown. This can potentially cause a hang if this rank to GPU mapping is incorrect. You can specify device_id in init_process_group() to force use of a particular device.
+[WARNING|modeling_utils.py:5560] 2025-10-02 00:09:36,076 >> Some weights of the model checkpoint at gpt2 were not used when initializing GPT2LMHeadModel: ['transformer.h.0.attn.bias', 'transformer.h.0.attn.c_attn.bias', 'transformer.h.0.attn.c_attn.weight', 'transformer.h.0.attn.c_proj.bias', 'transformer.h.0.attn.c_proj.weight', 'transformer.h.1.attn.bias', 'transformer.h.1.attn.c_attn.bias', 'transformer.h.1.attn.c_attn.weight', 'transformer.h.1.attn.c_proj.bias', 'transformer.h.1.attn.c_proj.weight', 'transformer.h.10.attn.bias', 'transformer.h.10.attn.c_attn.bias', 'transformer.h.10.attn.c_attn.weight', 'transformer.h.10.attn.c_proj.bias', 'transformer.h.10.attn.c_proj.weight', 'transformer.h.11.attn.bias', 'transformer.h.11.attn.c_attn.bias', 'transformer.h.11.attn.c_attn.weight', 'transformer.h.11.attn.c_proj.bias', 'transformer.h.11.attn.c_proj.weight', 'transformer.h.2.attn.bias', 'transformer.h.2.attn.c_attn.bias', 'transformer.h.2.attn.c_attn.weight', 'transformer.h.2.attn.c_proj.bias', 'transformer.h.2.attn.c_proj.weight', 'transformer.h.3.attn.bias', 'transformer.h.3.attn.c_attn.bias', 'transformer.h.3.attn.c_attn.weight', 'transformer.h.3.attn.c_proj.bias', 'transformer.h.3.attn.c_proj.weight', 'transformer.h.4.attn.bias', 'transformer.h.4.attn.c_attn.bias', 'transformer.h.4.attn.c_attn.weight', 'transformer.h.4.attn.c_proj.bias', 'transformer.h.4.attn.c_proj.weight', 'transformer.h.5.attn.bias', 'transformer.h.5.attn.c_attn.bias', 'transformer.h.5.attn.c_attn.weight', 'transformer.h.5.attn.c_proj.bias', 'transformer.h.5.attn.c_proj.weight', 'transformer.h.6.attn.bias', 'transformer.h.6.attn.c_attn.bias', 'transformer.h.6.attn.c_attn.weight', 'transformer.h.6.attn.c_proj.bias', 'transformer.h.6.attn.c_proj.weight', 'transformer.h.7.attn.bias', 'transformer.h.7.attn.c_attn.bias', 'transformer.h.7.attn.c_attn.weight', 'transformer.h.7.attn.c_proj.bias', 'transformer.h.7.attn.c_proj.weight', 'transformer.h.8.attn.bias', 'transformer.h.8.attn.c_attn.bias', 'transformer.h.8.attn.c_attn.weight', 'transformer.h.8.attn.c_proj.bias', 'transformer.h.8.attn.c_proj.weight', 'transformer.h.9.attn.bias', 'transformer.h.9.attn.c_attn.bias', 'transformer.h.9.attn.c_attn.weight', 'transformer.h.9.attn.c_proj.bias', 'transformer.h.9.attn.c_proj.weight']
+- This IS expected if you are initializing GPT2LMHeadModel from the checkpoint of a model trained on another task or with another architecture (e.g. initializing a BertForSequenceClassification model from a BertForPreTraining model).
+- This IS NOT expected if you are initializing GPT2LMHeadModel from the checkpoint of a model that you expect to be exactly identical (initializing a BertForSequenceClassification model from a BertForSequenceClassification model).
+[WARNING|modeling_utils.py:5572] 2025-10-02 00:09:36,076 >> Some weights of GPT2LMHeadModel were not initialized from the model checkpoint at gpt2 and are newly initialized: ['transformer.h.0.attn.core.bt_proj.bias', 'transformer.h.0.attn.core.bt_proj.weight', 'transformer.h.0.attn.core.k_proj.weight', 'transformer.h.0.attn.core.o_proj.weight', 'transformer.h.0.attn.core.q_proj.weight', 'transformer.h.0.attn.core.v_proj.weight', 'transformer.h.0.attn.core.w_proj.0.weight', 'transformer.h.0.attn.core.w_proj.1.weight', 'transformer.h.1.attn.core.bt_proj.bias', 'transformer.h.1.attn.core.bt_proj.weight', 'transformer.h.1.attn.core.k_proj.weight', 'transformer.h.1.attn.core.o_proj.weight', 'transformer.h.1.attn.core.q_proj.weight', 'transformer.h.1.attn.core.v_proj.weight', 'transformer.h.1.attn.core.w_proj.0.weight', 'transformer.h.1.attn.core.w_proj.1.weight', 'transformer.h.10.attn.core.bt_proj.bias', 'transformer.h.10.attn.core.bt_proj.weight', 'transformer.h.10.attn.core.k_proj.weight', 'transformer.h.10.attn.core.o_proj.weight', 'transformer.h.10.attn.core.q_proj.weight', 'transformer.h.10.attn.core.v_proj.weight', 'transformer.h.10.attn.core.w_proj.0.weight', 'transformer.h.10.attn.core.w_proj.1.weight', 'transformer.h.11.attn.core.bt_proj.bias', 'transformer.h.11.attn.core.bt_proj.weight', 'transformer.h.11.attn.core.k_proj.weight', 'transformer.h.11.attn.core.o_proj.weight', 'transformer.h.11.attn.core.q_proj.weight', 'transformer.h.11.attn.core.v_proj.weight', 'transformer.h.11.attn.core.w_proj.0.weight', 'transformer.h.11.attn.core.w_proj.1.weight', 'transformer.h.2.attn.core.bt_proj.bias', 'transformer.h.2.attn.core.bt_proj.weight', 'transformer.h.2.attn.core.k_proj.weight', 'transformer.h.2.attn.core.o_proj.weight', 'transformer.h.2.attn.core.q_proj.weight', 'transformer.h.2.attn.core.v_proj.weight', 'transformer.h.2.attn.core.w_proj.0.weight', 'transformer.h.2.attn.core.w_proj.1.weight', 'transformer.h.3.attn.core.bt_proj.bias', 'transformer.h.3.attn.core.bt_proj.weight', 'transformer.h.3.attn.core.k_proj.weight', 'transformer.h.3.attn.core.o_proj.weight', 'transformer.h.3.attn.core.q_proj.weight', 'transformer.h.3.attn.core.v_proj.weight', 'transformer.h.3.attn.core.w_proj.0.weight', 'transformer.h.3.attn.core.w_proj.1.weight', 'transformer.h.4.attn.core.bt_proj.bias', 'transformer.h.4.attn.core.bt_proj.weight', 'transformer.h.4.attn.core.k_proj.weight', 'transformer.h.4.attn.core.o_proj.weight', 'transformer.h.4.attn.core.q_proj.weight', 'transformer.h.4.attn.core.v_proj.weight', 'transformer.h.4.attn.core.w_proj.0.weight', 'transformer.h.4.attn.core.w_proj.1.weight', 'transformer.h.5.attn.core.bt_proj.bias', 'transformer.h.5.attn.core.bt_proj.weight', 'transformer.h.5.attn.core.k_proj.weight', 'transformer.h.5.attn.core.o_proj.weight', 'transformer.h.5.attn.core.q_proj.weight', 'transformer.h.5.attn.core.v_proj.weight', 'transformer.h.5.attn.core.w_proj.0.weight', 'transformer.h.5.attn.core.w_proj.1.weight', 'transformer.h.6.attn.core.bt_proj.bias', 'transformer.h.6.attn.core.bt_proj.weight', 'transformer.h.6.attn.core.k_proj.weight', 'transformer.h.6.attn.core.o_proj.weight', 'transformer.h.6.attn.core.q_proj.weight', 'transformer.h.6.attn.core.v_proj.weight', 'transformer.h.6.attn.core.w_proj.0.weight', 'transformer.h.6.attn.core.w_proj.1.weight', 'transformer.h.7.attn.core.bt_proj.bias', 'transformer.h.7.attn.core.bt_proj.weight', 'transformer.h.7.attn.core.k_proj.weight', 'transformer.h.7.attn.core.o_proj.weight', 'transformer.h.7.attn.core.q_proj.weight', 'transformer.h.7.attn.core.v_proj.weight', 'transformer.h.7.attn.core.w_proj.0.weight', 'transformer.h.7.attn.core.w_proj.1.weight', 'transformer.h.8.attn.core.bt_proj.bias', 'transformer.h.8.attn.core.bt_proj.weight', 'transformer.h.8.attn.core.k_proj.weight', 'transformer.h.8.attn.core.o_proj.weight', 'transformer.h.8.attn.core.q_proj.weight', 'transformer.h.8.attn.core.v_proj.weight', 'transformer.h.8.attn.core.w_proj.0.weight', 'transformer.h.8.attn.core.w_proj.1.weight', 'transformer.h.9.attn.core.bt_proj.bias', 'transformer.h.9.attn.core.bt_proj.weight', 'transformer.h.9.attn.core.k_proj.weight', 'transformer.h.9.attn.core.o_proj.weight', 'transformer.h.9.attn.core.q_proj.weight', 'transformer.h.9.attn.core.v_proj.weight', 'transformer.h.9.attn.core.w_proj.0.weight', 'transformer.h.9.attn.core.w_proj.1.weight']
+You should probably TRAIN this model on a down-stream task to be able to use it for predictions and inference.
+/cl/work5/hongyu-s/conda/envs/latest_transformers/lib/python3.12/site-packages/torch/distributed/distributed_c10d.py:4807: UserWarning: No device id is provided via `init_process_group` or `barrier `. Using the current device set by the user. 
+  warnings.warn(  # warn only once
+[rank1]:[W1002 00:09:36.390462221 ProcessGroupNCCL.cpp:5023] [PG ID 0 PG GUID 0 Rank 1]  using GPU 1 as device used by this process is currently unknown. This can potentially cause a hang if this rank to GPU mapping is incorrect. You can specify device_id in init_process_group() to force use of a particular device.
+[WARNING|modeling_utils.py:5560] 2025-10-02 00:09:40,622 >> Some weights of the model checkpoint at gpt2 were not used when initializing GPT2LMHeadModel: ['transformer.h.0.attn.bias', 'transformer.h.0.attn.c_attn.bias', 'transformer.h.0.attn.c_attn.weight', 'transformer.h.0.attn.c_proj.bias', 'transformer.h.0.attn.c_proj.weight', 'transformer.h.1.attn.bias', 'transformer.h.1.attn.c_attn.bias', 'transformer.h.1.attn.c_attn.weight', 'transformer.h.1.attn.c_proj.bias', 'transformer.h.1.attn.c_proj.weight', 'transformer.h.10.attn.bias', 'transformer.h.10.attn.c_attn.bias', 'transformer.h.10.attn.c_attn.weight', 'transformer.h.10.attn.c_proj.bias', 'transformer.h.10.attn.c_proj.weight', 'transformer.h.11.attn.bias', 'transformer.h.11.attn.c_attn.bias', 'transformer.h.11.attn.c_attn.weight', 'transformer.h.11.attn.c_proj.bias', 'transformer.h.11.attn.c_proj.weight', 'transformer.h.2.attn.bias', 'transformer.h.2.attn.c_attn.bias', 'transformer.h.2.attn.c_attn.weight', 'transformer.h.2.attn.c_proj.bias', 'transformer.h.2.attn.c_proj.weight', 'transformer.h.3.attn.bias', 'transformer.h.3.attn.c_attn.bias', 'transformer.h.3.attn.c_attn.weight', 'transformer.h.3.attn.c_proj.bias', 'transformer.h.3.attn.c_proj.weight', 'transformer.h.4.attn.bias', 'transformer.h.4.attn.c_attn.bias', 'transformer.h.4.attn.c_attn.weight', 'transformer.h.4.attn.c_proj.bias', 'transformer.h.4.attn.c_proj.weight', 'transformer.h.5.attn.bias', 'transformer.h.5.attn.c_attn.bias', 'transformer.h.5.attn.c_attn.weight', 'transformer.h.5.attn.c_proj.bias', 'transformer.h.5.attn.c_proj.weight', 'transformer.h.6.attn.bias', 'transformer.h.6.attn.c_attn.bias', 'transformer.h.6.attn.c_attn.weight', 'transformer.h.6.attn.c_proj.bias', 'transformer.h.6.attn.c_proj.weight', 'transformer.h.7.attn.bias', 'transformer.h.7.attn.c_attn.bias', 'transformer.h.7.attn.c_attn.weight', 'transformer.h.7.attn.c_proj.bias', 'transformer.h.7.attn.c_proj.weight', 'transformer.h.8.attn.bias', 'transformer.h.8.attn.c_attn.bias', 'transformer.h.8.attn.c_attn.weight', 'transformer.h.8.attn.c_proj.bias', 'transformer.h.8.attn.c_proj.weight', 'transformer.h.9.attn.bias', 'transformer.h.9.attn.c_attn.bias', 'transformer.h.9.attn.c_attn.weight', 'transformer.h.9.attn.c_proj.bias', 'transformer.h.9.attn.c_proj.weight']
+- This IS expected if you are initializing GPT2LMHeadModel from the checkpoint of a model trained on another task or with another architecture (e.g. initializing a BertForSequenceClassification model from a BertForPreTraining model).
+- This IS NOT expected if you are initializing GPT2LMHeadModel from the checkpoint of a model that you expect to be exactly identical (initializing a BertForSequenceClassification model from a BertForSequenceClassification model).
+[WARNING|modeling_utils.py:5572] 2025-10-02 00:09:40,622 >> Some weights of GPT2LMHeadModel were not initialized from the model checkpoint at gpt2 and are newly initialized: ['transformer.h.0.attn.core.bt_proj.bias', 'transformer.h.0.attn.core.bt_proj.weight', 'transformer.h.0.attn.core.k_proj.weight', 'transformer.h.0.attn.core.o_proj.weight', 'transformer.h.0.attn.core.q_proj.weight', 'transformer.h.0.attn.core.v_proj.weight', 'transformer.h.0.attn.core.w_proj.0.weight', 'transformer.h.0.attn.core.w_proj.1.weight', 'transformer.h.1.attn.core.bt_proj.bias', 'transformer.h.1.attn.core.bt_proj.weight', 'transformer.h.1.attn.core.k_proj.weight', 'transformer.h.1.attn.core.o_proj.weight', 'transformer.h.1.attn.core.q_proj.weight', 'transformer.h.1.attn.core.v_proj.weight', 'transformer.h.1.attn.core.w_proj.0.weight', 'transformer.h.1.attn.core.w_proj.1.weight', 'transformer.h.10.attn.core.bt_proj.bias', 'transformer.h.10.attn.core.bt_proj.weight', 'transformer.h.10.attn.core.k_proj.weight', 'transformer.h.10.attn.core.o_proj.weight', 'transformer.h.10.attn.core.q_proj.weight', 'transformer.h.10.attn.core.v_proj.weight', 'transformer.h.10.attn.core.w_proj.0.weight', 'transformer.h.10.attn.core.w_proj.1.weight', 'transformer.h.11.attn.core.bt_proj.bias', 'transformer.h.11.attn.core.bt_proj.weight', 'transformer.h.11.attn.core.k_proj.weight', 'transformer.h.11.attn.core.o_proj.weight', 'transformer.h.11.attn.core.q_proj.weight', 'transformer.h.11.attn.core.v_proj.weight', 'transformer.h.11.attn.core.w_proj.0.weight', 'transformer.h.11.attn.core.w_proj.1.weight', 'transformer.h.2.attn.core.bt_proj.bias', 'transformer.h.2.attn.core.bt_proj.weight', 'transformer.h.2.attn.core.k_proj.weight', 'transformer.h.2.attn.core.o_proj.weight', 'transformer.h.2.attn.core.q_proj.weight', 'transformer.h.2.attn.core.v_proj.weight', 'transformer.h.2.attn.core.w_proj.0.weight', 'transformer.h.2.attn.core.w_proj.1.weight', 'transformer.h.3.attn.core.bt_proj.bias', 'transformer.h.3.attn.core.bt_proj.weight', 'transformer.h.3.attn.core.k_proj.weight', 'transformer.h.3.attn.core.o_proj.weight', 'transformer.h.3.attn.core.q_proj.weight', 'transformer.h.3.attn.core.v_proj.weight', 'transformer.h.3.attn.core.w_proj.0.weight', 'transformer.h.3.attn.core.w_proj.1.weight', 'transformer.h.4.attn.core.bt_proj.bias', 'transformer.h.4.attn.core.bt_proj.weight', 'transformer.h.4.attn.core.k_proj.weight', 'transformer.h.4.attn.core.o_proj.weight', 'transformer.h.4.attn.core.q_proj.weight', 'transformer.h.4.attn.core.v_proj.weight', 'transformer.h.4.attn.core.w_proj.0.weight', 'transformer.h.4.attn.core.w_proj.1.weight', 'transformer.h.5.attn.core.bt_proj.bias', 'transformer.h.5.attn.core.bt_proj.weight', 'transformer.h.5.attn.core.k_proj.weight', 'transformer.h.5.attn.core.o_proj.weight', 'transformer.h.5.attn.core.q_proj.weight', 'transformer.h.5.attn.core.v_proj.weight', 'transformer.h.5.attn.core.w_proj.0.weight', 'transformer.h.5.attn.core.w_proj.1.weight', 'transformer.h.6.attn.core.bt_proj.bias', 'transformer.h.6.attn.core.bt_proj.weight', 'transformer.h.6.attn.core.k_proj.weight', 'transformer.h.6.attn.core.o_proj.weight', 'transformer.h.6.attn.core.q_proj.weight', 'transformer.h.6.attn.core.v_proj.weight', 'transformer.h.6.attn.core.w_proj.0.weight', 'transformer.h.6.attn.core.w_proj.1.weight', 'transformer.h.7.attn.core.bt_proj.bias', 'transformer.h.7.attn.core.bt_proj.weight', 'transformer.h.7.attn.core.k_proj.weight', 'transformer.h.7.attn.core.o_proj.weight', 'transformer.h.7.attn.core.q_proj.weight', 'transformer.h.7.attn.core.v_proj.weight', 'transformer.h.7.attn.core.w_proj.0.weight', 'transformer.h.7.attn.core.w_proj.1.weight', 'transformer.h.8.attn.core.bt_proj.bias', 'transformer.h.8.attn.core.bt_proj.weight', 'transformer.h.8.attn.core.k_proj.weight', 'transformer.h.8.attn.core.o_proj.weight', 'transformer.h.8.attn.core.q_proj.weight', 'transformer.h.8.attn.core.v_proj.weight', 'transformer.h.8.attn.core.w_proj.0.weight', 'transformer.h.8.attn.core.w_proj.1.weight', 'transformer.h.9.attn.core.bt_proj.bias', 'transformer.h.9.attn.core.bt_proj.weight', 'transformer.h.9.attn.core.k_proj.weight', 'transformer.h.9.attn.core.o_proj.weight', 'transformer.h.9.attn.core.q_proj.weight', 'transformer.h.9.attn.core.v_proj.weight', 'transformer.h.9.attn.core.w_proj.0.weight', 'transformer.h.9.attn.core.w_proj.1.weight']
+You should probably TRAIN this model on a down-stream task to be able to use it for predictions and inference.
+/cl/work5/hongyu-s/conda/envs/latest_transformers/lib/python3.12/site-packages/torch/distributed/distributed_c10d.py:4807: UserWarning: No device id is provided via `init_process_group` or `barrier `. Using the current device set by the user. 
+  warnings.warn(  # warn only once
+[rank3]:[W1002 00:09:41.946442445 ProcessGroupNCCL.cpp:5023] [PG ID 0 PG GUID 0 Rank 3]  using GPU 3 as device used by this process is currently unknown. This can potentially cause a hang if this rank to GPU mapping is incorrect. You can specify device_id in init_process_group() to force use of a particular device.
+Loading cached processed dataset at /cl/work5/hongyu-s/huggingfac/datasets/wikitext/wikitext-103-raw-v1/0.0.0/b08601e04326c79dfdd32d625aee71d232d685c3/cache-6c45e581cfd12e15_*_of_00001.arrow
+10/02/2025 00:09:41 - INFO - datasets.arrow_dataset - Loading cached processed dataset at /cl/work5/hongyu-s/huggingfac/datasets/wikitext/wikitext-103-raw-v1/0.0.0/b08601e04326c79dfdd32d625aee71d232d685c3/cache-6c45e581cfd12e15_*_of_00001.arrow
+Loading cached processed dataset at /cl/work5/hongyu-s/huggingfac/datasets/wikitext/wikitext-103-raw-v1/0.0.0/b08601e04326c79dfdd32d625aee71d232d685c3/cache-f4b57832a890a927_*_of_00001.arrow
+10/02/2025 00:09:42 - INFO - datasets.arrow_dataset - Loading cached processed dataset at /cl/work5/hongyu-s/huggingfac/datasets/wikitext/wikitext-103-raw-v1/0.0.0/b08601e04326c79dfdd32d625aee71d232d685c3/cache-f4b57832a890a927_*_of_00001.arrow
+Loading cached processed dataset at /cl/work5/hongyu-s/huggingfac/datasets/wikitext/wikitext-103-raw-v1/0.0.0/b08601e04326c79dfdd32d625aee71d232d685c3/cache-5e0edde0740173f5_*_of_00001.arrow
+10/02/2025 00:09:42 - INFO - datasets.arrow_dataset - Loading cached processed dataset at /cl/work5/hongyu-s/huggingfac/datasets/wikitext/wikitext-103-raw-v1/0.0.0/b08601e04326c79dfdd32d625aee71d232d685c3/cache-5e0edde0740173f5_*_of_00001.arrow
+[INFO|trainer.py:2710] 2025-10-02 00:09:49,893 >> ***** Running training *****
+[INFO|trainer.py:2711] 2025-10-02 00:09:49,893 >>   Num examples = 229,395
+[INFO|trainer.py:2712] 2025-10-02 00:09:49,894 >>   Num Epochs = 30
+[INFO|trainer.py:2713] 2025-10-02 00:09:49,894 >>   Instantaneous batch size per device = 16
+[INFO|trainer.py:2716] 2025-10-02 00:09:49,894 >>   Total train batch size (w. parallel, distributed & accumulation) = 64
+[INFO|trainer.py:2717] 2025-10-02 00:09:49,894 >>   Gradient Accumulation steps = 1
+[INFO|trainer.py:2718] 2025-10-02 00:09:49,894 >>   Total optimization steps = 107,550
+[INFO|trainer.py:2719] 2025-10-02 00:09:49,895 >>   Number of trainable parameters = 125,103,504
+[INFO|integration_utils.py:858] 2025-10-02 00:09:49,905 >> Automatic Weights & Biases logging enabled, to disable set os.environ["WANDB_DISABLED"] = "true"
+  0%|          | 0/107550 [00:00<?, ?it/s][WARNING|logging.py:328] 2025-10-02 00:10:07,135 >> `loss_type=None` was set in the config but it is unrecognized. Using the default loss: `ForCausalLMLoss`.
+[WARNING|logging.py:328] 2025-10-02 00:10:07,136 >> `loss_type=None` was set in the config but it is unrecognized. Using the default loss: `ForCausalLMLoss`.
+[WARNING|logging.py:328] 2025-10-02 00:10:07,142 >> `loss_type=None` was set in the config but it is unrecognized. Using the default loss: `ForCausalLMLoss`.
+[WARNING|logging.py:328] 2025-10-02 00:10:07,143 >> `loss_type=None` was set in the config but it is unrecognized. Using the default loss: `ForCausalLMLoss`.
+  0%|          | 1/107550 [00:19<574:52:30, 19.24s/it]  0%|          | 2/107550 [00:21<270:46:44,  9.06s/it]  0%|          | 3/107550 [00:23<173:32:15,  5.81s/it]  0%|          | 4/107550 [00:25<127:51:26,  4.28s/it]  0%|          | 5/107550 [00:26<102:38:21,  3.44s/it]  0%|          | 6/107550 [00:28<87:24:46,  2.93s/it]   0%|          | 7/107550 [00:30<77:44:51,  2.60s/it]  0%|          | 8/107550 [00:32<71:19:25,  2.39s/it]  0%|          | 9/107550 [00:34<67:03:46,  2.24s/it]  0%|          | 10/107550 [00:36<64:10:13,  2.15s/it]  0%|          | 11/107550 [00:38<62:15:51,  2.08s/it]  0%|          | 12/107550 [00:40<60:56:00,  2.04s/it]  0%|          | 13/107550 [00:42<60:05:55,  2.01s/it]  0%|          | 14/107550 [00:44<59:24:49,  1.99s/it]  0%|          | 15/107550 [00:46<59:03:32,  1.98s/it]  0%|          | 16/107550 [00:48<58:43:48,  1.97s/it]  0%|          | 17/107550 [00:50<58:32:41,  1.96s/it]  0%|          | 18/107550 [00:52<58:23:14,  1.95s/it]  0%|          | 19/107550 [00:54<58:17:15,  1.95s/it]  0%|          | 20/107550 [00:56<58:20:42,  1.95s/it]  0%|          | 21/107550 [00:58<58:08:57,  1.95s/it]  0%|          | 22/107550 [00:59<58:09:45,  1.95s/it]  0%|          | 23/107550 [01:01<58:07:15,  1.95s/it]  0%|          | 24/107550 [01:03<58:11:35,  1.95s/it]  0%|          | 25/107550 [01:05<58:12:53,  1.95s/it]  0%|          | 26/107550 [01:07<58:12:25,  1.95s/it]  0%|          | 27/107550 [01:09<58:09:26,  1.95s/it]  0%|          | 28/107550 [01:11<58:07:53,  1.95s/it]  0%|          | 29/107550 [01:13<58:10:44,  1.95s/it]  0%|          | 30/107550 [01:15<58:10:05,  1.95s/it]  0%|          | 31/107550 [01:17<58:09:30,  1.95s/it]  0%|          | 32/107550 [01:19<58:10:50,  1.95s/it]  0%|          | 33/107550 [01:21<58:09:26,  1.95s/it]  0%|          | 34/107550 [01:23<58:07:16,  1.95s/it]  0%|          | 35/107550 [01:25<58:10:15,  1.95s/it]  0%|          | 36/107550 [01:27<58:15:32,  1.95s/it]  0%|          | 37/107550 [01:29<58:11:48,  1.95s/it]  0%|          | 38/107550 [01:31<58:12:40,  1.95s/it]  0%|          | 39/107550 [01:33<58:09:56,  1.95s/it]  0%|          | 40/107550 [01:35<58:11:50,  1.95s/it]  0%|          | 41/107550 [01:37<58:17:39,  1.95s/it]  0%|          | 42/107550 [01:38<58:19:33,  1.95s/it]  0%|          | 43/107550 [01:40<58:14:40,  1.95s/it]  0%|          | 44/107550 [01:42<58:18:48,  1.95s/it]  0%|          | 45/107550 [01:44<58:17:20,  1.95s/it]  0%|          | 46/107550 [01:46<58:17:26,  1.95s/it]  0%|          | 47/107550 [01:48<58:21:22,  1.95s/it]  0%|          | 48/107550 [01:50<58:25:05,  1.96s/it]  0%|          | 49/107550 [01:52<58:22:30,  1.95s/it]  0%|          | 50/107550 [01:54<58:21:10,  1.95s/it]  0%|          | 51/107550 [01:56<58:21:35,  1.95s/it]  0%|          | 52/107550 [01:58<58:26:26,  1.96s/it]  0%|          | 53/107550 [02:00<58:21:19,  1.95s/it]  0%|          | 54/107550 [02:02<58:24:40,  1.96s/it]  0%|          | 55/107550 [02:04<58:24:49,  1.96s/it]  0%|          | 56/107550 [02:06<58:23:58,  1.96s/it]  0%|          | 57/107550 [02:08<58:26:40,  1.96s/it]  0%|          | 58/107550 [02:10<58:22:55,  1.96s/it]  0%|          | 59/107550 [02:12<58:20:31,  1.95s/it]  0%|          | 60/107550 [02:14<58:23:58,  1.96s/it]  0%|          | 61/107550 [02:16<58:27:46,  1.96s/it]  0%|          | 62/107550 [02:18<58:32:37,  1.96s/it]  0%|          | 63/107550 [02:20<58:32:56,  1.96s/it]  0%|          | 64/107550 [02:21<58:30:29,  1.96s/it]  0%|          | 65/107550 [02:23<58:33:00,  1.96s/it]  0%|          | 66/107550 [02:25<58:32:05,  1.96s/it]  0%|          | 67/107550 [02:27<58:33:40,  1.96s/it]  0%|          | 68/107550 [02:29<58:39:02,  1.96s/it]  0%|          | 69/107550 [02:31<58:30:16,  1.96s/it]  0%|          | 70/107550 [02:33<58:31:31,  1.96s/it]  0%|          | 71/107550 [02:35<58:32:29,  1.96s/it]  0%|          | 72/107550 [02:37<58:32:30,  1.96s/it]  0%|          | 73/107550 [02:39<58:34:57,  1.96s/it]  0%|          | 74/107550 [02:41<58:30:22,  1.96s/it]  0%|          | 75/107550 [02:43<58:33:17,  1.96s/it]  0%|          | 76/107550 [02:45<58:27:43,  1.96s/it]  0%|          | 77/107550 [02:47<58:35:09,  1.96s/it]  0%|          | 78/107550 [02:49<58:31:38,  1.96s/it]  0%|          | 79/107550 [02:51<58:34:28,  1.96s/it]  0%|          | 80/107550 [02:53<58:33:22,  1.96s/it]  0%|          | 81/107550 [02:55<58:37:19,  1.96s/it]  0%|          | 82/107550 [02:57<58:37:51,  1.96s/it]  0%|          | 83/107550 [02:59<58:33:37,  1.96s/it]  0%|          | 84/107550 [03:01<58:38:14,  1.96s/it]  0%|          | 85/107550 [03:03<58:34:08,  1.96s/it]  0%|          | 86/107550 [03:05<58:34:43,  1.96s/it]  0%|          | 87/107550 [03:07<58:35:28,  1.96s/it]  0%|          | 88/107550 [03:09<58:35:07,  1.96s/it]  0%|          | 89/107550 [03:11<58:35:43,  1.96s/it]  0%|          | 90/107550 [03:13<58:39:33,  1.97s/it]  0%|          | 91/107550 [03:14<58:35:59,  1.96s/it]  0%|          | 92/107550 [03:16<58:41:34,  1.97s/it]  0%|          | 93/107550 [03:18<58:42:07,  1.97s/it]  0%|          | 94/107550 [03:20<58:39:05,  1.96s/it]  0%|          | 95/107550 [03:22<58:41:02,  1.97s/it]  0%|          | 96/107550 [03:24<58:45:20,  1.97s/it]  0%|          | 97/107550 [03:26<58:36:44,  1.96s/it]  0%|          | 98/107550 [03:28<58:39:48,  1.97s/it]  0%|          | 99/107550 [03:30<58:38:35,  1.96s/it]  0%|          | 100/107550 [03:32<58:37:45,  1.96s/it]  0%|          | 101/107550 [03:34<58:39:33,  1.97s/it]  0%|          | 102/107550 [03:36<58:56:50,  1.98s/it]  0%|          | 103/107550 [03:38<58:48:25,  1.97s/it]  0%|          | 104/107550 [03:40<58:48:59,  1.97s/it]  0%|          | 105/107550 [03:42<58:45:57,  1.97s/it]  0%|          | 106/107550 [03:44<58:44:50,  1.97s/it]  0%|          | 107/107550 [03:46<58:51:02,  1.97s/it]  0%|          | 108/107550 [03:48<58:46:06,  1.97s/it]  0%|          | 109/107550 [03:50<58:43:47,  1.97s/it]  0%|          | 110/107550 [03:52<59:05:04,  1.98s/it]  0%|          | 111/107550 [03:54<58:54:32,  1.97s/it]  0%|          | 112/107550 [03:56<58:54:17,  1.97s/it]  0%|          | 113/107550 [03:58<58:59:08,  1.98s/it]  0%|          | 114/107550 [04:00<58:52:29,  1.97s/it]  0%|          | 115/107550 [04:02<58:49:53,  1.97s/it]  0%|          | 116/107550 [04:04<58:58:26,  1.98s/it]  0%|          | 117/107550 [04:06<58:58:27,  1.98s/it]  0%|          | 118/107550 [04:08<58:54:18,  1.97s/it]  0%|          | 119/107550 [04:10<58:59:01,  1.98s/it]  0%|          | 120/107550 [04:12<58:58:30,  1.98s/it]  0%|          | 121/107550 [04:14<59:06:03,  1.98s/it]  0%|          | 122/107550 [04:16<58:57:04,  1.98s/it]  0%|          | 123/107550 [04:18<58:58:39,  1.98s/it]  0%|          | 124/107550 [04:20<58:56:49,  1.98s/it]  0%|          | 125/107550 [04:22<59:21:51,  1.99s/it]  0%|          | 126/107550 [04:24<59:15:14,  1.99s/it]  0%|          | 127/107550 [04:26<59:08:18,  1.98s/it]  0%|          | 128/107550 [04:27<59:00:38,  1.98s/it]  0%|          | 129/107550 [04:29<58:59:16,  1.98s/it]  0%|          | 130/107550 [04:31<59:09:01,  1.98s/it]  0%|          | 131/107550 [04:33<59:13:16,  1.98s/it]  0%|          | 132/107550 [04:35<59:14:08,  1.99s/it]  0%|          | 133/107550 [04:37<59:12:21,  1.98s/it]  0%|          | 134/107550 [04:39<59:22:20,  1.99s/it]  0%|          | 135/107550 [04:41<59:28:15,  1.99s/it]  0%|          | 136/107550 [04:44<60:19:44,  2.02s/it]  0%|          | 137/107550 [04:46<60:03:04,  2.01s/it]  0%|          | 138/107550 [04:47<59:48:32,  2.00s/it]  0%|          | 139/107550 [04:49<59:40:31,  2.00s/it]  0%|          | 140/107550 [04:51<59:31:04,  1.99s/it]  0%|          | 141/107550 [04:53<59:17:24,  1.99s/it]  0%|          | 142/107550 [04:55<59:25:18,  1.99s/it]  0%|          | 143/107550 [04:58<60:19:12,  2.02s/it]  0%|          | 144/107550 [05:00<59:55:20,  2.01s/it]  0%|          | 145/107550 [05:01<59:42:04,  2.00s/it]  0%|          | 146/107550 [05:03<59:27:59,  1.99s/it]  0%|          | 147/107550 [05:05<59:30:48,  1.99s/it]  0%|          | 148/107550 [05:08<59:59:24,  2.01s/it]  0%|          | 149/107550 [05:09<59:38:13,  2.00s/it]  0%|          | 150/107550 [05:11<59:38:22,  2.00s/it]  0%|          | 151/107550 [05:13<59:27:57,  1.99s/it]  0%|          | 152/107550 [05:15<59:24:41,  1.99s/it]  0%|          | 153/107550 [05:18<60:16:23,  2.02s/it]  0%|          | 154/107550 [05:20<60:01:37,  2.01s/it]  0%|          | 155/107550 [05:22<59:41:19,  2.00s/it]  0%|          | 156/107550 [05:23<59:24:38,  1.99s/it]  0%|          | 157/107550 [05:26<60:33:51,  2.03s/it]  0%|          | 158/107550 [05:28<60:03:02,  2.01s/it]  0%|          | 159/107550 [05:30<60:58:44,  2.04s/it]  0%|          | 160/107550 [05:32<60:29:47,  2.03s/it]  0%|          | 161/107550 [05:34<59:52:31,  2.01s/it]  0%|          | 162/107550 [05:36<59:32:45,  2.00s/it]  0%|          | 163/107550 [05:38<59:27:48,  1.99s/it]  0%|          | 164/107550 [05:40<59:19:12,  1.99s/it]  0%|          | 165/107550 [05:42<59:38:19,  2.00s/it]  0%|          | 166/107550 [05:44<59:29:47,  1.99s/it]  0%|          | 167/107550 [05:46<59:22:08,  1.99s/it]  0%|          | 168/107550 [05:48<60:24:38,  2.03s/it]  0%|          | 169/107550 [05:50<59:58:11,  2.01s/it]  0%|          | 170/107550 [05:52<59:39:58,  2.00s/it]  0%|          | 171/107550 [05:54<60:36:19,  2.03s/it]  0%|          | 172/107550 [05:56<60:01:08,  2.01s/it]  0%|          | 173/107550 [05:58<59:34:19,  2.00s/it]  0%|          | 174/107550 [06:00<59:27:20,  1.99s/it]  0%|          | 175/107550 [06:02<59:18:32,  1.99s/it]  0%|          | 176/107550 [06:04<59:17:52,  1.99s/it]  0%|          | 177/107550 [06:06<59:09:47,  1.98s/it]  0%|          | 178/107550 [06:08<59:18:28,  1.99s/it]  0%|          | 179/107550 [06:10<59:11:07,  1.98s/it]  0%|          | 180/107550 [06:12<59:09:17,  1.98s/it]  0%|          | 181/107550 [06:14<59:14:46,  1.99s/it]  0%|          | 182/107550 [06:16<59:15:03,  1.99s/it]  0%|          | 183/107550 [06:18<61:09:59,  2.05s/it]  0%|          | 184/107550 [06:20<60:23:56,  2.03s/it]  0%|          | 185/107550 [06:22<60:47:50,  2.04s/it]  0%|          | 186/107550 [06:24<60:18:13,  2.02s/it]  0%|          | 187/107550 [06:26<61:53:49,  2.08s/it]  0%|          | 188/107550 [06:28<61:00:55,  2.05s/it]  0%|          | 189/107550 [06:30<60:24:36,  2.03s/it]  0%|          | 190/107550 [06:32<59:57:24,  2.01s/it]  0%|          | 191/107550 [06:34<61:28:24,  2.06s/it]  0%|          | 192/107550 [06:36<60:50:28,  2.04s/it]  0%|          | 193/107550 [06:38<60:10:37,  2.02s/it]  0%|          | 194/107550 [06:40<61:01:16,  2.05s/it]  0%|          | 195/107550 [06:42<60:29:30,  2.03s/it]  0%|          | 196/107550 [06:44<59:54:32,  2.01s/it]  0%|          | 197/107550 [06:46<59:40:11,  2.00s/it]  0%|          | 198/107550 [06:48<59:25:41,  1.99s/it]  0%|          | 199/107550 [06:50<59:32:00,  2.00s/it]  0%|          | 200/107550 [06:52<59:30:16,  2.00s/it]  0%|          | 201/107550 [06:54<59:41:55,  2.00s/it]  0%|          | 202/107550 [06:56<60:22:53,  2.02s/it]  0%|          | 203/107550 [06:58<60:02:11,  2.01s/it]  0%|          | 204/107550 [07:00<59:50:14,  2.01s/it]  0%|          | 205/107550 [07:02<59:33:39,  2.00s/it]  0%|          | 206/107550 [07:04<59:28:53,  1.99s/it]  0%|          | 207/107550 [07:06<59:20:28,  1.99s/it]  0%|          | 208/107550 [07:08<59:31:19,  2.00s/it]  0%|          | 209/107550 [07:10<59:22:33,  1.99s/it]  0%|          | 210/107550 [07:12<59:23:35,  1.99s/it]  0%|          | 211/107550 [07:14<59:16:27,  1.99s/it]  0%|          | 212/107550 [07:16<59:16:10,  1.99s/it]  0%|          | 213/107550 [07:18<59:49:02,  2.01s/it]  0%|          | 214/107550 [07:20<59:35:38,  2.00s/it]  0%|          | 215/107550 [07:22<59:31:50,  2.00s/it]  0%|          | 216/107550 [07:24<59:35:30,  2.00s/it]  0%|          | 217/107550 [07:26<60:04:55,  2.02s/it]  0%|          | 218/107550 [07:28<59:59:24,  2.01s/it]  0%|          | 219/107550 [07:30<59:46:14,  2.00s/it]  0%|          | 220/107550 [07:32<59:38:41,  2.00s/it]  0%|          | 221/107550 [07:34<59:28:26,  1.99s/it]  0%|          | 222/107550 [07:36<60:47:18,  2.04s/it]  0%|          | 223/107550 [07:38<59:59:48,  2.01s/it]  0%|          | 224/107550 [07:40<59:37:01,  2.00s/it]  0%|          | 225/107550 [07:42<60:08:12,  2.02s/it]  0%|          | 226/107550 [07:44<59:50:41,  2.01s/it]  0%|          | 227/107550 [07:46<59:42:32,  2.00s/it]  0%|          | 228/107550 [07:48<59:58:09,  2.01s/it]  0%|          | 229/107550 [07:50<59:47:05,  2.01s/it]  0%|          | 230/107550 [07:52<59:33:33,  2.00s/it]  0%|          | 231/107550 [07:54<59:57:25,  2.01s/it]  0%|          | 232/107550 [07:56<59:38:11,  2.00s/it]  0%|          | 233/107550 [07:58<60:04:17,  2.02s/it]  0%|          | 234/107550 [08:00<59:42:02,  2.00s/it]  0%|          | 235/107550 [08:02<60:04:49,  2.02s/it]  0%|          | 236/107550 [08:04<59:47:43,  2.01s/it]  0%|          | 237/107550 [08:06<59:40:03,  2.00s/it]  0%|          | 238/107550 [08:08<59:25:28,  1.99s/it]  0%|          | 239/107550 [08:10<59:18:38,  1.99s/it]  0%|          | 240/107550 [08:12<59:25:10,  1.99s/it]  0%|          | 241/107550 [08:14<61:11:30,  2.05s/it]  0%|          | 242/107550 [08:16<60:27:21,  2.03s/it]  0%|          | 243/107550 [08:18<59:59:28,  2.01s/it]  0%|          | 244/107550 [08:20<60:17:22,  2.02s/it]  0%|          | 245/107550 [08:22<59:56:40,  2.01s/it]  0%|          | 246/107550 [08:24<59:35:20,  2.00s/it]  0%|          | 247/107550 [08:26<59:30:45,  2.00s/it]  0%|          | 248/107550 [08:28<59:40:52,  2.00s/it]  0%|          | 249/107550 [08:30<60:55:35,  2.04s/it]  0%|          | 250/107550 [08:32<60:18:20,  2.02s/it][LR][LR][LR]  group_0: lr=5e-06, active=True | group_1: lr=5e-06, active=True | main_decay: lr=N/A, active=False (not in optimizer) | B_decay: lr=N/A, active=False (not in optimizer) | main_nodecay: lr=N/A, active=False (not in optimizer) | B_nodecay: lr=N/A, active=False (not in optimizer)group_0: lr=5e-06, active=True | group_1: lr=5e-06, active=True | main_decay: lr=N/A, active=False (not in optimizer) | main_nodecay: lr=N/A, active=False (not in optimizer) | B_nodecay: lr=N/A, active=False (not in optimizer) | B_decay: lr=N/A, active=False (not in optimizer)
+
+ group_0: lr=5e-06, active=True | group_1: lr=5e-06, active=True | main_decay: lr=N/A, active=False (not in optimizer) | main_nodecay: lr=N/A, active=False (not in optimizer) | B_decay: lr=N/A, active=False (not in optimizer) | B_nodecay: lr=N/A, active=False (not in optimizer)
+[LR] group_0: lr=5e-06, active=True | group_1: lr=5e-06, active=True | B_nodecay: lr=N/A, active=False (not in optimizer) | main_decay: lr=N/A, active=False (not in optimizer) | B_decay: lr=N/A, active=False (not in optimizer) | main_nodecay: lr=N/A, active=False (not in optimizer)
+                                                       {'loss': 7.1094, 'grad_norm': 2.854126453399658, 'learning_rate': 4.98e-06, 'epoch': 0.07, 'lr/group_0': 5e-06, 'lr/group_1': 5e-06, 'lr/B_nodecay': nan, 'lr/main_decay': nan, 'lr/B_decay': nan, 'lr/main_nodecay': nan}
+  0%|          | 250/107550 [08:32<60:18:20,  2.02s/it][INFO|trainer.py:4833] 2025-10-02 00:18:22,861 >> 
+***** Running Evaluation *****
+[INFO|trainer.py:4835] 2025-10-02 00:18:22,861 >>   Num examples = 481
+[INFO|trainer.py:4838] 2025-10-02 00:18:22,862 >>   Batch size = 16
+
+  0%|          | 0/8 [00:00<?, ?it/s][A
+ 25%|██▌       | 2/8 [00:00<00:01,  3.91it/s][A
+ 38%|███▊      | 3/8 [00:01<00:01,  2.75it/s][A
+ 50%|█████     | 4/8 [00:01<00:01,  2.38it/s][A
+ 62%|██████▎   | 5/8 [00:02<00:01,  2.20it/s][A
+ 75%|███████▌  | 6/8 [00:02<00:00,  2.10it/s][A
+ 88%|████████▊ | 7/8 [00:03<00:00,  2.05it/s][A
+100%|██████████| 8/8 [00:03<00:00,  2.03it/s][A[LR] group_0: lr=5e-06, active=True | group_1: lr=5e-06, active=True | main_decay: lr=N/A, active=False (not in optimizer) | main_nodecay: lr=N/A, active=False (not in optimizer) | B_nodecay: lr=N/A, active=False (not in optimizer) | B_decay: lr=N/A, active=False (not in optimizer)
+[LR] group_0: lr=5e-06, active=True | group_1: lr=5e-06, active=True | B_nodecay: lr=N/A, active=False (not in optimizer) | main_decay: lr=N/A, active=False (not in optimizer) | B_decay: lr=N/A, active=False (not in optimizer) | main_nodecay: lr=N/A, active=False (not in optimizer)
+                                                       
+                                             [A{'eval_loss': 6.347496509552002, 'eval_accuracy': 0.13474862789931283, 'eval_runtime': 5.6438, 'eval_samples_per_second': 85.227, 'eval_steps_per_second': 1.417, 'epoch': 0.07, 'lr/group_0': 5e-06, 'lr/group_1': 5e-06, 'lr/B_nodecay': nan, 'lr/main_decay': nan, 'lr/B_decay': nan, 'lr/main_nodecay': nan}
+  0%|          | 250/107550 [08:38<60:18:20,  2.02s/it]
+100%|██████████| 8/8 [00:05<00:00,  2.03it/s][A
+                                             [A[LR] group_0: lr=5e-06, active=True | group_1: lr=5e-06, active=True | main_decay: lr=N/A, active=False (not in optimizer) | main_nodecay: lr=N/A, active=False (not in optimizer) | B_decay: lr=N/A, active=False (not in optimizer) | B_nodecay: lr=N/A, active=False (not in optimizer)
+[LR] group_0: lr=5e-06, active=True | group_1: lr=5e-06, active=True | main_decay: lr=N/A, active=False (not in optimizer) | B_decay: lr=N/A, active=False (not in optimizer) | main_nodecay: lr=N/A, active=False (not in optimizer) | B_nodecay: lr=N/A, active=False (not in optimizer)
+  0%|          | 251/107550 [08:41<116:46:53,  3.92s/it]  0%|          | 252/107550 [08:43<99:18:48,  3.33s/it]   0%|          | 253/107550 [08:45<87:09:39,  2.92s/it]  0%|          | 254/107550 [08:47<78:33:07,  2.64s/it]  0%|          | 255/107550 [08:49<73:07:56,  2.45s/it]  0%|          | 256/107550 [08:51<68:44:28,  2.31s/it]  0%|          | 257/107550 [08:53<65:50:09,  2.21s/it]  0%|          | 258/107550 [08:55<63:47:46,  2.14s/it]  0%|          | 259/107550 [08:57<62:17:54,  2.09s/it]  0%|          | 260/107550 [08:59<61:15:20,  2.06s/it]  0%|          | 261/107550 [09:01<60:34:11,  2.03s/it]  0%|          | 262/107550 [09:03<60:38:47,  2.03s/it]  0%|          | 263/107550 [09:05<60:47:23,  2.04s/it]  0%|          | 264/107550 [09:07<60:08:48,  2.02s/it]  0%|          | 265/107550 [09:09<59:48:46,  2.01s/it]  0%|          | 266/107550 [09:11<59:30:00,  2.00s/it]  0%|          | 267/107550 [09:13<59:22:33,  1.99s/it]  0%|          | 268/107550 [09:15<59:17:10,  1.99s/it]  0%|          | 269/107550 [09:17<61:03:03,  2.05s/it]  0%|          | 270/107550 [09:19<60:21:36,  2.03s/it]  0%|          | 271/107550 [09:21<59:53:53,  2.01s/it]  0%|          | 272/107550 [09:23<59:31:35,  2.00s/it]  0%|          | 273/107550 [09:25<59:54:10,  2.01s/it]  0%|          | 274/107550 [09:27<59:37:08,  2.00s/it]  0%|          | 275/107550 [09:29<59:32:00,  2.00s/it]  0%|          | 276/107550 [09:31<59:25:22,  1.99s/it]  0%|          | 277/107550 [09:33<59:21:08,  1.99s/it]  0%|          | 278/107550 [09:35<59:36:33,  2.00s/it]  0%|          | 279/107550 [09:37<59:53:13,  2.01s/it]  0%|          | 280/107550 [09:39<59:56:42,  2.01s/it]  0%|          | 281/107550 [09:41<59:40:57,  2.00s/it]  0%|          | 282/107550 [09:43<59:24:58,  1.99s/it]  0%|          | 283/107550 [09:45<59:35:57,  2.00s/it]  0%|          | 284/107550 [09:47<60:06:53,  2.02s/it]  0%|          | 285/107550 [09:49<59:50:28,  2.01s/it]  0%|          | 286/107550 [09:51<59:32:24,  2.00s/it]  0%|          | 287/107550 [09:53<59:22:05,  1.99s/it]  0%|          | 288/107550 [09:55<59:23:00,  1.99s/it]  0%|          | 289/107550 [09:57<59:15:09,  1.99s/it]  0%|          | 290/107550 [09:59<59:30:19,  2.00s/it]  0%|          | 291/107550 [10:01<60:51:20,  2.04s/it]  0%|          | 292/107550 [10:03<60:21:09,  2.03s/it]  0%|          | 293/107550 [10:05<59:53:19,  2.01s/it]  0%|          | 294/107550 [10:07<59:45:07,  2.01s/it]  0%|          | 295/107550 [10:09<59:54:38,  2.01s/it]  0%|          | 296/107550 [10:11<59:40:14,  2.00s/it]  0%|          | 297/107550 [10:13<59:26:05,  1.99s/it]  0%|          | 298/107550 [10:15<59:31:06,  2.00s/it]  0%|          | 299/107550 [10:17<60:19:24,  2.02s/it]  0%|          | 300/107550 [10:19<59:52:05,  2.01s/it]  0%|          | 301/107550 [10:21<59:39:53,  2.00s/it]  0%|          | 302/107550 [10:23<59:31:17,  2.00s/it]  0%|          | 303/107550 [10:25<59:25:42,  1.99s/it]  0%|          | 304/107550 [10:27<59:19:15,  1.99s/it]  0%|          | 305/107550 [10:29<61:06:08,  2.05s/it]  0%|          | 306/107550 [10:31<60:23:13,  2.03s/it]  0%|          | 307/107550 [10:33<60:40:53,  2.04s/it]  0%|          | 308/107550 [10:35<60:09:52,  2.02s/it]  0%|          | 309/107550 [10:37<59:52:25,  2.01s/it]  0%|          | 310/107550 [10:39<59:30:05,  2.00s/it]  0%|          | 311/107550 [10:41<59:30:41,  2.00s/it]  0%|          | 312/107550 [10:43<59:22:31,  1.99s/it]  0%|          | 313/107550 [10:45<59:13:41,  1.99s/it]  0%|          | 314/107550 [10:47<59:09:13,  1.99s/it]  0%|          | 315/107550 [10:49<59:23:59,  1.99s/it]  0%|          | 316/107550 [10:51<59:38:14,  2.00s/it]  0%|          | 317/107550 [10:53<59:23:41,  1.99s/it]  0%|          | 318/107550 [10:55<59:24:14,  1.99s/it]  0%|          | 319/107550 [10:57<60:09:29,  2.02s/it]  0%|          | 320/107550 [10:59<59:42:19,  2.00s/it]  0%|          | 321/107550 [11:01<59:44:23,  2.01s/it]  0%|          | 322/107550 [11:03<59:24:22,  1.99s/it]  0%|          | 323/107550 [11:05<59:13:26,  1.99s/it]  0%|          | 324/107550 [11:07<59:22:29,  1.99s/it]  0%|          | 325/107550 [11:09<59:57:52,  2.01s/it]  0%|          | 326/107550 [11:11<59:43:25,  2.01s/it]  0%|          | 327/107550 [11:13<59:27:04,  2.00s/it]  0%|          | 328/107550 [11:15<59:48:37,  2.01s/it]  0%|          | 329/107550 [11:17<59:31:23,  2.00s/it]  0%|          | 330/107550 [11:19<59:19:59,  1.99s/it]  0%|          | 331/107550 [11:21<59:10:46,  1.99s/it]  0%|          | 332/107550 [11:23<59:11:13,  1.99s/it]  0%|          | 333/107550 [11:25<59:18:00,  1.99s/it]  0%|          | 334/107550 [11:27<59:22:01,  1.99s/it]  0%|          | 335/107550 [11:29<59:11:32,  1.99s/it]  0%|          | 336/107550 [11:31<59:20:01,  1.99s/it]  0%|          | 337/107550 [11:33<59:23:17,  1.99s/it]  0%|          | 338/107550 [11:35<59:13:52,  1.99s/it]  0%|          | 339/107550 [11:37<60:00:10,  2.01s/it]  0%|          | 340/107550 [11:39<59:41:45,  2.00s/it]  0%|          | 341/107550 [11:41<59:28:48,  2.00s/it]  0%|          | 342/107550 [11:43<59:26:25,  2.00s/it]  0%|          | 343/107550 [11:45<60:13:36,  2.02s/it]  0%|          | 344/107550 [11:47<59:53:43,  2.01s/it]  0%|          | 345/107550 [11:49<59:28:11,  2.00s/it]  0%|          | 346/107550 [11:51<59:24:46,  2.00s/it]  0%|          | 347/107550 [11:53<60:21:29,  2.03s/it]  0%|          | 348/107550 [11:55<59:53:07,  2.01s/it]  0%|          | 349/107550 [11:57<60:03:49,  2.02s/it]  0%|          | 350/107550 [11:59<59:48:32,  2.01s/it]  0%|          | 351/107550 [12:01<59:32:21,  2.00s/it]  0%|          | 352/107550 [12:03<59:46:25,  2.01s/it]  0%|          | 353/107550 [12:05<59:30:44,  2.00s/it]  0%|          | 354/107550 [12:07<60:06:19,  2.02s/it]  0%|          | 355/107550 [12:09<59:42:12,  2.01s/it]  0%|          | 356/107550 [12:11<59:41:01,  2.00s/it]  0%|          | 357/107550 [12:13<59:20:36,  1.99s/it]  0%|          | 358/107550 [12:15<59:12:30,  1.99s/it]  0%|          | 359/107550 [12:17<59:05:56,  1.98s/it]  0%|          | 360/107550 [12:19<59:16:12,  1.99s/it]  0%|          | 361/107550 [12:21<60:30:53,  2.03s/it]  0%|          | 362/107550 [12:23<60:28:01,  2.03s/it]  0%|          | 363/107550 [12:25<59:54:14,  2.01s/it]  0%|          | 364/107550 [12:27<59:38:20,  2.00s/it]  0%|          | 365/107550 [12:29<59:36:55,  2.00s/it]  0%|          | 366/107550 [12:31<59:17:54,  1.99s/it]  0%|          | 367/107550 [12:33<59:38:02,  2.00s/it]  0%|          | 368/107550 [12:35<59:16:52,  1.99s/it]  0%|          | 369/107550 [12:37<59:11:52,  1.99s/it]  0%|          | 370/107550 [12:39<59:13:58,  1.99s/it]  0%|          | 371/107550 [12:41<59:43:07,  2.01s/it]  0%|          | 372/107550 [12:43<60:01:26,  2.02s/it]  0%|          | 373/107550 [12:45<59:32:59,  2.00s/it]  0%|          | 374/107550 [12:47<59:19:44,  1.99s/it]slurmstepd-elm42: error: *** JOB 318612 ON elm42 CANCELLED AT 2025-10-02T00:22:37 ***

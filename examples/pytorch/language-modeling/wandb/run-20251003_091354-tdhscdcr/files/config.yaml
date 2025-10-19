@@ -1,0 +1,651 @@
+_attn_implementation_internal:
+    value: null
+_commit_hash:
+    value: 607a30d783dfa663caf39e06633721c8d4cfcd7e
+_name_or_path:
+    value: gpt2
+_output_attentions:
+    value: false
+_wandb:
+    value:
+        cli_version: 0.22.0
+        e:
+            bt0w4h0w7ti9rxsftfqfl3kl45oygq1d:
+                args:
+                    - --model_name_or_path
+                    - gpt2
+                    - --tokenizer_name
+                    - gpt2
+                    - --share_freq_across_heads
+                    - "True"
+                    - --learning_rate
+                    - "1e-4"
+                    - --per_device_train_batch_size
+                    - "16"
+                    - --per_device_eval_batch_size
+                    - "16"
+                    - --block_size
+                    - "512"
+                    - --dataset_name
+                    - wikitext
+                    - --dataset_config_name
+                    - wikitext-103-raw-v1
+                    - --do_train
+                    - --do_eval
+                    - --num_train_epochs
+                    - "30"
+                    - --num_harmonics
+                    - "2"
+                    - --eval_strategy
+                    - steps
+                    - --eval_steps
+                    - "250"
+                    - --logging_dir
+                    - ./2r_baseline_log
+                    - --logging_steps
+                    - "250"
+                    - --save_steps
+                    - "5000"
+                    - --attn_implementation
+                    - path_attn
+                    - --path_use_qk_norm
+                    - "false"
+                    - --path_use_low_rank_w
+                    - "true"
+                    - --path_use_w_shortconv
+                    - "false"
+                    - --path_conv_size
+                    - "3"
+                    - --warmup_steps
+                    - "5000"
+                    - --path_conv_bias
+                    - "false"
+                    - --output_dir
+                    - runs/2r_baseline
+                    - --gradient_accumulation_steps
+                    - "1"
+                    - --b_unfreeze_step
+                    - "5000"
+                    - --pe_method
+                    - vanilla
+                    - --single_A_B
+                    - "True"
+                codePath: examples/pytorch/language-modeling/run_clm.py
+                codePathLocal: run_clm.py
+                cpu_count: 10
+                cpu_count_logical: 20
+                cudaVersion: "12.6"
+                disk:
+                    /:
+                        total: "981231353856"
+                        used: "180066906112"
+                email: hongyu.s.aa.titech@gmail.com
+                executable: /cl/work5/hongyu-s/conda/envs/latest_transformers/bin/python3.12
+                git:
+                    commit: 2dfdced37b3f98bdeff9841d52407396f0fbd5f3
+                    remote: git@github.com:Dearmer656/wavelet-path-attn.git
+                gpu: NVIDIA RTX A6000
+                gpu_count: 4
+                gpu_nvidia:
+                    - architecture: Ampere
+                      cudaCores: 10752
+                      memoryTotal: "51527024640"
+                      name: NVIDIA RTX A6000
+                      uuid: GPU-cbab1044-d154-adde-2a27-26f5191acbd5
+                    - architecture: Ampere
+                      cudaCores: 10752
+                      memoryTotal: "51527024640"
+                      name: NVIDIA RTX A6000
+                      uuid: GPU-34871914-f981-5b7a-3ea7-677bbc828890
+                    - architecture: Ampere
+                      cudaCores: 10752
+                      memoryTotal: "51527024640"
+                      name: NVIDIA RTX A6000
+                      uuid: GPU-a763542f-9b56-d41b-1a05-adbdd2f0b929
+                    - architecture: Ampere
+                      cudaCores: 10752
+                      memoryTotal: "51527024640"
+                      name: NVIDIA RTX A6000
+                      uuid: GPU-6f9c4815-7883-7b6f-5674-09bef9b2fdd1
+                host: elm64
+                memory:
+                    total: "269924802560"
+                os: Linux-5.15.0-124-generic-x86_64-with-glibc2.35
+                program: /project/nlp-work5/hongyu-s/transformers/examples/pytorch/language-modeling/./run_clm.py
+                python: CPython 3.12.11
+                root: /project/nlp-work5/hongyu-s/transformers/examples/pytorch/language-modeling
+                slurm:
+                    cluster_name: naist-nlp
+                    conf: /etc/slurm/slurm.conf
+                    cpus_on_node: "4"
+                    cpus_per_task: "4"
+                    gpus_on_node: "4"
+                    gtids: "0"
+                    job_account: is-nlp
+                    job_cpus_per_node: "4"
+                    job_gid: "1000"
+                    job_gpus: 0,1,2,3
+                    job_id: "319433"
+                    job_name: ""
+                    job_nodelist: elm64
+                    job_num_nodes: "1"
+                    job_partition: gpu_long
+                    job_qos: qos_is_nlp
+                    job_uid: "40779"
+                    job_user: hongyu-s
+                    jobid: "319433"
+                    localid: "0"
+                    nnodes: "1"
+                    node_aliases: (null)
+                    nodeid: "0"
+                    nodelist: elm64
+                    nprocs: "1"
+                    ntasks: "1"
+                    prio_process: "0"
+                    procid: "0"
+                    submit_dir: /project/nlp-work5/hongyu-s/transformers/examples/pytorch/language-modeling
+                    submit_host: pine13
+                    task_pid: "2724853"
+                    tasks_per_node: "1"
+                    topology_addr: naist.y2-118.elm64
+                    topology_addr_pattern: switch.switch.node
+                    working_cluster: naist-nlp:pine10:6817:9472:109
+                startedAt: "2025-10-03T00:13:54.917655Z"
+                writerId: bt0w4h0w7ti9rxsftfqfl3kl45oygq1d
+        m:
+            - "1": train/global_step
+              "6":
+                - 3
+              "7": []
+            - "2": '*'
+              "5": 1
+              "6":
+                - 1
+              "7": []
+        python_version: 3.12.11
+        t:
+            "1":
+                - 1
+                - 5
+                - 11
+                - 49
+                - 51
+                - 53
+                - 71
+                - 100
+            "2":
+                - 1
+                - 5
+                - 11
+                - 49
+                - 51
+                - 53
+                - 71
+                - 100
+            "3":
+                - 7
+                - 16
+                - 19
+                - 62
+                - 66
+            "4": 3.12.11
+            "5": 0.22.0
+            "6": 4.57.0.dev0
+            "9":
+                "1": transformers_trainer
+            "12": 0.22.0
+            "13": linux-x86_64
+accelerator_config:
+    value:
+        dispatch_batches: null
+        even_batches: true
+        gradient_accumulation_kwargs: null
+        non_blocking: false
+        split_batches: false
+        use_seedable_sampler: true
+activation_function:
+    value: gelu_new
+adafactor:
+    value: false
+adam_beta1:
+    value: 0.9
+adam_beta2:
+    value: 0.999
+adam_epsilon:
+    value: 1e-08
+add_cross_attention:
+    value: false
+architectures:
+    value:
+        - GPT2LMHeadModel
+attn_implementation:
+    value: path_attn
+attn_pdrop:
+    value: 0.1
+auto_find_batch_size:
+    value: false
+average_tokens_across_devices:
+    value: true
+b_unfreeze_step:
+    value: 5000
+bad_words_ids:
+    value: null
+batch_eval_metrics:
+    value: false
+begin_suppress_tokens:
+    value: null
+bf16:
+    value: false
+bf16_full_eval:
+    value: false
+block_size:
+    value: 512
+bos_token_id:
+    value: 50256
+chunk_size_feed_forward:
+    value: 0
+cross_attention_hidden_size:
+    value: null
+data_seed:
+    value: null
+dataloader_drop_last:
+    value: false
+dataloader_num_workers:
+    value: 0
+dataloader_persistent_workers:
+    value: false
+dataloader_pin_memory:
+    value: true
+dataloader_prefetch_factor:
+    value: null
+ddp_backend:
+    value: null
+ddp_broadcast_buffers:
+    value: null
+ddp_bucket_cap_mb:
+    value: null
+ddp_find_unused_parameters:
+    value: null
+ddp_timeout:
+    value: 1800
+debug:
+    value: []
+decoder_start_token_id:
+    value: null
+deepspeed:
+    value: null
+disable_tqdm:
+    value: false
+diversity_penalty:
+    value: 0
+do_eval:
+    value: true
+do_predict:
+    value: false
+do_sample:
+    value: false
+do_train:
+    value: true
+dtype:
+    value: float32
+early_stopping:
+    value: false
+embd_pdrop:
+    value: 0.1
+encoder_no_repeat_ngram_size:
+    value: 0
+eos_token_id:
+    value: 50256
+eval_accumulation_steps:
+    value: null
+eval_delay:
+    value: 0
+eval_do_concat_batches:
+    value: true
+eval_on_start:
+    value: false
+eval_steps:
+    value: 250
+eval_strategy:
+    value: steps
+eval_use_gather_object:
+    value: false
+exponential_decay_length_penalty:
+    value: null
+finetuning_task:
+    value: null
+forced_bos_token_id:
+    value: null
+forced_eos_token_id:
+    value: null
+fp16:
+    value: false
+fp16_backend:
+    value: auto
+fp16_full_eval:
+    value: false
+fp16_opt_level:
+    value: O1
+fsdp:
+    value: []
+fsdp_config:
+    value:
+        min_num_params: 0
+        xla: false
+        xla_fsdp_grad_ckpt: false
+        xla_fsdp_v2: false
+fsdp_min_num_params:
+    value: 0
+fsdp_transformer_layer_cls_to_wrap:
+    value: null
+full_determinism:
+    value: false
+gradient_accumulation_steps:
+    value: 1
+gradient_checkpointing:
+    value: false
+gradient_checkpointing_kwargs:
+    value: null
+greater_is_better:
+    value: null
+group_by_length:
+    value: false
+half_precision_backend:
+    value: auto
+hub_always_push:
+    value: false
+hub_model_id:
+    value: null
+hub_private_repo:
+    value: null
+hub_revision:
+    value: null
+hub_strategy:
+    value: every_save
+hub_token:
+    value: <HUB_TOKEN>
+id2label:
+    value:
+        "0": LABEL_0
+        "1": LABEL_1
+ignore_data_skip:
+    value: false
+include_for_metrics:
+    value: []
+include_inputs_for_metrics:
+    value: false
+include_num_input_tokens_seen:
+    value: "no"
+include_tokens_per_second:
+    value: false
+initializer_range:
+    value: 0.02
+is_decoder:
+    value: false
+is_encoder_decoder:
+    value: false
+jit_mode_eval:
+    value: false
+label_names:
+    value: null
+label_smoothing_factor:
+    value: 0
+label2id:
+    value:
+        LABEL_0: 0
+        LABEL_1: 1
+layer_norm_epsilon:
+    value: 1e-05
+learning_rate:
+    value: 0.0001
+length_column_name:
+    value: length
+length_penalty:
+    value: 1
+liger_kernel_config:
+    value: null
+load_best_model_at_end:
+    value: false
+local_rank:
+    value: 0
+log_level:
+    value: passive
+log_level_replica:
+    value: warning
+log_on_each_node:
+    value: true
+logging_dir:
+    value: ./2r_baseline_log
+logging_first_step:
+    value: false
+logging_nan_inf_filter:
+    value: true
+logging_steps:
+    value: 250
+logging_strategy:
+    value: steps
+lr_scheduler_type:
+    value: linear
+max_grad_norm:
+    value: 1
+max_length:
+    value: 20
+max_steps:
+    value: -1
+metric_for_best_model:
+    value: null
+min_length:
+    value: 0
+model/num_parameters:
+    value: 131800608
+model_type:
+    value: gpt2
+mp_parameters:
+    value: ""
+n_ctx:
+    value: 1024
+n_embd:
+    value: 768
+n_head:
+    value: 12
+n_inner:
+    value: null
+n_layer:
+    value: 12
+n_positions:
+    value: 1024
+neftune_noise_alpha:
+    value: null
+no_cuda:
+    value: false
+no_repeat_ngram_size:
+    value: 0
+num_beam_groups:
+    value: 1
+num_beams:
+    value: 1
+num_harmonics:
+    value: 2
+num_return_sequences:
+    value: 1
+num_train_epochs:
+    value: 30
+optim:
+    value: adamw_torch_fused
+optim_args:
+    value: null
+optim_target_modules:
+    value: null
+output_attentions:
+    value: false
+output_dir:
+    value: runs/2r_baseline
+output_hidden_states:
+    value: false
+output_scores:
+    value: false
+overwrite_output_dir:
+    value: false
+pad_token_id:
+    value: null
+parallelism_config:
+    value: null
+past_index:
+    value: -1
+path_conv_bias:
+    value: false
+path_conv_size:
+    value: 3
+path_use_forget_gate:
+    value: false
+path_use_low_rank_w:
+    value: true
+path_use_qk_norm:
+    value: false
+path_use_w_shortconv:
+    value: false
+pe_method:
+    value: vanilla
+per_device_eval_batch_size:
+    value: 16
+per_device_train_batch_size:
+    value: 16
+per_gpu_eval_batch_size:
+    value: null
+per_gpu_train_batch_size:
+    value: null
+prediction_loss_only:
+    value: false
+prefix:
+    value: null
+problem_type:
+    value: null
+push_to_hub:
+    value: false
+push_to_hub_model_id:
+    value: null
+push_to_hub_organization:
+    value: null
+push_to_hub_token:
+    value: <PUSH_TO_HUB_TOKEN>
+ray_scope:
+    value: last
+remove_invalid_values:
+    value: false
+remove_unused_columns:
+    value: true
+reorder_and_upcast_attn:
+    value: false
+repetition_penalty:
+    value: 1
+report_to:
+    value:
+        - tensorboard
+        - wandb
+resid_pdrop:
+    value: 0.1
+restore_callback_states_from_checkpoint:
+    value: false
+resume_from_checkpoint:
+    value: null
+return_dict:
+    value: true
+return_dict_in_generate:
+    value: false
+rope_theta:
+    value: 10000
+run_name:
+    value: null
+save_on_each_node:
+    value: false
+save_only_model:
+    value: false
+save_safetensors:
+    value: true
+save_steps:
+    value: 5000
+save_strategy:
+    value: steps
+save_total_limit:
+    value: null
+scale_attn_by_inverse_layer_idx:
+    value: false
+scale_attn_weights:
+    value: true
+seed:
+    value: 42
+sep_token_id:
+    value: null
+share_freq_across_heads:
+    value: true
+skip_memory_metrics:
+    value: true
+summary_activation:
+    value: null
+summary_first_dropout:
+    value: 0.1
+summary_proj_to_labels:
+    value: true
+summary_type:
+    value: cls_index
+summary_use_proj:
+    value: true
+suppress_tokens:
+    value: null
+task_specific_params:
+    value:
+        text-generation:
+            do_sample: true
+            max_length: 50
+temperature:
+    value: 1
+tf32:
+    value: null
+tie_encoder_decoder:
+    value: false
+tie_word_embeddings:
+    value: true
+tokenizer_class:
+    value: null
+top_k:
+    value: 50
+top_p:
+    value: 1
+torch_compile:
+    value: false
+torch_compile_backend:
+    value: null
+torch_compile_mode:
+    value: null
+torch_empty_cache_steps:
+    value: null
+torchdynamo:
+    value: null
+torchscript:
+    value: false
+tpu_metrics_debug:
+    value: false
+tpu_num_cores:
+    value: null
+transformers_version:
+    value: 4.57.0.dev0
+typical_p:
+    value: 1
+use_cache:
+    value: true
+use_cpu:
+    value: false
+use_legacy_prediction_loop:
+    value: false
+use_liger_kernel:
+    value: false
+use_mps_device:
+    value: false
+vocab_size:
+    value: 50257
+warmup_ratio:
+    value: 0
+warmup_steps:
+    value: 5000
+weight_decay:
+    value: 0

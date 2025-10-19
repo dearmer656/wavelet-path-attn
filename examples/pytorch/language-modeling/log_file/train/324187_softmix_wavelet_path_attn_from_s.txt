@@ -1,0 +1,380 @@
+MASTER_ADDR: elm41
+MASTER_PORT: 12345
+WORLD_SIZE: 1
+RANK: 0
++ echo 'Workdir: /project/nlp-work5/hongyu-s/transformers/examples/pytorch/language-modeling'
+Workdir: /project/nlp-work5/hongyu-s/transformers/examples/pytorch/language-modeling
++ cd /project/nlp-work5/hongyu-s/transformers/examples/pytorch/language-modeling
++ echo 'Launching training/eval command'
+Launching training/eval command
++ echo '================= BEGIN RUN ================='
+================= BEGIN RUN =================
++ torchrun --nproc_per_node=4 --master_port=12422 ./run_clm.py --model_type gpt2 --tokenizer_name gpt2 --share_freq_across_heads False --learning_rate 1e-4 --per_device_train_batch_size 16 --per_device_eval_batch_size 16 --block_size 512 --dataset_name wikitext --dataset_config_name wikitext-103-raw-v1 --do_train --do_eval --num_train_epochs 30 --num_harmonics 1 --eval_strategy steps --eval_steps 250 --logging_dir ./softmix_wavelet_path_attn_from_s_log --logging_steps 250 --save_steps 5000 --attn_implementation path_attn_wfreq --path_use_qk_norm false --path_use_low_rank_w true --path_use_w_shortconv false --path_conv_size 3 --warmup_steps 5000 --path_conv_bias false --output_dir runs/softmix_wavelet_path_attn_from_s --gradient_accumulation_steps 1 --b_unfreeze_step 5000 --pe_method vanilla --single_A_B False --use_beta_modulation False --use_wavelet_beta True --wavelet_mode softmix
+W1010 17:43:56.393000 2023301 /project/nlp-work5/hongyu-s/conda/envs/latest_transformers/lib/python3.12/site-packages/torch/distributed/run.py:774] 
+W1010 17:43:56.393000 2023301 /project/nlp-work5/hongyu-s/conda/envs/latest_transformers/lib/python3.12/site-packages/torch/distributed/run.py:774] *****************************************
+W1010 17:43:56.393000 2023301 /project/nlp-work5/hongyu-s/conda/envs/latest_transformers/lib/python3.12/site-packages/torch/distributed/run.py:774] Setting OMP_NUM_THREADS environment variable for each process to be 1 in default, to avoid your system being overloaded, please further tune the variable for optimal performance in your application as needed. 
+W1010 17:43:56.393000 2023301 /project/nlp-work5/hongyu-s/conda/envs/latest_transformers/lib/python3.12/site-packages/torch/distributed/run.py:774] *****************************************
+10/10/2025 17:44:11 - WARNING - __main__ - Process rank: 1, device: cuda:1, n_gpu: 1, distributed training: True, 16-bits training: False
+10/10/2025 17:44:11 - WARNING - __main__ - Process rank: 3, device: cuda:3, n_gpu: 1, distributed training: True, 16-bits training: False
+10/10/2025 17:44:11 - WARNING - __main__ - Process rank: 2, device: cuda:2, n_gpu: 1, distributed training: True, 16-bits training: False
+10/10/2025 17:44:14 - WARNING - __main__ - Process rank: 0, device: cuda:0, n_gpu: 1, distributed training: True, 16-bits training: False
+10/10/2025 17:44:14 - INFO - __main__ - Training/evaluation parameters SupplyTrainingArguments(
+_n_gpu=1,
+accelerator_config={'split_batches': False, 'dispatch_batches': None, 'even_batches': True, 'use_seedable_sampler': True, 'non_blocking': False, 'gradient_accumulation_kwargs': None, 'use_configured_state': False},
+adafactor=False,
+adam_beta1=0.9,
+adam_beta2=0.999,
+adam_epsilon=1e-08,
+auto_find_batch_size=False,
+average_tokens_across_devices=True,
+b_unfreeze_step=5000,
+batch_eval_metrics=False,
+bf16=False,
+bf16_full_eval=False,
+data_seed=None,
+dataloader_drop_last=False,
+dataloader_num_workers=0,
+dataloader_persistent_workers=False,
+dataloader_pin_memory=True,
+dataloader_prefetch_factor=None,
+ddp_backend=None,
+ddp_broadcast_buffers=None,
+ddp_bucket_cap_mb=None,
+ddp_find_unused_parameters=None,
+ddp_timeout=1800,
+debug=[],
+deepspeed=None,
+disable_tqdm=False,
+do_eval=True,
+do_predict=False,
+do_train=True,
+eval_accumulation_steps=None,
+eval_delay=0,
+eval_do_concat_batches=True,
+eval_on_start=False,
+eval_steps=250,
+eval_strategy=IntervalStrategy.STEPS,
+eval_use_gather_object=False,
+fp16=False,
+fp16_backend=auto,
+fp16_full_eval=False,
+fp16_opt_level=O1,
+fsdp=[],
+fsdp_config={'min_num_params': 0, 'xla': False, 'xla_fsdp_v2': False, 'xla_fsdp_grad_ckpt': False},
+fsdp_min_num_params=0,
+fsdp_transformer_layer_cls_to_wrap=None,
+full_determinism=False,
+gradient_accumulation_steps=1,
+gradient_checkpointing=False,
+gradient_checkpointing_kwargs=None,
+greater_is_better=None,
+group_by_length=False,
+half_precision_backend=auto,
+hub_always_push=False,
+hub_model_id=None,
+hub_private_repo=None,
+hub_revision=None,
+hub_strategy=HubStrategy.EVERY_SAVE,
+hub_token=<HUB_TOKEN>,
+ignore_data_skip=False,
+include_for_metrics=[],
+include_inputs_for_metrics=False,
+include_num_input_tokens_seen=no,
+include_tokens_per_second=False,
+jit_mode_eval=False,
+label_names=None,
+label_smoothing_factor=0.0,
+learning_rate=0.0001,
+length_column_name=length,
+liger_kernel_config=None,
+load_best_model_at_end=False,
+local_rank=0,
+log_level=passive,
+log_level_replica=warning,
+log_on_each_node=True,
+logging_dir=./softmix_wavelet_path_attn_from_s_log,
+logging_first_step=False,
+logging_nan_inf_filter=True,
+logging_steps=250,
+logging_strategy=IntervalStrategy.STEPS,
+lr_scheduler_kwargs={},
+lr_scheduler_type=SchedulerType.LINEAR,
+max_grad_norm=1.0,
+max_steps=-1,
+metric_for_best_model=None,
+mp_parameters=,
+neftune_noise_alpha=None,
+no_cuda=False,
+num_train_epochs=30.0,
+optim=OptimizerNames.ADAMW_TORCH_FUSED,
+optim_args=None,
+optim_target_modules=None,
+output_dir=runs/softmix_wavelet_path_attn_from_s,
+overwrite_output_dir=False,
+parallelism_config=None,
+past_index=-1,
+per_device_eval_batch_size=16,
+per_device_train_batch_size=16,
+prediction_loss_only=False,
+push_to_hub=False,
+push_to_hub_model_id=None,
+push_to_hub_organization=None,
+push_to_hub_token=<PUSH_TO_HUB_TOKEN>,
+ray_scope=last,
+remove_unused_columns=True,
+report_to=['tensorboard', 'wandb'],
+restore_callback_states_from_checkpoint=False,
+resume_from_checkpoint=None,
+run_name=None,
+save_on_each_node=False,
+save_only_model=False,
+save_safetensors=True,
+save_steps=5000,
+save_strategy=SaveStrategy.STEPS,
+save_total_limit=None,
+seed=42,
+skip_memory_metrics=True,
+tf32=None,
+torch_compile=False,
+torch_compile_backend=None,
+torch_compile_mode=None,
+torch_empty_cache_steps=None,
+torchdynamo=None,
+tpu_metrics_debug=False,
+tpu_num_cores=None,
+use_cpu=False,
+use_legacy_prediction_loop=False,
+use_liger_kernel=False,
+use_mps_device=False,
+warmup_ratio=0.0,
+warmup_steps=5000,
+weight_decay=0.0,
+)
+10/10/2025 17:44:15 - WARNING - __main__ - You are instantiating a new config instance from scratch.
+10/10/2025 17:44:15 - WARNING - __main__ - You are instantiating a new config instance from scratch.
+10/10/2025 17:44:17 - WARNING - __main__ - You are instantiating a new config instance from scratch.
+Found cached dataset wikitext (/cl/work5/hongyu-s/huggingfac/datasets/wikitext/wikitext-103-raw-v1/0.0.0/b08601e04326c79dfdd32d625aee71d232d685c3)
+10/10/2025 17:44:19 - INFO - datasets.builder - Found cached dataset wikitext (/cl/work5/hongyu-s/huggingfac/datasets/wikitext/wikitext-103-raw-v1/0.0.0/b08601e04326c79dfdd32d625aee71d232d685c3)
+10/10/2025 17:44:19 - WARNING - __main__ - You are instantiating a new config instance from scratch.
+[INFO|configuration_utils.py:759] 2025-10-10 17:44:19,662 >> loading configuration file config.json from cache at /cl/work5/hongyu-s/huggingfac/hub/models--gpt2/snapshots/607a30d783dfa663caf39e06633721c8d4cfcd7e/config.json
+[INFO|configuration_utils.py:833] 2025-10-10 17:44:19,663 >> Model config GPT2Config {
+  "activation_function": "gelu_new",
+  "architectures": [
+    "GPT2LMHeadModel"
+  ],
+  "attn_pdrop": 0.1,
+  "bos_token_id": 50256,
+  "embd_pdrop": 0.1,
+  "eos_token_id": 50256,
+  "initializer_range": 0.02,
+  "layer_norm_epsilon": 1e-05,
+  "model_type": "gpt2",
+  "n_ctx": 1024,
+  "n_embd": 768,
+  "n_head": 12,
+  "n_inner": null,
+  "n_layer": 12,
+  "n_positions": 1024,
+  "reorder_and_upcast_attn": false,
+  "resid_pdrop": 0.1,
+  "scale_attn_by_inverse_layer_idx": false,
+  "scale_attn_weights": true,
+  "summary_activation": null,
+  "summary_first_dropout": 0.1,
+  "summary_proj_to_labels": true,
+  "summary_type": "cls_index",
+  "summary_use_proj": true,
+  "task_specific_params": {
+    "text-generation": {
+      "do_sample": true,
+      "max_length": 50
+    }
+  },
+  "transformers_version": "4.57.0.dev0",
+  "use_cache": true,
+  "vocab_size": 50257
+}
+
+[INFO|tokenization_utils_base.py:2057] 2025-10-10 17:44:20,023 >> loading file vocab.json from cache at /cl/work5/hongyu-s/huggingfac/hub/models--gpt2/snapshots/607a30d783dfa663caf39e06633721c8d4cfcd7e/vocab.json
+[INFO|tokenization_utils_base.py:2057] 2025-10-10 17:44:20,023 >> loading file merges.txt from cache at /cl/work5/hongyu-s/huggingfac/hub/models--gpt2/snapshots/607a30d783dfa663caf39e06633721c8d4cfcd7e/merges.txt
+[INFO|tokenization_utils_base.py:2057] 2025-10-10 17:44:20,023 >> loading file tokenizer.json from cache at /cl/work5/hongyu-s/huggingfac/hub/models--gpt2/snapshots/607a30d783dfa663caf39e06633721c8d4cfcd7e/tokenizer.json
+[INFO|tokenization_utils_base.py:2057] 2025-10-10 17:44:20,023 >> loading file added_tokens.json from cache at None
+[INFO|tokenization_utils_base.py:2057] 2025-10-10 17:44:20,023 >> loading file special_tokens_map.json from cache at None
+[INFO|tokenization_utils_base.py:2057] 2025-10-10 17:44:20,023 >> loading file tokenizer_config.json from cache at /cl/work5/hongyu-s/huggingfac/hub/models--gpt2/snapshots/607a30d783dfa663caf39e06633721c8d4cfcd7e/tokenizer_config.json
+[INFO|tokenization_utils_base.py:2057] 2025-10-10 17:44:20,023 >> loading file chat_template.jinja from cache at None
+[INFO|configuration_utils.py:759] 2025-10-10 17:44:20,025 >> loading configuration file config.json from cache at /cl/work5/hongyu-s/huggingfac/hub/models--gpt2/snapshots/607a30d783dfa663caf39e06633721c8d4cfcd7e/config.json
+[INFO|configuration_utils.py:833] 2025-10-10 17:44:20,026 >> Model config GPT2Config {
+  "activation_function": "gelu_new",
+  "architectures": [
+    "GPT2LMHeadModel"
+  ],
+  "attn_pdrop": 0.1,
+  "bos_token_id": 50256,
+  "embd_pdrop": 0.1,
+  "eos_token_id": 50256,
+  "initializer_range": 0.02,
+  "layer_norm_epsilon": 1e-05,
+  "model_type": "gpt2",
+  "n_ctx": 1024,
+  "n_embd": 768,
+  "n_head": 12,
+  "n_inner": null,
+  "n_layer": 12,
+  "n_positions": 1024,
+  "reorder_and_upcast_attn": false,
+  "resid_pdrop": 0.1,
+  "scale_attn_by_inverse_layer_idx": false,
+  "scale_attn_weights": true,
+  "summary_activation": null,
+  "summary_first_dropout": 0.1,
+  "summary_proj_to_labels": true,
+  "summary_type": "cls_index",
+  "summary_use_proj": true,
+  "task_specific_params": {
+    "text-generation": {
+      "do_sample": true,
+      "max_length": 50
+    }
+  },
+  "transformers_version": "4.57.0.dev0",
+  "use_cache": true,
+  "vocab_size": 50257
+}
+
+wandb: Currently logged in as: hongyu-s-aa-titech (hongyu-s-aa-titech-nara-institute-of-science-and-technology) to https://api.wandb.ai. Use `wandb login --relogin` to force relogin
+wandb: creating run
+wandb: Tracking run with wandb version 0.22.0
+wandb: Run data is saved locally in /project/nlp-work5/hongyu-s/transformers/examples/pytorch/language-modeling/wandb/run-20251010_174420-to61u7ym
+wandb: Run `wandb offline` to turn off syncing.
+wandb: Syncing run likely-night-300
+wandb: ⭐️ View project at https://wandb.ai/hongyu-s-aa-titech-nara-institute-of-science-and-technology/gpt2%20with%20path%20attn
+wandb: 🚀 View run at https://wandb.ai/hongyu-s-aa-titech-nara-institute-of-science-and-technology/gpt2%20with%20path%20attn/runs/to61u7ym
+[rank2]: Traceback (most recent call last):
+[rank2]:   File "/project/nlp-work5/hongyu-s/transformers/examples/pytorch/language-modeling/./run_clm.py", line 1274, in <module>
+[rank2]:     main()
+[rank2]:   File "/project/nlp-work5/hongyu-s/transformers/examples/pytorch/language-modeling/./run_clm.py", line 879, in main
+[rank2]:     model = AutoModelForCausalLM.from_config(config, trust_remote_code=model_args.trust_remote_code)
+[rank2]:             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+[rank2]:   File "/project/nlp-work5/hongyu-s/transformers/src/transformers/models/auto/auto_factory.py", line 241, in from_config
+[rank2]:     return model_class._from_config(config, **kwargs)
+[rank2]:            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+[rank2]:   File "/project/nlp-work5/hongyu-s/transformers/src/transformers/modeling_utils.py", line 285, in _wrapper
+[rank2]:     return func(*args, **kwargs)
+[rank2]:            ^^^^^^^^^^^^^^^^^^^^^
+[rank2]:   File "/project/nlp-work5/hongyu-s/transformers/src/transformers/modeling_utils.py", line 2347, in _from_config
+[rank2]:     model = cls(config, **kwargs)
+[rank2]:             ^^^^^^^^^^^^^^^^^^^^^
+[rank2]:   File "/project/nlp-work5/hongyu-s/transformers/src/transformers/models/gpt2/modeling_gpt2.py", line 1055, in __init__
+[rank2]:     self.transformer = GPT2Model(config)
+[rank2]:                        ^^^^^^^^^^^^^^^^^
+[rank2]:   File "/project/nlp-work5/hongyu-s/transformers/src/transformers/models/gpt2/modeling_gpt2.py", line 765, in __init__
+[rank2]:     self.h = nn.ModuleList([GPT2Block(config, layer_idx=i) for i in range(config.num_hidden_layers)])
+[rank2]:                             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+[rank2]:   File "/project/nlp-work5/hongyu-s/transformers/src/transformers/models/gpt2/modeling_gpt2.py", line 444, in __init__
+[rank2]:     self.attn = GPT2PaTHAttention(config=config, layer_idx=layer_idx)
+[rank2]:                 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+[rank2]:   File "/project/nlp-work5/hongyu-s/transformers/src/transformers/models/gpt2/modeling_gpt2.py", line 126, in __init__
+[rank2]:     self.core = _PaTHAttentionWfreq(
+[rank2]:                 ^^^^^^^^^^^^^^^^^^^^
+[rank2]:   File "/project/nlp-work5/hongyu-s/flash-linear-attention/fla/layers/path_attn.py", line 512, in __init__
+[rank2]:     self.omega_raw = nn.Parameter(torch.full((1,1,Hf,self.r), -8.0))
+[rank2]:                                                   ^^
+[rank2]: UnboundLocalError: cannot access local variable 'Hf' where it is not associated with a value
+[rank1]: Traceback (most recent call last):
+[rank1]:   File "/project/nlp-work5/hongyu-s/transformers/examples/pytorch/language-modeling/./run_clm.py", line 1274, in <module>
+[rank1]:     main()
+[rank1]:   File "/project/nlp-work5/hongyu-s/transformers/examples/pytorch/language-modeling/./run_clm.py", line 879, in main
+[rank1]:     model = AutoModelForCausalLM.from_config(config, trust_remote_code=model_args.trust_remote_code)
+[rank1]:             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+[rank1]:   File "/project/nlp-work5/hongyu-s/transformers/src/transformers/models/auto/auto_factory.py", line 241, in from_config
+[rank1]:     return model_class._from_config(config, **kwargs)
+[rank1]:            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+[rank1]:   File "/project/nlp-work5/hongyu-s/transformers/src/transformers/modeling_utils.py", line 285, in _wrapper
+[rank1]:     return func(*args, **kwargs)
+[rank1]:            ^^^^^^^^^^^^^^^^^^^^^
+[rank1]:   File "/project/nlp-work5/hongyu-s/transformers/src/transformers/modeling_utils.py", line 2347, in _from_config
+[rank1]:     model = cls(config, **kwargs)
+[rank1]:             ^^^^^^^^^^^^^^^^^^^^^
+[rank1]:   File "/project/nlp-work5/hongyu-s/transformers/src/transformers/models/gpt2/modeling_gpt2.py", line 1055, in __init__
+[rank1]:     self.transformer = GPT2Model(config)
+[rank1]:                        ^^^^^^^^^^^^^^^^^
+[rank1]:   File "/project/nlp-work5/hongyu-s/transformers/src/transformers/models/gpt2/modeling_gpt2.py", line 765, in __init__
+[rank1]:     self.h = nn.ModuleList([GPT2Block(config, layer_idx=i) for i in range(config.num_hidden_layers)])
+[rank1]:                             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+[rank1]:   File "/project/nlp-work5/hongyu-s/transformers/src/transformers/models/gpt2/modeling_gpt2.py", line 444, in __init__
+[rank1]:     self.attn = GPT2PaTHAttention(config=config, layer_idx=layer_idx)
+[rank1]:                 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+[rank1]:   File "/project/nlp-work5/hongyu-s/transformers/src/transformers/models/gpt2/modeling_gpt2.py", line 126, in __init__
+[rank1]:     self.core = _PaTHAttentionWfreq(
+[rank1]:                 ^^^^^^^^^^^^^^^^^^^^
+[rank1]:   File "/project/nlp-work5/hongyu-s/flash-linear-attention/fla/layers/path_attn.py", line 512, in __init__
+[rank1]:     self.omega_raw = nn.Parameter(torch.full((1,1,Hf,self.r), -8.0))
+[rank1]:                                                   ^^
+[rank1]: UnboundLocalError: cannot access local variable 'Hf' where it is not associated with a value
+[rank3]: Traceback (most recent call last):
+[rank3]:   File "/project/nlp-work5/hongyu-s/transformers/examples/pytorch/language-modeling/./run_clm.py", line 1274, in <module>
+[rank3]:     main()
+[rank3]:   File "/project/nlp-work5/hongyu-s/transformers/examples/pytorch/language-modeling/./run_clm.py", line 879, in main
+[rank3]:     model = AutoModelForCausalLM.from_config(config, trust_remote_code=model_args.trust_remote_code)
+[rank3]:             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+[rank3]:   File "/project/nlp-work5/hongyu-s/transformers/src/transformers/models/auto/auto_factory.py", line 241, in from_config
+[rank3]:     return model_class._from_config(config, **kwargs)
+[rank3]:            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+[rank3]:   File "/project/nlp-work5/hongyu-s/transformers/src/transformers/modeling_utils.py", line 285, in _wrapper
+[rank3]:     return func(*args, **kwargs)
+[rank3]:            ^^^^^^^^^^^^^^^^^^^^^
+[rank3]:   File "/project/nlp-work5/hongyu-s/transformers/src/transformers/modeling_utils.py", line 2347, in _from_config
+[rank3]:     model = cls(config, **kwargs)
+[rank3]:             ^^^^^^^^^^^^^^^^^^^^^
+[rank3]:   File "/project/nlp-work5/hongyu-s/transformers/src/transformers/models/gpt2/modeling_gpt2.py", line 1055, in __init__
+[rank3]:     self.transformer = GPT2Model(config)
+[rank3]:                        ^^^^^^^^^^^^^^^^^
+[rank3]:   File "/project/nlp-work5/hongyu-s/transformers/src/transformers/models/gpt2/modeling_gpt2.py", line 765, in __init__
+[rank3]:     self.h = nn.ModuleList([GPT2Block(config, layer_idx=i) for i in range(config.num_hidden_layers)])
+[rank3]:                             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+[rank3]:   File "/project/nlp-work5/hongyu-s/transformers/src/transformers/models/gpt2/modeling_gpt2.py", line 444, in __init__
+[rank3]:     self.attn = GPT2PaTHAttention(config=config, layer_idx=layer_idx)
+[rank3]:                 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+[rank3]:   File "/project/nlp-work5/hongyu-s/transformers/src/transformers/models/gpt2/modeling_gpt2.py", line 126, in __init__
+[rank3]:     self.core = _PaTHAttentionWfreq(
+[rank3]:                 ^^^^^^^^^^^^^^^^^^^^
+[rank3]:   File "/project/nlp-work5/hongyu-s/flash-linear-attention/fla/layers/path_attn.py", line 512, in __init__
+[rank3]:     self.omega_raw = nn.Parameter(torch.full((1,1,Hf,self.r), -8.0))
+[rank3]:                                                   ^^
+[rank3]: UnboundLocalError: cannot access local variable 'Hf' where it is not associated with a value
+W1010 17:44:29.657000 2023301 /project/nlp-work5/hongyu-s/conda/envs/latest_transformers/lib/python3.12/site-packages/torch/distributed/elastic/multiprocessing/api.py:900] Sending process 2023307 closing signal SIGTERM
+W1010 17:44:29.658000 2023301 /project/nlp-work5/hongyu-s/conda/envs/latest_transformers/lib/python3.12/site-packages/torch/distributed/elastic/multiprocessing/api.py:900] Sending process 2023309 closing signal SIGTERM
+W1010 17:44:29.659000 2023301 /project/nlp-work5/hongyu-s/conda/envs/latest_transformers/lib/python3.12/site-packages/torch/distributed/elastic/multiprocessing/api.py:900] Sending process 2023310 closing signal SIGTERM
+E1010 17:44:29.932000 2023301 /project/nlp-work5/hongyu-s/conda/envs/latest_transformers/lib/python3.12/site-packages/torch/distributed/elastic/multiprocessing/api.py:874] failed (exitcode: 1) local_rank: 1 (pid: 2023308) of binary: /cl/work5/hongyu-s/conda/envs/latest_transformers/bin/python3.12
+Traceback (most recent call last):
+  File "/cl/work5/hongyu-s/conda/envs/latest_transformers/bin/torchrun", line 7, in <module>
+    sys.exit(main())
+             ^^^^^^
+  File "/cl/work5/hongyu-s/conda/envs/latest_transformers/lib/python3.12/site-packages/torch/distributed/elastic/multiprocessing/errors/__init__.py", line 357, in wrapper
+    return f(*args, **kwargs)
+           ^^^^^^^^^^^^^^^^^^
+  File "/cl/work5/hongyu-s/conda/envs/latest_transformers/lib/python3.12/site-packages/torch/distributed/run.py", line 901, in main
+    run(args)
+  File "/cl/work5/hongyu-s/conda/envs/latest_transformers/lib/python3.12/site-packages/torch/distributed/run.py", line 892, in run
+    elastic_launch(
+  File "/cl/work5/hongyu-s/conda/envs/latest_transformers/lib/python3.12/site-packages/torch/distributed/launcher/api.py", line 143, in __call__
+    return launch_agent(self._config, self._entrypoint, list(args))
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/cl/work5/hongyu-s/conda/envs/latest_transformers/lib/python3.12/site-packages/torch/distributed/launcher/api.py", line 277, in launch_agent
+    raise ChildFailedError(
+torch.distributed.elastic.multiprocessing.errors.ChildFailedError: 
+============================================================
+./run_clm.py FAILED
+------------------------------------------------------------
+Failures:
+  <NO_OTHER_FAILURES>
+------------------------------------------------------------
+Root Cause (first observed failure):
+[0]:
+  time      : 2025-10-10_17:44:29
+  host      : elm41.naist.jp
+  rank      : 1 (local_rank: 1)
+  exitcode  : 1 (pid: 2023308)
+  error_file: <N/A>
+  traceback : To enable traceback see: https://pytorch.org/docs/stable/elastic/errors.html
+============================================================

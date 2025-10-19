@@ -1,0 +1,1 @@
+{"_step":0,"eval/loss":2.915700912475586,"eval/model_preparation_time":0.0024,"eval/steps_per_second":6.868,"eval/accuracy":0.44934500527720866,"train/global_step":0,"_wandb":{"runtime":14},"_runtime":14,"_timestamp":1.760578228882297e+09,"eval/samples_per_second":13.508,"eval/runtime":4.3678}

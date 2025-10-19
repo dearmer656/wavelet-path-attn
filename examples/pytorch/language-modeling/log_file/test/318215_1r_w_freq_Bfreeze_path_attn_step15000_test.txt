@@ -1,0 +1,340 @@
+MASTER_ADDR: elm72
+MASTER_PORT: 12345
+WORLD_SIZE: 1
+RANK: 0
++ echo 'Workdir: /project/nlp-work5/hongyu-s/transformers/examples/pytorch/language-modeling'
+Workdir: /project/nlp-work5/hongyu-s/transformers/examples/pytorch/language-modeling
++ cd /project/nlp-work5/hongyu-s/transformers/examples/pytorch/language-modeling
++ echo 'Launching training/eval command'
+Launching training/eval command
++ echo '================= BEGIN RUN ================='
+================= BEGIN RUN =================
++ torchrun --nproc_per_node=1 ./run_clm.py --model_type gpt2 --tokenizer_name gpt2 --model_name_or_path ./runs/1r_w_freq_Bfreeze_path_attn/checkpoint-15000 --share_freq_across_heads True --learning_rate 1e-4 --per_device_train_batch_size 1 --per_device_eval_batch_size 1 --block_size 512 --dataset_name wikitext --dataset_config_name wikitext-103-raw-v1 --do_eval --overwrite_output_dir --num_train_epochs 30 --output_dir ./1r_w_freq_Bfreeze_path_attn --num_harmonics 1 --eval_strategy steps --logging_dir ./1r_w_freq_Bfreeze_path_attn_log --logging_steps 250 --save_steps 2500 --attn_implementation path_attn_wfreq --path_use_qk_norm false --path_use_low_rank_w true --path_use_w_shortconv false --path_conv_size 3 --warmup_steps 5000 --path_conv_bias false --output_dir runs/1r_w_freq_Bfreeze_path_attn --gradient_accumulation_steps 1
+09/30/2025 18:43:31 - WARNING - __main__ - Process rank: 0, device: cuda:0, n_gpu: 1, distributed training: True, 16-bits training: False
+09/30/2025 18:43:31 - INFO - __main__ - Training/evaluation parameters SupplyTrainingArguments(
+_n_gpu=1,
+accelerator_config={'split_batches': False, 'dispatch_batches': None, 'even_batches': True, 'use_seedable_sampler': True, 'non_blocking': False, 'gradient_accumulation_kwargs': None, 'use_configured_state': False},
+adafactor=False,
+adam_beta1=0.9,
+adam_beta2=0.999,
+adam_epsilon=1e-08,
+auto_find_batch_size=False,
+average_tokens_across_devices=True,
+b_unfreeze_step=5000,
+batch_eval_metrics=False,
+bf16=False,
+bf16_full_eval=False,
+data_seed=None,
+dataloader_drop_last=False,
+dataloader_num_workers=0,
+dataloader_persistent_workers=False,
+dataloader_pin_memory=True,
+dataloader_prefetch_factor=None,
+ddp_backend=None,
+ddp_broadcast_buffers=None,
+ddp_bucket_cap_mb=None,
+ddp_find_unused_parameters=None,
+ddp_timeout=1800,
+debug=[],
+deepspeed=None,
+disable_tqdm=False,
+do_eval=True,
+do_predict=False,
+do_train=False,
+eval_accumulation_steps=None,
+eval_delay=0,
+eval_do_concat_batches=True,
+eval_on_start=False,
+eval_steps=250,
+eval_strategy=IntervalStrategy.STEPS,
+eval_use_gather_object=False,
+fp16=False,
+fp16_backend=auto,
+fp16_full_eval=False,
+fp16_opt_level=O1,
+fsdp=[],
+fsdp_config={'min_num_params': 0, 'xla': False, 'xla_fsdp_v2': False, 'xla_fsdp_grad_ckpt': False},
+fsdp_min_num_params=0,
+fsdp_transformer_layer_cls_to_wrap=None,
+full_determinism=False,
+gradient_accumulation_steps=1,
+gradient_checkpointing=False,
+gradient_checkpointing_kwargs=None,
+greater_is_better=None,
+group_by_length=False,
+half_precision_backend=auto,
+hub_always_push=False,
+hub_model_id=None,
+hub_private_repo=None,
+hub_revision=None,
+hub_strategy=HubStrategy.EVERY_SAVE,
+hub_token=<HUB_TOKEN>,
+ignore_data_skip=False,
+include_for_metrics=[],
+include_inputs_for_metrics=False,
+include_num_input_tokens_seen=no,
+include_tokens_per_second=False,
+jit_mode_eval=False,
+label_names=None,
+label_smoothing_factor=0.0,
+learning_rate=0.0001,
+length_column_name=length,
+liger_kernel_config=None,
+load_best_model_at_end=False,
+local_rank=0,
+log_level=passive,
+log_level_replica=warning,
+log_on_each_node=True,
+logging_dir=./1r_w_freq_Bfreeze_path_attn_log,
+logging_first_step=False,
+logging_nan_inf_filter=True,
+logging_steps=250,
+logging_strategy=IntervalStrategy.STEPS,
+lr_scheduler_kwargs={},
+lr_scheduler_type=SchedulerType.LINEAR,
+max_grad_norm=1.0,
+max_steps=-1,
+metric_for_best_model=None,
+mp_parameters=,
+neftune_noise_alpha=None,
+no_cuda=False,
+num_train_epochs=30.0,
+optim=OptimizerNames.ADAMW_TORCH_FUSED,
+optim_args=None,
+optim_target_modules=None,
+output_dir=runs/1r_w_freq_Bfreeze_path_attn,
+overwrite_output_dir=True,
+parallelism_config=None,
+past_index=-1,
+per_device_eval_batch_size=1,
+per_device_train_batch_size=1,
+prediction_loss_only=False,
+push_to_hub=False,
+push_to_hub_model_id=None,
+push_to_hub_organization=None,
+push_to_hub_token=<PUSH_TO_HUB_TOKEN>,
+ray_scope=last,
+remove_unused_columns=True,
+report_to=['tensorboard', 'wandb'],
+restore_callback_states_from_checkpoint=False,
+resume_from_checkpoint=None,
+run_name=None,
+save_on_each_node=False,
+save_only_model=False,
+save_safetensors=True,
+save_steps=2500,
+save_strategy=SaveStrategy.STEPS,
+save_total_limit=None,
+seed=42,
+skip_memory_metrics=True,
+tf32=None,
+torch_compile=False,
+torch_compile_backend=None,
+torch_compile_mode=None,
+torch_empty_cache_steps=None,
+torchdynamo=None,
+tpu_metrics_debug=False,
+tpu_num_cores=None,
+use_cpu=False,
+use_legacy_prediction_loop=False,
+use_liger_kernel=False,
+use_mps_device=False,
+warmup_ratio=0.0,
+warmup_steps=5000,
+weight_decay=0.0,
+)
+Found cached dataset wikitext (/cl/work5/hongyu-s/huggingfac/datasets/wikitext/wikitext-103-raw-v1/0.0.0/b08601e04326c79dfdd32d625aee71d232d685c3)
+09/30/2025 18:43:36 - INFO - datasets.builder - Found cached dataset wikitext (/cl/work5/hongyu-s/huggingfac/datasets/wikitext/wikitext-103-raw-v1/0.0.0/b08601e04326c79dfdd32d625aee71d232d685c3)
+[INFO|configuration_utils.py:757] 2025-09-30 18:43:36,549 >> loading configuration file ./runs/1r_w_freq_Bfreeze_path_attn/checkpoint-15000/config.json
+[INFO|configuration_utils.py:833] 2025-09-30 18:43:36,550 >> Model config GPT2Config {
+  "activation_function": "gelu_new",
+  "architectures": [
+    "GPT2LMHeadModel"
+  ],
+  "attn_pdrop": 0.1,
+  "bos_token_id": 50256,
+  "dtype": "float32",
+  "embd_pdrop": 0.1,
+  "eos_token_id": 50256,
+  "initializer_range": 0.02,
+  "layer_norm_epsilon": 1e-05,
+  "model_type": "gpt2",
+  "n_ctx": 1024,
+  "n_embd": 768,
+  "n_head": 12,
+  "n_inner": null,
+  "n_layer": 12,
+  "n_positions": 1024,
+  "num_harmonics": 1,
+  "path_conv_bias": false,
+  "path_conv_size": 3,
+  "path_use_forget_gate": false,
+  "path_use_low_rank_w": true,
+  "path_use_qk_norm": false,
+  "path_use_w_shortconv": false,
+  "reorder_and_upcast_attn": false,
+  "resid_pdrop": 0.1,
+  "scale_attn_by_inverse_layer_idx": false,
+  "scale_attn_weights": true,
+  "share_freq_across_heads": true,
+  "summary_activation": null,
+  "summary_first_dropout": 0.1,
+  "summary_proj_to_labels": true,
+  "summary_type": "cls_index",
+  "summary_use_proj": true,
+  "task_specific_params": {
+    "text-generation": {
+      "do_sample": true,
+      "max_length": 50
+    }
+  },
+  "transformers_version": "4.57.0.dev0",
+  "use_cache": true,
+  "vocab_size": 50257
+}
+
+[INFO|configuration_utils.py:759] 2025-09-30 18:43:36,764 >> loading configuration file config.json from cache at /cl/work5/hongyu-s/huggingfac/hub/models--gpt2/snapshots/607a30d783dfa663caf39e06633721c8d4cfcd7e/config.json
+[INFO|configuration_utils.py:833] 2025-09-30 18:43:36,766 >> Model config GPT2Config {
+  "activation_function": "gelu_new",
+  "architectures": [
+    "GPT2LMHeadModel"
+  ],
+  "attn_pdrop": 0.1,
+  "bos_token_id": 50256,
+  "embd_pdrop": 0.1,
+  "eos_token_id": 50256,
+  "initializer_range": 0.02,
+  "layer_norm_epsilon": 1e-05,
+  "model_type": "gpt2",
+  "n_ctx": 1024,
+  "n_embd": 768,
+  "n_head": 12,
+  "n_inner": null,
+  "n_layer": 12,
+  "n_positions": 1024,
+  "reorder_and_upcast_attn": false,
+  "resid_pdrop": 0.1,
+  "scale_attn_by_inverse_layer_idx": false,
+  "scale_attn_weights": true,
+  "summary_activation": null,
+  "summary_first_dropout": 0.1,
+  "summary_proj_to_labels": true,
+  "summary_type": "cls_index",
+  "summary_use_proj": true,
+  "task_specific_params": {
+    "text-generation": {
+      "do_sample": true,
+      "max_length": 50
+    }
+  },
+  "transformers_version": "4.57.0.dev0",
+  "use_cache": true,
+  "vocab_size": 50257
+}
+
+[INFO|tokenization_utils_base.py:2057] 2025-09-30 18:43:37,172 >> loading file vocab.json from cache at /cl/work5/hongyu-s/huggingfac/hub/models--gpt2/snapshots/607a30d783dfa663caf39e06633721c8d4cfcd7e/vocab.json
+[INFO|tokenization_utils_base.py:2057] 2025-09-30 18:43:37,173 >> loading file merges.txt from cache at /cl/work5/hongyu-s/huggingfac/hub/models--gpt2/snapshots/607a30d783dfa663caf39e06633721c8d4cfcd7e/merges.txt
+[INFO|tokenization_utils_base.py:2057] 2025-09-30 18:43:37,173 >> loading file tokenizer.json from cache at /cl/work5/hongyu-s/huggingfac/hub/models--gpt2/snapshots/607a30d783dfa663caf39e06633721c8d4cfcd7e/tokenizer.json
+[INFO|tokenization_utils_base.py:2057] 2025-09-30 18:43:37,173 >> loading file added_tokens.json from cache at None
+[INFO|tokenization_utils_base.py:2057] 2025-09-30 18:43:37,173 >> loading file special_tokens_map.json from cache at None
+[INFO|tokenization_utils_base.py:2057] 2025-09-30 18:43:37,173 >> loading file tokenizer_config.json from cache at /cl/work5/hongyu-s/huggingfac/hub/models--gpt2/snapshots/607a30d783dfa663caf39e06633721c8d4cfcd7e/tokenizer_config.json
+[INFO|tokenization_utils_base.py:2057] 2025-09-30 18:43:37,173 >> loading file chat_template.jinja from cache at None
+[INFO|configuration_utils.py:759] 2025-09-30 18:43:37,177 >> loading configuration file config.json from cache at /cl/work5/hongyu-s/huggingfac/hub/models--gpt2/snapshots/607a30d783dfa663caf39e06633721c8d4cfcd7e/config.json
+[INFO|configuration_utils.py:833] 2025-09-30 18:43:37,179 >> Model config GPT2Config {
+  "activation_function": "gelu_new",
+  "architectures": [
+    "GPT2LMHeadModel"
+  ],
+  "attn_pdrop": 0.1,
+  "bos_token_id": 50256,
+  "embd_pdrop": 0.1,
+  "eos_token_id": 50256,
+  "initializer_range": 0.02,
+  "layer_norm_epsilon": 1e-05,
+  "model_type": "gpt2",
+  "n_ctx": 1024,
+  "n_embd": 768,
+  "n_head": 12,
+  "n_inner": null,
+  "n_layer": 12,
+  "n_positions": 1024,
+  "reorder_and_upcast_attn": false,
+  "resid_pdrop": 0.1,
+  "scale_attn_by_inverse_layer_idx": false,
+  "scale_attn_weights": true,
+  "summary_activation": null,
+  "summary_first_dropout": 0.1,
+  "summary_proj_to_labels": true,
+  "summary_type": "cls_index",
+  "summary_use_proj": true,
+  "task_specific_params": {
+    "text-generation": {
+      "do_sample": true,
+      "max_length": 50
+    }
+  },
+  "transformers_version": "4.57.0.dev0",
+  "use_cache": true,
+  "vocab_size": 50257
+}
+
+wandb: Currently logged in as: hongyu-s-aa-titech (hongyu-s-aa-titech-nara-institute-of-science-and-technology) to https://api.wandb.ai. Use `wandb login --relogin` to force relogin
+wandb: Tracking run with wandb version 0.22.0
+wandb: Run data is saved locally in /project/nlp-work5/hongyu-s/transformers/examples/pytorch/language-modeling/wandb/run-20250930_184337-soflfqyc
+wandb: Run `wandb offline` to turn off syncing.
+wandb: Syncing run ethereal-spaceship-132
+wandb: ⭐️ View project at https://wandb.ai/hongyu-s-aa-titech-nara-institute-of-science-and-technology/gpt2%20with%20path%20attn
+wandb: 🚀 View run at https://wandb.ai/hongyu-s-aa-titech-nara-institute-of-science-and-technology/gpt2%20with%20path%20attn/runs/soflfqyc
+[INFO|modeling_utils.py:1202] 2025-09-30 18:43:46,784 >> loading weights file ./runs/1r_w_freq_Bfreeze_path_attn/checkpoint-15000/model.safetensors
+[INFO|configuration_utils.py:986] 2025-09-30 18:43:46,787 >> Generate config GenerationConfig {
+  "bos_token_id": 50256,
+  "eos_token_id": 50256
+}
+
+[INFO|modeling_utils.py:5570] 2025-09-30 18:43:46,854 >> All model checkpoint weights were used when initializing GPT2LMHeadModel.
+
+[INFO|modeling_utils.py:5578] 2025-09-30 18:43:46,854 >> All the weights of GPT2LMHeadModel were initialized from the model checkpoint at ./runs/1r_w_freq_Bfreeze_path_attn/checkpoint-15000.
+If your task is similar to the task the model of the checkpoint was trained on, you can already use GPT2LMHeadModel for predictions without further training.
+[INFO|configuration_utils.py:939] 2025-09-30 18:43:46,857 >> loading configuration file ./runs/1r_w_freq_Bfreeze_path_attn/checkpoint-15000/generation_config.json
+[INFO|configuration_utils.py:986] 2025-09-30 18:43:46,857 >> Generate config GenerationConfig {
+  "bos_token_id": 50256,
+  "eos_token_id": [
+    50256
+  ]
+}
+
+Loading cached processed dataset at /cl/work5/hongyu-s/huggingfac/datasets/wikitext/wikitext-103-raw-v1/0.0.0/b08601e04326c79dfdd32d625aee71d232d685c3/cache-78d56f068833be52_*_of_00001.arrow
+09/30/2025 18:43:46 - INFO - datasets.arrow_dataset - Loading cached processed dataset at /cl/work5/hongyu-s/huggingfac/datasets/wikitext/wikitext-103-raw-v1/0.0.0/b08601e04326c79dfdd32d625aee71d232d685c3/cache-78d56f068833be52_*_of_00001.arrow
+Loading cached processed dataset at /cl/work5/hongyu-s/huggingfac/datasets/wikitext/wikitext-103-raw-v1/0.0.0/b08601e04326c79dfdd32d625aee71d232d685c3/cache-4aa64ec0866d64bf_*_of_00001.arrow
+09/30/2025 18:43:46 - INFO - datasets.arrow_dataset - Loading cached processed dataset at /cl/work5/hongyu-s/huggingfac/datasets/wikitext/wikitext-103-raw-v1/0.0.0/b08601e04326c79dfdd32d625aee71d232d685c3/cache-4aa64ec0866d64bf_*_of_00001.arrow
+Loading cached processed dataset at /cl/work5/hongyu-s/huggingfac/datasets/wikitext/wikitext-103-raw-v1/0.0.0/b08601e04326c79dfdd32d625aee71d232d685c3/cache-dd72d81b3872e8ad_*_of_00001.arrow
+09/30/2025 18:43:46 - INFO - datasets.arrow_dataset - Loading cached processed dataset at /cl/work5/hongyu-s/huggingfac/datasets/wikitext/wikitext-103-raw-v1/0.0.0/b08601e04326c79dfdd32d625aee71d232d685c3/cache-dd72d81b3872e8ad_*_of_00001.arrow
+Loading cached processed dataset at /cl/work5/hongyu-s/huggingfac/datasets/wikitext/wikitext-103-raw-v1/0.0.0/b08601e04326c79dfdd32d625aee71d232d685c3/cache-6c45e581cfd12e15_*_of_00001.arrow
+09/30/2025 18:43:46 - INFO - datasets.arrow_dataset - Loading cached processed dataset at /cl/work5/hongyu-s/huggingfac/datasets/wikitext/wikitext-103-raw-v1/0.0.0/b08601e04326c79dfdd32d625aee71d232d685c3/cache-6c45e581cfd12e15_*_of_00001.arrow
+Loading cached processed dataset at /cl/work5/hongyu-s/huggingfac/datasets/wikitext/wikitext-103-raw-v1/0.0.0/b08601e04326c79dfdd32d625aee71d232d685c3/cache-f4b57832a890a927_*_of_00001.arrow
+09/30/2025 18:43:46 - INFO - datasets.arrow_dataset - Loading cached processed dataset at /cl/work5/hongyu-s/huggingfac/datasets/wikitext/wikitext-103-raw-v1/0.0.0/b08601e04326c79dfdd32d625aee71d232d685c3/cache-f4b57832a890a927_*_of_00001.arrow
+Loading cached processed dataset at /cl/work5/hongyu-s/huggingfac/datasets/wikitext/wikitext-103-raw-v1/0.0.0/b08601e04326c79dfdd32d625aee71d232d685c3/cache-5e0edde0740173f5_*_of_00001.arrow
+09/30/2025 18:43:46 - INFO - datasets.arrow_dataset - Loading cached processed dataset at /cl/work5/hongyu-s/huggingfac/datasets/wikitext/wikitext-103-raw-v1/0.0.0/b08601e04326c79dfdd32d625aee71d232d685c3/cache-5e0edde0740173f5_*_of_00001.arrow
+09/30/2025 18:43:48 - INFO - __main__ - *** Evaluate ***
+[INFO|trainer.py:4833] 2025-09-30 18:43:48,656 >> 
+***** Running Evaluation *****
+[INFO|trainer.py:4835] 2025-09-30 18:43:48,656 >>   Num examples = 481
+[INFO|trainer.py:4838] 2025-09-30 18:43:48,656 >>   Batch size = 1
+[WARNING|logging.py:328] 2025-09-30 18:43:58,940 >> `loss_type=None` was set in the config but it is unrecognized. Using the default loss: `ForCausalLMLoss`.
+  0%|          | 0/481 [00:00<?, ?it/s]  1%|▏         | 7/481 [00:00<00:07, 60.78it/s]  3%|▎         | 14/481 [00:00<00:08, 56.93it/s]  4%|▍         | 20/481 [00:00<00:08, 55.93it/s]  5%|▌         | 26/481 [00:00<00:08, 55.41it/s]  7%|▋         | 32/481 [00:00<00:08, 54.99it/s]  8%|▊         | 38/481 [00:00<00:08, 54.73it/s]  9%|▉         | 44/481 [00:00<00:08, 54.56it/s] 10%|█         | 50/481 [00:00<00:07, 54.49it/s] 12%|█▏        | 56/481 [00:01<00:07, 54.45it/s] 13%|█▎        | 62/481 [00:01<00:07, 54.45it/s] 14%|█▍        | 68/481 [00:01<00:07, 54.36it/s] 15%|█▌        | 74/481 [00:01<00:07, 54.28it/s] 17%|█▋        | 80/481 [00:01<00:07, 54.23it/s] 18%|█▊        | 86/481 [00:01<00:07, 53.82it/s] 19%|█▉        | 92/481 [00:01<00:07, 53.88it/s] 20%|██        | 98/481 [00:01<00:07, 54.01it/s] 22%|██▏       | 104/481 [00:01<00:06, 54.02it/s] 23%|██▎       | 110/481 [00:02<00:06, 54.03it/s] 24%|██▍       | 116/481 [00:02<00:06, 54.00it/s] 25%|██▌       | 122/481 [00:02<00:06, 53.94it/s] 27%|██▋       | 128/481 [00:02<00:06, 54.14it/s] 28%|██▊       | 134/481 [00:02<00:06, 54.03it/s] 29%|██▉       | 140/481 [00:02<00:06, 54.09it/s] 30%|███       | 146/481 [00:02<00:06, 54.16it/s] 32%|███▏      | 152/481 [00:02<00:06, 54.19it/s] 33%|███▎      | 158/481 [00:02<00:05, 54.18it/s] 34%|███▍      | 164/481 [00:03<00:05, 54.22it/s] 35%|███▌      | 170/481 [00:03<00:05, 54.13it/s] 37%|███▋      | 176/481 [00:03<00:05, 54.17it/s] 38%|███▊      | 182/481 [00:03<00:05, 54.15it/s] 39%|███▉      | 188/481 [00:03<00:05, 54.17it/s] 41%|████      | 195/481 [00:03<00:05, 57.11it/s] 42%|████▏     | 204/481 [00:03<00:04, 64.11it/s] 44%|████▍     | 212/481 [00:03<00:03, 67.76it/s] 46%|████▌     | 220/481 [00:03<00:03, 70.93it/s] 48%|████▊     | 229/481 [00:03<00:03, 73.97it/s] 49%|████▉     | 238/481 [00:04<00:03, 75.75it/s] 51%|█████▏    | 247/481 [00:04<00:03, 77.28it/s] 53%|█████▎    | 256/481 [00:04<00:02, 78.40it/s] 55%|█████▌    | 265/481 [00:04<00:02, 79.02it/s] 57%|█████▋    | 274/481 [00:04<00:02, 79.56it/s] 59%|█████▊    | 282/481 [00:04<00:02, 79.11it/s] 60%|██████    | 290/481 [00:04<00:02, 79.32it/s] 62%|██████▏   | 299/481 [00:04<00:02, 79.74it/s] 64%|██████▍   | 308/481 [00:04<00:02, 79.04it/s] 66%|██████▌   | 316/481 [00:05<00:02, 70.25it/s] 67%|██████▋   | 324/481 [00:05<00:02, 64.91it/s] 69%|██████▉   | 332/481 [00:05<00:02, 68.45it/s] 71%|███████   | 340/481 [00:05<00:01, 71.32it/s] 72%|███████▏  | 348/481 [00:05<00:01, 73.64it/s] 74%|███████▍  | 356/481 [00:05<00:01, 75.02it/s] 76%|███████▌  | 364/481 [00:05<00:01, 75.62it/s] 77%|███████▋  | 372/481 [00:05<00:01, 76.48it/s] 79%|███████▉  | 381/481 [00:05<00:01, 77.81it/s] 81%|████████  | 390/481 [00:06<00:01, 78.63it/s] 83%|████████▎ | 399/481 [00:06<00:01, 79.25it/s] 85%|████████▍ | 407/481 [00:06<00:00, 79.44it/s] 86%|████████▋ | 415/481 [00:06<00:00, 79.59it/s] 88%|████████▊ | 424/481 [00:06<00:00, 80.04it/s] 90%|█████████ | 433/481 [00:06<00:00, 79.75it/s] 92%|█████████▏| 441/481 [00:06<00:00, 79.52it/s] 94%|█████████▎| 450/481 [00:06<00:00, 79.74it/s] 95%|█████████▌| 458/481 [00:06<00:00, 79.39it/s] 97%|█████████▋| 466/481 [00:07<00:00, 79.42it/s] 99%|█████████▉| 475/481 [00:07<00:00, 79.93it/s][INFO|integration_utils.py:858] 2025-09-30 18:44:07,088 >> Automatic Weights & Biases logging enabled, to disable set os.environ["WANDB_DISABLED"] = "true"
+100%|██████████| 481/481 [00:07<00:00, 60.62it/s]
+***** eval metrics *****
+  eval_accuracy               =     0.4335
+  eval_loss                   =     2.9738
+  eval_model_preparation_time =     0.0028
+  eval_runtime                = 0:00:18.41
+  eval_samples                =        481
+  eval_samples_per_second     =     26.123
+  eval_steps_per_second       =     26.123
+  perplexity                  =     19.567
+[INFO|modelcard.py:450] 2025-09-30 18:44:07,109 >> Dropping the following result as it does not have all the necessary fields:
+{'task': {'name': 'Causal Language Modeling', 'type': 'text-generation'}, 'dataset': {'name': 'wikitext wikitext-103-raw-v1', 'type': 'wikitext', 'args': 'wikitext-103-raw-v1'}}
+[1;34mwandb[0m: 
+[1;34mwandb[0m: 🚀 View run [33methereal-spaceship-132[0m at: [34m[0m
+[1;34mwandb[0m: Find logs at: [1;35mwandb/run-20250930_184337-soflfqyc/logs[0m
+[rank0]:[W930 18:44:09.315128932 ProcessGroupNCCL.cpp:1538] Warning: WARNING: destroy_process_group() was not called before program exit, which can leak resources. For more info, please see https://pytorch.org/docs/stable/distributed.html#shutdown (function operator())

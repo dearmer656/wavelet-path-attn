@@ -1,0 +1,840 @@
+MASTER_ADDR: elm71
+MASTER_PORT: 12345
+WORLD_SIZE: 1
+RANK: 0
++ echo 'Workdir: /project/nlp-work5/hongyu-s/transformers/examples/pytorch/language-modeling'
+Workdir: /project/nlp-work5/hongyu-s/transformers/examples/pytorch/language-modeling
++ cd /project/nlp-work5/hongyu-s/transformers/examples/pytorch/language-modeling
++ echo 'Launching training/eval command'
+Launching training/eval command
++ echo '================= BEGIN RUN ================='
+================= BEGIN RUN =================
++ torchrun --nproc_per_node=2 --master_port=12422 ./run_clm.py --model_type gpt2 --tokenizer_name gpt2 --share_freq_across_heads False --learning_rate 1e-4 --per_device_train_batch_size 16 --per_device_eval_batch_size 16 --block_size 512 --dataset_name wikitext --dataset_config_name wikitext-103-raw-v1 --do_train --do_eval --num_train_epochs 30 --num_harmonics 1 --eval_strategy steps --eval_steps 250 --logging_dir ./s_0_10_softmix_wavelet_path_attn_from_s_log --logging_steps 250 --save_steps 5000 --attn_implementation path_attn --path_use_qk_norm false --path_use_low_rank_w true --path_use_w_shortconv false --path_conv_size 3 --warmup_steps 5000 --path_conv_bias false --output_dir runs/s_0_10_softmix_wavelet_path_attn_from_s --gradient_accumulation_steps 2 --b_unfreeze_step 5000 --pe_method vanilla --single_A_B False --use_beta_modulation False --use_wavelet_beta True --wavelet_mode softmix
+W1011 13:25:56.549000 1900202 /project/nlp-work5/hongyu-s/conda/envs/latest_transformers/lib/python3.12/site-packages/torch/distributed/run.py:774] 
+W1011 13:25:56.549000 1900202 /project/nlp-work5/hongyu-s/conda/envs/latest_transformers/lib/python3.12/site-packages/torch/distributed/run.py:774] *****************************************
+W1011 13:25:56.549000 1900202 /project/nlp-work5/hongyu-s/conda/envs/latest_transformers/lib/python3.12/site-packages/torch/distributed/run.py:774] Setting OMP_NUM_THREADS environment variable for each process to be 1 in default, to avoid your system being overloaded, please further tune the variable for optimal performance in your application as needed. 
+W1011 13:25:56.549000 1900202 /project/nlp-work5/hongyu-s/conda/envs/latest_transformers/lib/python3.12/site-packages/torch/distributed/run.py:774] *****************************************
+10/11/2025 13:26:12 - WARNING - __main__ - Process rank: 1, device: cuda:1, n_gpu: 1, distributed training: True, 16-bits training: False
+10/11/2025 13:26:12 - WARNING - __main__ - Process rank: 0, device: cuda:0, n_gpu: 1, distributed training: True, 16-bits training: False
+10/11/2025 13:26:12 - INFO - __main__ - Training/evaluation parameters SupplyTrainingArguments(
+_n_gpu=1,
+accelerator_config={'split_batches': False, 'dispatch_batches': None, 'even_batches': True, 'use_seedable_sampler': True, 'non_blocking': False, 'gradient_accumulation_kwargs': None, 'use_configured_state': False},
+adafactor=False,
+adam_beta1=0.9,
+adam_beta2=0.999,
+adam_epsilon=1e-08,
+auto_find_batch_size=False,
+average_tokens_across_devices=True,
+b_unfreeze_step=5000,
+batch_eval_metrics=False,
+bf16=False,
+bf16_full_eval=False,
+data_seed=None,
+dataloader_drop_last=False,
+dataloader_num_workers=0,
+dataloader_persistent_workers=False,
+dataloader_pin_memory=True,
+dataloader_prefetch_factor=None,
+ddp_backend=None,
+ddp_broadcast_buffers=None,
+ddp_bucket_cap_mb=None,
+ddp_find_unused_parameters=None,
+ddp_timeout=1800,
+debug=[],
+deepspeed=None,
+disable_tqdm=False,
+do_eval=True,
+do_predict=False,
+do_train=True,
+eval_accumulation_steps=None,
+eval_delay=0,
+eval_do_concat_batches=True,
+eval_on_start=False,
+eval_steps=250,
+eval_strategy=IntervalStrategy.STEPS,
+eval_use_gather_object=False,
+fp16=False,
+fp16_backend=auto,
+fp16_full_eval=False,
+fp16_opt_level=O1,
+fsdp=[],
+fsdp_config={'min_num_params': 0, 'xla': False, 'xla_fsdp_v2': False, 'xla_fsdp_grad_ckpt': False},
+fsdp_min_num_params=0,
+fsdp_transformer_layer_cls_to_wrap=None,
+full_determinism=False,
+gradient_accumulation_steps=2,
+gradient_checkpointing=False,
+gradient_checkpointing_kwargs=None,
+greater_is_better=None,
+group_by_length=False,
+half_precision_backend=auto,
+hub_always_push=False,
+hub_model_id=None,
+hub_private_repo=None,
+hub_revision=None,
+hub_strategy=HubStrategy.EVERY_SAVE,
+hub_token=<HUB_TOKEN>,
+ignore_data_skip=False,
+include_for_metrics=[],
+include_inputs_for_metrics=False,
+include_num_input_tokens_seen=no,
+include_tokens_per_second=False,
+jit_mode_eval=False,
+label_names=None,
+label_smoothing_factor=0.0,
+learning_rate=0.0001,
+length_column_name=length,
+liger_kernel_config=None,
+load_best_model_at_end=False,
+local_rank=0,
+log_level=passive,
+log_level_replica=warning,
+log_on_each_node=True,
+logging_dir=./s_0_10_softmix_wavelet_path_attn_from_s_log,
+logging_first_step=False,
+logging_nan_inf_filter=True,
+logging_steps=250,
+logging_strategy=IntervalStrategy.STEPS,
+lr_scheduler_kwargs={},
+lr_scheduler_type=SchedulerType.LINEAR,
+max_grad_norm=1.0,
+max_steps=-1,
+metric_for_best_model=None,
+mp_parameters=,
+neftune_noise_alpha=None,
+no_cuda=False,
+num_train_epochs=30.0,
+optim=OptimizerNames.ADAMW_TORCH_FUSED,
+optim_args=None,
+optim_target_modules=None,
+output_dir=runs/s_0_10_softmix_wavelet_path_attn_from_s,
+overwrite_output_dir=False,
+parallelism_config=None,
+past_index=-1,
+per_device_eval_batch_size=16,
+per_device_train_batch_size=16,
+prediction_loss_only=False,
+push_to_hub=False,
+push_to_hub_model_id=None,
+push_to_hub_organization=None,
+push_to_hub_token=<PUSH_TO_HUB_TOKEN>,
+ray_scope=last,
+remove_unused_columns=True,
+report_to=['tensorboard', 'wandb'],
+restore_callback_states_from_checkpoint=False,
+resume_from_checkpoint=None,
+run_name=None,
+save_on_each_node=False,
+save_only_model=False,
+save_safetensors=True,
+save_steps=5000,
+save_strategy=SaveStrategy.STEPS,
+save_total_limit=None,
+seed=42,
+skip_memory_metrics=True,
+tf32=None,
+torch_compile=False,
+torch_compile_backend=None,
+torch_compile_mode=None,
+torch_empty_cache_steps=None,
+torchdynamo=None,
+tpu_metrics_debug=False,
+tpu_num_cores=None,
+use_cpu=False,
+use_legacy_prediction_loop=False,
+use_liger_kernel=False,
+use_mps_device=False,
+warmup_ratio=0.0,
+warmup_steps=5000,
+weight_decay=0.0,
+)
+Found cached dataset wikitext (/cl/work5/hongyu-s/huggingfac/datasets/wikitext/wikitext-103-raw-v1/0.0.0/b08601e04326c79dfdd32d625aee71d232d685c3)
+10/11/2025 13:26:16 - INFO - datasets.builder - Found cached dataset wikitext (/cl/work5/hongyu-s/huggingfac/datasets/wikitext/wikitext-103-raw-v1/0.0.0/b08601e04326c79dfdd32d625aee71d232d685c3)
+10/11/2025 13:26:16 - WARNING - __main__ - You are instantiating a new config instance from scratch.
+10/11/2025 13:26:16 - WARNING - __main__ - You are instantiating a new config instance from scratch.
+[INFO|configuration_utils.py:759] 2025-10-11 13:26:16,865 >> loading configuration file config.json from cache at /cl/work5/hongyu-s/huggingfac/hub/models--gpt2/snapshots/607a30d783dfa663caf39e06633721c8d4cfcd7e/config.json
+[INFO|configuration_utils.py:833] 2025-10-11 13:26:16,867 >> Model config GPT2Config {
+  "activation_function": "gelu_new",
+  "architectures": [
+    "GPT2LMHeadModel"
+  ],
+  "attn_pdrop": 0.1,
+  "bos_token_id": 50256,
+  "embd_pdrop": 0.1,
+  "eos_token_id": 50256,
+  "initializer_range": 0.02,
+  "layer_norm_epsilon": 1e-05,
+  "model_type": "gpt2",
+  "n_ctx": 1024,
+  "n_embd": 768,
+  "n_head": 12,
+  "n_inner": null,
+  "n_layer": 12,
+  "n_positions": 1024,
+  "reorder_and_upcast_attn": false,
+  "resid_pdrop": 0.1,
+  "scale_attn_by_inverse_layer_idx": false,
+  "scale_attn_weights": true,
+  "summary_activation": null,
+  "summary_first_dropout": 0.1,
+  "summary_proj_to_labels": true,
+  "summary_type": "cls_index",
+  "summary_use_proj": true,
+  "task_specific_params": {
+    "text-generation": {
+      "do_sample": true,
+      "max_length": 50
+    }
+  },
+  "transformers_version": "4.57.0.dev0",
+  "use_cache": true,
+  "vocab_size": 50257
+}
+
+[INFO|tokenization_utils_base.py:2057] 2025-10-11 13:26:17,299 >> loading file vocab.json from cache at /cl/work5/hongyu-s/huggingfac/hub/models--gpt2/snapshots/607a30d783dfa663caf39e06633721c8d4cfcd7e/vocab.json
+[INFO|tokenization_utils_base.py:2057] 2025-10-11 13:26:17,300 >> loading file merges.txt from cache at /cl/work5/hongyu-s/huggingfac/hub/models--gpt2/snapshots/607a30d783dfa663caf39e06633721c8d4cfcd7e/merges.txt
+[INFO|tokenization_utils_base.py:2057] 2025-10-11 13:26:17,300 >> loading file tokenizer.json from cache at /cl/work5/hongyu-s/huggingfac/hub/models--gpt2/snapshots/607a30d783dfa663caf39e06633721c8d4cfcd7e/tokenizer.json
+[INFO|tokenization_utils_base.py:2057] 2025-10-11 13:26:17,300 >> loading file added_tokens.json from cache at None
+[INFO|tokenization_utils_base.py:2057] 2025-10-11 13:26:17,300 >> loading file special_tokens_map.json from cache at None
+[INFO|tokenization_utils_base.py:2057] 2025-10-11 13:26:17,300 >> loading file tokenizer_config.json from cache at /cl/work5/hongyu-s/huggingfac/hub/models--gpt2/snapshots/607a30d783dfa663caf39e06633721c8d4cfcd7e/tokenizer_config.json
+[INFO|tokenization_utils_base.py:2057] 2025-10-11 13:26:17,300 >> loading file chat_template.jinja from cache at None
+[INFO|configuration_utils.py:759] 2025-10-11 13:26:17,303 >> loading configuration file config.json from cache at /cl/work5/hongyu-s/huggingfac/hub/models--gpt2/snapshots/607a30d783dfa663caf39e06633721c8d4cfcd7e/config.json
+[INFO|configuration_utils.py:833] 2025-10-11 13:26:17,304 >> Model config GPT2Config {
+  "activation_function": "gelu_new",
+  "architectures": [
+    "GPT2LMHeadModel"
+  ],
+  "attn_pdrop": 0.1,
+  "bos_token_id": 50256,
+  "embd_pdrop": 0.1,
+  "eos_token_id": 50256,
+  "initializer_range": 0.02,
+  "layer_norm_epsilon": 1e-05,
+  "model_type": "gpt2",
+  "n_ctx": 1024,
+  "n_embd": 768,
+  "n_head": 12,
+  "n_inner": null,
+  "n_layer": 12,
+  "n_positions": 1024,
+  "reorder_and_upcast_attn": false,
+  "resid_pdrop": 0.1,
+  "scale_attn_by_inverse_layer_idx": false,
+  "scale_attn_weights": true,
+  "summary_activation": null,
+  "summary_first_dropout": 0.1,
+  "summary_proj_to_labels": true,
+  "summary_type": "cls_index",
+  "summary_use_proj": true,
+  "task_specific_params": {
+    "text-generation": {
+      "do_sample": true,
+      "max_length": 50
+    }
+  },
+  "transformers_version": "4.57.0.dev0",
+  "use_cache": true,
+  "vocab_size": 50257
+}
+
+wandb: Currently logged in as: hongyu-s-aa-titech (hongyu-s-aa-titech-nara-institute-of-science-and-technology) to https://api.wandb.ai. Use `wandb login --relogin` to force relogin
+wandb: Tracking run with wandb version 0.22.0
+wandb: Run data is saved locally in /project/nlp-work5/hongyu-s/transformers/examples/pytorch/language-modeling/wandb/run-20251011_132617-agofuw3n
+wandb: Run `wandb offline` to turn off syncing.
+wandb: Syncing run vibrant-cosmos-330
+wandb: ⭐️ View project at https://wandb.ai/hongyu-s-aa-titech-nara-institute-of-science-and-technology/gpt2%20with%20path%20attn
+wandb: 🚀 View run at https://wandb.ai/hongyu-s-aa-titech-nara-institute-of-science-and-technology/gpt2%20with%20path%20attn/runs/agofuw3n
+[INFO|configuration_utils.py:986] 2025-10-11 13:26:25,686 >> Generate config GenerationConfig {
+  "bos_token_id": 50256,
+  "eos_token_id": 50256
+}
+
+/cl/work5/hongyu-s/conda/envs/latest_transformers/lib/python3.12/site-packages/torch/distributed/distributed_c10d.py:4807: UserWarning: No device id is provided via `init_process_group` or `barrier `. Using the current device set by the user. 
+  warnings.warn(  # warn only once
+[rank1]:[W1011 13:26:26.717848822 ProcessGroupNCCL.cpp:5023] [PG ID 0 PG GUID 0 Rank 1]  using GPU 1 as device used by this process is currently unknown. This can potentially cause a hang if this rank to GPU mapping is incorrect. You can specify device_id in init_process_group() to force use of a particular device.
+10/11/2025 13:26:27 - INFO - __main__ - Training new model from scratch - Total size=118.56M params
+Loading cached processed dataset at /cl/work5/hongyu-s/huggingfac/datasets/wikitext/wikitext-103-raw-v1/0.0.0/b08601e04326c79dfdd32d625aee71d232d685c3/cache-78d56f068833be52_*_of_00001.arrow
+10/11/2025 13:26:27 - INFO - datasets.arrow_dataset - Loading cached processed dataset at /cl/work5/hongyu-s/huggingfac/datasets/wikitext/wikitext-103-raw-v1/0.0.0/b08601e04326c79dfdd32d625aee71d232d685c3/cache-78d56f068833be52_*_of_00001.arrow
+Loading cached processed dataset at /cl/work5/hongyu-s/huggingfac/datasets/wikitext/wikitext-103-raw-v1/0.0.0/b08601e04326c79dfdd32d625aee71d232d685c3/cache-4aa64ec0866d64bf_*_of_00001.arrow
+10/11/2025 13:26:28 - INFO - datasets.arrow_dataset - Loading cached processed dataset at /cl/work5/hongyu-s/huggingfac/datasets/wikitext/wikitext-103-raw-v1/0.0.0/b08601e04326c79dfdd32d625aee71d232d685c3/cache-4aa64ec0866d64bf_*_of_00001.arrow
+Loading cached processed dataset at /cl/work5/hongyu-s/huggingfac/datasets/wikitext/wikitext-103-raw-v1/0.0.0/b08601e04326c79dfdd32d625aee71d232d685c3/cache-dd72d81b3872e8ad_*_of_00001.arrow
+10/11/2025 13:26:28 - INFO - datasets.arrow_dataset - Loading cached processed dataset at /cl/work5/hongyu-s/huggingfac/datasets/wikitext/wikitext-103-raw-v1/0.0.0/b08601e04326c79dfdd32d625aee71d232d685c3/cache-dd72d81b3872e8ad_*_of_00001.arrow
+/cl/work5/hongyu-s/conda/envs/latest_transformers/lib/python3.12/site-packages/torch/distributed/distributed_c10d.py:4807: UserWarning: No device id is provided via `init_process_group` or `barrier `. Using the current device set by the user. 
+  warnings.warn(  # warn only once
+[rank0]:[W1011 13:26:28.204805993 ProcessGroupNCCL.cpp:5023] [PG ID 0 PG GUID 0 Rank 0]  using GPU 0 as device used by this process is currently unknown. This can potentially cause a hang if this rank to GPU mapping is incorrect. You can specify device_id in init_process_group() to force use of a particular device.
+Loading cached processed dataset at /cl/work5/hongyu-s/huggingfac/datasets/wikitext/wikitext-103-raw-v1/0.0.0/b08601e04326c79dfdd32d625aee71d232d685c3/cache-e9eef162c551998a_*_of_00001.arrow
+10/11/2025 13:26:28 - INFO - datasets.arrow_dataset - Loading cached processed dataset at /cl/work5/hongyu-s/huggingfac/datasets/wikitext/wikitext-103-raw-v1/0.0.0/b08601e04326c79dfdd32d625aee71d232d685c3/cache-e9eef162c551998a_*_of_00001.arrow
+Loading cached processed dataset at /cl/work5/hongyu-s/huggingfac/datasets/wikitext/wikitext-103-raw-v1/0.0.0/b08601e04326c79dfdd32d625aee71d232d685c3/cache-0273e13d750e9448_*_of_00001.arrow
+10/11/2025 13:26:28 - INFO - datasets.arrow_dataset - Loading cached processed dataset at /cl/work5/hongyu-s/huggingfac/datasets/wikitext/wikitext-103-raw-v1/0.0.0/b08601e04326c79dfdd32d625aee71d232d685c3/cache-0273e13d750e9448_*_of_00001.arrow
+Loading cached processed dataset at /cl/work5/hongyu-s/huggingfac/datasets/wikitext/wikitext-103-raw-v1/0.0.0/b08601e04326c79dfdd32d625aee71d232d685c3/cache-4ac008830118d7c3_*_of_00001.arrow
+10/11/2025 13:26:28 - INFO - datasets.arrow_dataset - Loading cached processed dataset at /cl/work5/hongyu-s/huggingfac/datasets/wikitext/wikitext-103-raw-v1/0.0.0/b08601e04326c79dfdd32d625aee71d232d685c3/cache-4ac008830118d7c3_*_of_00001.arrow
+[INFO|trainer.py:2710] 2025-10-11 13:26:30,267 >> ***** Running training *****
+[INFO|trainer.py:2711] 2025-10-11 13:26:30,267 >>   Num examples = 229,395
+[INFO|trainer.py:2712] 2025-10-11 13:26:30,267 >>   Num Epochs = 30
+[INFO|trainer.py:2713] 2025-10-11 13:26:30,267 >>   Instantaneous batch size per device = 16
+[INFO|trainer.py:2716] 2025-10-11 13:26:30,267 >>   Total train batch size (w. parallel, distributed & accumulation) = 64
+[INFO|trainer.py:2717] 2025-10-11 13:26:30,267 >>   Gradient Accumulation steps = 2
+[INFO|trainer.py:2718] 2025-10-11 13:26:30,267 >>   Total optimization steps = 107,550
+[INFO|trainer.py:2719] 2025-10-11 13:26:30,268 >>   Number of trainable parameters = 124,317,516
+[INFO|integration_utils.py:858] 2025-10-11 13:26:30,285 >> Automatic Weights & Biases logging enabled, to disable set os.environ["WANDB_DISABLED"] = "true"
+  0%|          | 0/107550 [00:00<?, ?it/s][WARNING|logging.py:328] 2025-10-11 13:26:31,119 >> `loss_type=None` was set in the config but it is unrecognized. Using the default loss: `ForCausalLMLoss`.
+[WARNING|logging.py:328] 2025-10-11 13:26:31,119 >> `loss_type=None` was set in the config but it is unrecognized. Using the default loss: `ForCausalLMLoss`.
+[rank1]:[W1011 13:26:31.795925668 reducer.cpp:1457] Warning: find_unused_parameters=True was specified in DDP constructor, but did not find any unused parameters in the forward pass. This flag results in an extra traversal of the autograd graph every iteration,  which can adversely affect performance. If your model indeed never has any unused parameters in the forward pass, consider turning this flag off. Note that this warning may be a false positive if your model has flow control causing later iterations to have unused parameters. (function operator())
+[rank0]:[W1011 13:26:31.796527933 reducer.cpp:1457] Warning: find_unused_parameters=True was specified in DDP constructor, but did not find any unused parameters in the forward pass. This flag results in an extra traversal of the autograd graph every iteration,  which can adversely affect performance. If your model indeed never has any unused parameters in the forward pass, consider turning this flag off. Note that this warning may be a false positive if your model has flow control causing later iterations to have unused parameters. (function operator())
+  0%|          | 1/107550 [00:01<54:43:35,  1.83s/it]  0%|          | 2/107550 [00:02<37:41:49,  1.26s/it]  0%|          | 3/107550 [00:03<32:14:24,  1.08s/it]  0%|          | 4/107550 [00:04<29:43:03,  1.01it/s]  0%|          | 5/107550 [00:05<28:21:31,  1.05it/s]  0%|          | 6/107550 [00:06<27:35:35,  1.08it/s]  0%|          | 7/107550 [00:07<27:05:26,  1.10it/s]  0%|          | 8/107550 [00:07<26:48:46,  1.11it/s]  0%|          | 9/107550 [00:08<26:40:04,  1.12it/s]  0%|          | 10/107550 [00:09<26:33:36,  1.12it/s]  0%|          | 11/107550 [00:10<26:29:20,  1.13it/s]  0%|          | 12/107550 [00:11<26:21:11,  1.13it/s]  0%|          | 13/107550 [00:12<26:17:15,  1.14it/s]  0%|          | 14/107550 [00:13<26:13:29,  1.14it/s]  0%|          | 15/107550 [00:14<26:16:57,  1.14it/s]  0%|          | 16/107550 [00:14<26:16:17,  1.14it/s]  0%|          | 17/107550 [00:15<26:23:09,  1.13it/s]  0%|          | 18/107550 [00:16<26:29:41,  1.13it/s]  0%|          | 19/107550 [00:17<26:32:45,  1.13it/s]  0%|          | 20/107550 [00:18<26:37:33,  1.12it/s]  0%|          | 21/107550 [00:19<26:42:58,  1.12it/s]  0%|          | 22/107550 [00:20<26:46:12,  1.12it/s]  0%|          | 23/107550 [00:21<26:49:31,  1.11it/s]  0%|          | 24/107550 [00:22<26:48:21,  1.11it/s]  0%|          | 25/107550 [00:23<26:49:09,  1.11it/s]  0%|          | 26/107550 [00:23<26:53:32,  1.11it/s]  0%|          | 27/107550 [00:24<26:50:34,  1.11it/s]  0%|          | 28/107550 [00:25<26:57:39,  1.11it/s]  0%|          | 29/107550 [00:26<27:03:12,  1.10it/s]  0%|          | 30/107550 [00:27<27:08:46,  1.10it/s]  0%|          | 31/107550 [00:28<27:14:54,  1.10it/s]  0%|          | 32/107550 [00:29<27:16:02,  1.10it/s]  0%|          | 33/107550 [00:30<27:16:46,  1.09it/s]  0%|          | 34/107550 [00:31<27:21:53,  1.09it/s]  0%|          | 35/107550 [00:32<27:23:48,  1.09it/s]  0%|          | 36/107550 [00:33<27:22:21,  1.09it/s]  0%|          | 37/107550 [00:33<27:30:04,  1.09it/s]  0%|          | 38/107550 [00:34<27:27:42,  1.09it/s]  0%|          | 39/107550 [00:35<27:29:10,  1.09it/s]  0%|          | 40/107550 [00:36<27:30:43,  1.09it/s]  0%|          | 41/107550 [00:37<27:39:18,  1.08it/s]  0%|          | 42/107550 [00:38<27:45:18,  1.08it/s]  0%|          | 43/107550 [00:39<27:51:27,  1.07it/s]  0%|          | 44/107550 [00:40<27:58:25,  1.07it/s]  0%|          | 45/107550 [00:41<28:04:22,  1.06it/s]  0%|          | 46/107550 [00:42<28:07:50,  1.06it/s]  0%|          | 47/107550 [00:43<28:09:29,  1.06it/s]  0%|          | 48/107550 [00:44<28:16:31,  1.06it/s]  0%|          | 49/107550 [00:45<28:22:10,  1.05it/s]  0%|          | 50/107550 [00:46<28:19:15,  1.05it/s]  0%|          | 51/107550 [00:47<28:21:08,  1.05it/s]  0%|          | 52/107550 [00:48<28:21:49,  1.05it/s]  0%|          | 53/107550 [00:49<28:28:15,  1.05it/s]  0%|          | 54/107550 [00:50<28:35:20,  1.04it/s]  0%|          | 55/107550 [00:51<28:37:31,  1.04it/s]  0%|          | 56/107550 [00:51<28:33:06,  1.05it/s]  0%|          | 57/107550 [00:52<28:36:27,  1.04it/s]  0%|          | 58/107550 [00:53<28:35:17,  1.04it/s]  0%|          | 59/107550 [00:54<28:34:50,  1.04it/s]  0%|          | 60/107550 [00:55<28:40:36,  1.04it/s]  0%|          | 61/107550 [00:56<28:46:12,  1.04it/s]  0%|          | 62/107550 [00:57<28:58:05,  1.03it/s]  0%|          | 63/107550 [00:58<29:01:02,  1.03it/s]  0%|          | 64/107550 [00:59<28:54:38,  1.03it/s]  0%|          | 65/107550 [01:00<28:54:57,  1.03it/s]  0%|          | 66/107550 [01:01<28:44:46,  1.04it/s]  0%|          | 67/107550 [01:02<28:52:55,  1.03it/s]  0%|          | 68/107550 [01:03<28:57:42,  1.03it/s]  0%|          | 69/107550 [01:04<28:59:53,  1.03it/s]  0%|          | 70/107550 [01:05<29:01:32,  1.03it/s]  0%|          | 71/107550 [01:06<29:05:01,  1.03it/s]  0%|          | 72/107550 [01:07<29:09:03,  1.02it/s]  0%|          | 73/107550 [01:08<29:10:56,  1.02it/s]  0%|          | 74/107550 [01:09<29:14:32,  1.02it/s]  0%|          | 75/107550 [01:10<29:16:35,  1.02it/s]  0%|          | 76/107550 [01:11<29:19:15,  1.02it/s]  0%|          | 77/107550 [01:12<29:22:29,  1.02it/s]  0%|          | 78/107550 [01:13<29:23:17,  1.02it/s]  0%|          | 79/107550 [01:14<29:24:49,  1.01it/s]  0%|          | 80/107550 [01:15<29:27:46,  1.01it/s]  0%|          | 81/107550 [01:16<29:21:21,  1.02it/s]  0%|          | 82/107550 [01:17<29:20:44,  1.02it/s]  0%|          | 83/107550 [01:18<29:19:07,  1.02it/s]  0%|          | 84/107550 [01:19<29:20:27,  1.02it/s]  0%|          | 85/107550 [01:20<29:23:23,  1.02it/s]  0%|          | 86/107550 [01:21<29:38:41,  1.01it/s]  0%|          | 87/107550 [01:22<29:42:32,  1.00it/s]  0%|          | 88/107550 [01:23<29:33:58,  1.01it/s]  0%|          | 89/107550 [01:24<29:32:55,  1.01it/s]  0%|          | 90/107550 [01:25<29:29:49,  1.01it/s]  0%|          | 91/107550 [01:26<29:30:08,  1.01it/s]  0%|          | 92/107550 [01:27<29:32:57,  1.01it/s]  0%|          | 93/107550 [01:28<29:38:04,  1.01it/s]  0%|          | 94/107550 [01:29<29:41:30,  1.01it/s]  0%|          | 95/107550 [01:30<29:41:22,  1.01it/s]  0%|          | 96/107550 [01:31<29:47:37,  1.00it/s]  0%|          | 97/107550 [01:32<29:51:53,  1.00s/it]  0%|          | 98/107550 [01:33<29:45:55,  1.00it/s]  0%|          | 99/107550 [01:34<29:46:16,  1.00it/s]  0%|          | 100/107550 [01:35<29:47:37,  1.00it/s]  0%|          | 101/107550 [01:36<29:49:20,  1.00it/s]  0%|          | 102/107550 [01:37<29:47:28,  1.00it/s]  0%|          | 103/107550 [01:38<29:52:21,  1.00s/it]  0%|          | 104/107550 [01:39<29:54:58,  1.00s/it]  0%|          | 105/107550 [01:40<29:50:15,  1.00it/s]  0%|          | 106/107550 [01:41<29:52:36,  1.00s/it]  0%|          | 107/107550 [01:42<29:55:24,  1.00s/it]  0%|          | 108/107550 [01:43<29:51:27,  1.00s/it]  0%|          | 109/107550 [01:44<29:55:16,  1.00s/it]  0%|          | 110/107550 [01:45<29:56:37,  1.00s/it]  0%|          | 111/107550 [01:46<29:54:46,  1.00s/it]  0%|          | 112/107550 [01:47<29:58:26,  1.00s/it]  0%|          | 113/107550 [01:48<30:02:02,  1.01s/it]  0%|          | 114/107550 [01:49<30:02:44,  1.01s/it]  0%|          | 115/107550 [01:50<30:04:43,  1.01s/it]  0%|          | 116/107550 [01:51<29:57:52,  1.00s/it]  0%|          | 117/107550 [01:52<29:58:16,  1.00s/it]  0%|          | 118/107550 [01:53<30:03:12,  1.01s/it]  0%|          | 119/107550 [01:54<30:01:27,  1.01s/it]  0%|          | 120/107550 [01:55<30:11:59,  1.01s/it]  0%|          | 121/107550 [01:56<30:09:27,  1.01s/it]  0%|          | 122/107550 [01:57<30:07:43,  1.01s/it]  0%|          | 123/107550 [01:58<30:09:23,  1.01s/it]  0%|          | 124/107550 [01:59<30:13:12,  1.01s/it]amp_mean_by_head amp_mean_by_head tensor([1.0000, 1.0000, 1.0000, 1.0000, 1.0000, 1.0000, 1.0000, 1.0000, 1.0001,
+        1.0000, 1.0000, 1.0001], device='cuda:0', grad_fn=<MeanBackward1>)
+scaleExp_by_head tensor([-3.4061e-06, -1.0812e-06, -2.0000e+00, -2.0000e+00, -4.0000e+00,
+        -4.0000e+00, -6.0000e+00, -6.0000e+00, -8.0000e+00, -8.0000e+00,
+        -1.0000e+01, -1.0000e+01], device='cuda:0', grad_fn=<MeanBackward1>)
+shift_mean_by_head tensor([-2.0318e-05,  9.9999e-01, -4.3056e-06,  9.9999e-01,  2.5454e-05,
+         1.0000e+00,  6.3261e-06,  1.0000e+00, -8.2861e-06,  1.0000e+00,
+        -2.9842e-06,  1.0000e+00], device='cuda:0', grad_fn=<MeanBackward1>)
+psi_mean_by_head tensor([ 2.3283e-10, -4.0745e-10,  1.7462e-10,  6.4028e-10, -2.3865e-09,
+         1.0477e-09, -1.8626e-09,  4.1910e-09, -4.3074e-09,  4.9477e-09,
+         9.8371e-09, -2.6106e-08], device='cuda:0', grad_fn=<MeanBackward1>)
+amp_mean_by_head tensor([1.0000, 1.0000, 1.0000, 1.0000, 1.0000, 1.0000, 0.9999, 1.0001, 1.0000,
+        1.0000, 1.0001, 1.0000], device='cuda:0', grad_fn=<MeanBackward1>)
+scaleExp_by_head tensor([ 2.5434e-07,  3.5277e-08, -2.0000e+00, -2.0000e+00, -4.0000e+00,
+        -4.0000e+00, -5.9999e+00, -6.0001e+00, -8.0000e+00, -8.0000e+00,
+        -9.9999e+00, -1.0000e+01], device='cuda:0', grad_fn=<MeanBackward1>)
+shift_mean_by_head tensor([ 6.1230e-07,  1.0000e+00,  2.1968e-05,  1.0000e+00, -6.2584e-07,
+         1.0000e+00,  2.9301e-05,  9.9998e-01,  3.2771e-06,  1.0000e+00,
+         3.0405e-06,  1.0000e+00], device='cuda:0', grad_fn=<MeanBackward1>)
+psi_mean_by_head tensor([ 0.0000e+00,  2.9104e-11, -7.5670e-10, -3.4925e-10,  4.6566e-10,
+        -1.8626e-09, -2.7940e-09,  4.0745e-10,  9.6043e-09, -2.8522e-09,
+         4.7236e-08, -2.3734e-08], device='cuda:0', grad_fn=<MeanBackward1>)
+amp_mean_by_head tensor([1.0000, 1.0000, 1.0000, 1.0000, 1.0000, 1.0000, 1.0001, 1.0000, 0.9999,
+        0.9999, 1.0000, 1.0000], device='cuda:0', grad_fn=<MeanBackward1>)
+scaleExp_by_head tensor([-2.2062e-07, -1.9760e-06, -2.0000e+00, -2.0000e+00, -4.0000e+00,
+        -4.0000e+00, -6.0000e+00, -6.0000e+00, -7.9999e+00, -8.0000e+00,
+        -1.0000e+01, -1.0000e+01], device='cuda:0', grad_fn=<MeanBackward1>)
+shift_mean_by_head tensor([-5.7834e-06,  1.0000e+00,  1.2448e-05,  1.0000e+00, -1.3501e-05,
+         9.9999e-01,  1.2276e-05,  1.0000e+00,  1.2153e-05,  1.0000e+00,
+         1.0763e-06,  1.0000e+00], device='cuda:0', grad_fn=<MeanBackward1>)
+psi_mean_by_head tensor([-5.8208e-11, -1.1642e-10, -2.9104e-10,  0.0000e+00,  1.2806e-09,
+         3.4925e-10, -2.0955e-09, -6.9849e-10, -3.8999e-09,  1.1874e-08,
+         3.8912e-08,  6.6357e-09], device='cuda:0', grad_fn=<MeanBackward1>)
+amp_mean_by_head tensor([1.0000, 1.0000, 1.0000, 1.0000, 1.0000, 1.0000, 1.0000, 1.0000, 1.0000,
+        0.9998, 0.9998, 0.9999], device='cuda:0', grad_fn=<MeanBackward1>)
+scaleExp_by_head tensor([-4.5582e-07, -1.1310e-06, -2.0000e+00, -2.0000e+00, -4.0000e+00,
+        -4.0000e+00, -6.0000e+00, -6.0000e+00, -8.0000e+00, -7.9999e+00,
+        -1.0000e+01, -1.0000e+01], device='cuda:0', grad_fn=<MeanBackward1>)
+shift_mean_by_headtensor([1.0000, 1.0000, 1.0000, 1.0000, 1.0000, 1.0000, 1.0000, 1.0000, 1.0001,
+        1.0000, 1.0000, 1.0001], device='cuda:1', grad_fn=<MeanBackward1>)
+scaleExp_by_head  tensor([-3.4061e-06, -1.0812e-06, -2.0000e+00, -2.0000e+00, -4.0000e+00,
+        -4.0000e+00, -6.0000e+00, -6.0000e+00, -8.0000e+00, -8.0000e+00,
+        -1.0000e+01, -1.0000e+01], device='cuda:1', grad_fn=<MeanBackward1>)
+shift_mean_by_head tensor([ 7.9900e-08,  1.0000e+00,  3.0414e-06,  1.0000e+00,  2.8036e-07,
+         1.0000e+00,  1.5718e-06,  1.0000e+00, -2.8033e-07,  1.0000e+00,
+        -6.1934e-06,  1.0000e+00], device='cuda:0', grad_fn=<MeanBackward1>)
+psi_mean_by_head tensor([-2.0318e-05,  9.9999e-01, -4.3056e-06,  9.9999e-01,  2.5454e-05,
+         1.0000e+00,  6.3261e-06,  1.0000e+00, -8.2861e-06,  1.0000e+00,
+        -2.9842e-06,  1.0000e+00], device='cuda:1', grad_fn=<MeanBackward1>)
+psi_mean_by_head tensor([ 2.3283e-10,  1.7462e-10,  1.1642e-10, -5.8208e-10,  1.1642e-10,
+         3.4925e-10, -5.2387e-10, -1.1059e-09,  6.4611e-09, -5.1223e-09,
+        -1.8044e-09, -2.6586e-08], device='cuda:0', grad_fn=<MeanBackward1>)
+tensor([ 2.3283e-10, -4.0745e-10,  1.7462e-10,  6.4028e-10, -2.3865e-09,
+         1.0477e-09, -1.8626e-09,  4.1910e-09, -4.3074e-09,  4.9477e-09,
+         9.8371e-09, -2.6106e-08], device='cuda:1', grad_fn=<MeanBackward1>)
+amp_mean_by_headamp_mean_by_head  tensor([1.0000, 1.0000, 1.0000, 1.0000, 1.0000, 1.0000, 1.0000, 1.0000, 0.9999,
+        0.9999, 1.0000, 1.0001], device='cuda:0', grad_fn=<MeanBackward1>)
+scaleExp_by_head tensor([1.0000, 1.0000, 1.0000, 1.0000, 1.0000, 1.0000, 0.9999, 1.0001, 1.0000,
+        1.0000, 1.0001, 1.0000], device='cuda:1', grad_fn=<MeanBackward1>)
+scaleExp_by_head tensor([ 1.0603e-06,  2.0680e-07, -2.0000e+00, -2.0000e+00, -4.0000e+00,
+        -4.0000e+00, -6.0000e+00, -6.0000e+00, -8.0000e+00, -7.9999e+00,
+        -1.0000e+01, -9.9999e+00], device='cuda:0', grad_fn=<MeanBackward1>)
+shift_mean_by_head tensor([ 2.5434e-07,  3.5277e-08, -2.0000e+00, -2.0000e+00, -4.0000e+00,
+        -4.0000e+00, -5.9999e+00, -6.0001e+00, -8.0000e+00, -8.0000e+00,
+        -9.9999e+00, -1.0000e+01], device='cuda:1', grad_fn=<MeanBackward1>)
+shift_mean_by_head tensor([ 6.1230e-07,  1.0000e+00,  2.1968e-05,  1.0000e+00, -6.2584e-07,
+         1.0000e+00,  2.9301e-05,  9.9998e-01,  3.2771e-06,  1.0000e+00,
+         3.0405e-06,  1.0000e+00], device='cuda:1', grad_fn=<MeanBackward1>)
+psi_mean_by_head tensor([ 1.2567e-05,  1.0000e+00, -4.6712e-06,  1.0000e+00,  4.4805e-06,
+         1.0000e+00,  2.0440e-07,  1.0000e+00,  4.0700e-06,  1.0000e+00,
+         1.5871e-07,  1.0000e+00], device='cuda:0', grad_fn=<MeanBackward1>)
+psi_mean_by_head tensor([ 0.0000e+00,  2.9104e-11, -7.5670e-10, -3.4925e-10,  4.6566e-10,
+        -1.8626e-09, -2.7940e-09,  4.0745e-10,  9.6043e-09, -2.8522e-09,
+         4.7236e-08, -2.3734e-08], device='cuda:1', grad_fn=<MeanBackward1>)
+tensor([-2.3283e-10,  1.1642e-10,  8.7311e-10,  4.6566e-10, -1.1642e-09,
+        -5.8208e-11,  4.9477e-09,  5.1223e-09, -1.0943e-08,  1.3970e-09,
+         5.0815e-08,  1.0463e-08], device='cuda:0', grad_fn=<MeanBackward1>)
+amp_mean_by_head amp_mean_by_head tensor([1.0000, 1.0000, 1.0000, 1.0000, 1.0000, 1.0000, 1.0001, 1.0000, 0.9999,
+        0.9999, 1.0000, 1.0000], device='cuda:1', grad_fn=<MeanBackward1>)
+scaleExp_by_head tensor([1.0000, 1.0000, 1.0000, 1.0000, 1.0000, 1.0000, 1.0000, 1.0000, 1.0000,
+        0.9999, 0.9999, 0.9999], device='cuda:0', grad_fn=<MeanBackward1>)
+scaleExp_by_head tensor([-2.2062e-07, -1.9760e-06, -2.0000e+00, -2.0000e+00, -4.0000e+00,
+        -4.0000e+00, -6.0000e+00, -6.0000e+00, -7.9999e+00, -8.0000e+00,
+        -1.0000e+01, -1.0000e+01], device='cuda:1', grad_fn=<MeanBackward1>)
+shift_mean_by_head tensor([-5.7834e-06,  1.0000e+00,  1.2448e-05,  1.0000e+00, -1.3501e-05,
+         9.9999e-01,  1.2276e-05,  1.0000e+00,  1.2153e-05,  1.0000e+00,
+         1.0763e-06,  1.0000e+00], device='cuda:1', grad_fn=<MeanBackward1>)
+psi_mean_by_head tensor([ 8.9598e-08, -1.4816e-07, -2.0000e+00, -2.0000e+00, -4.0000e+00,
+        -4.0000e+00, -6.0000e+00, -6.0000e+00, -8.0000e+00, -8.0000e+00,
+        -1.0000e+01, -1.0000e+01], device='cuda:0', grad_fn=<MeanBackward1>)
+shift_mean_by_head tensor([-5.8208e-11, -1.1642e-10, -2.9104e-10,  0.0000e+00,  1.2806e-09,
+         3.4925e-10, -2.0955e-09, -6.9849e-10, -3.8999e-09,  1.1874e-08,
+         3.8912e-08,  6.6357e-09], device='cuda:1', grad_fn=<MeanBackward1>)
+tensor([ 2.8008e-06,  1.0000e+00,  3.0604e-06,  1.0000e+00,  7.9894e-06,
+         1.0000e+00,  8.5657e-06,  1.0000e+00,  5.1757e-07,  1.0000e+00,
+        -1.3711e-06,  1.0000e+00], device='cuda:0', grad_fn=<MeanBackward1>)
+psi_mean_by_head tensor([ 2.3283e-10, -2.9104e-10, -4.0745e-10,  5.8208e-11, -5.8208e-10,
+        -2.3283e-10, -1.8626e-09,  5.4715e-09,  6.3446e-09, -3.7835e-09,
+         3.1345e-08,  3.6991e-08], device='cuda:0', grad_fn=<MeanBackward1>)
+amp_mean_by_head amp_mean_by_head tensor([1.0000, 1.0000, 1.0000, 1.0000, 1.0000, 1.0000, 1.0000, 1.0000, 1.0000,
+        0.9998, 0.9998, 0.9999], device='cuda:1', grad_fn=<MeanBackward1>)
+scaleExp_by_head tensor([-4.5582e-07, -1.1310e-06, -2.0000e+00, -2.0000e+00, -4.0000e+00,
+        -4.0000e+00, -6.0000e+00, -6.0000e+00, -8.0000e+00, -7.9999e+00,
+        -1.0000e+01, -1.0000e+01], device='cuda:1', grad_fn=<MeanBackward1>)
+shift_mean_by_head tensor([ 7.9900e-08,  1.0000e+00,  3.0414e-06,  1.0000e+00,  2.8036e-07,
+         1.0000e+00,  1.5718e-06,  1.0000e+00, -2.8033e-07,  1.0000e+00,
+        -6.1934e-06,  1.0000e+00], device='cuda:1', grad_fn=<MeanBackward1>)
+psi_mean_by_head tensor([1.0000, 1.0000, 1.0000, 1.0000, 1.0000, 1.0000, 1.0000, 0.9999, 0.9999,
+        0.9998, 1.0000, 1.0001], device='cuda:0', grad_fn=<MeanBackward1>)
+scaleExp_by_head tensor([ 2.3283e-10,  1.7462e-10,  1.1642e-10, -5.8208e-10,  1.1642e-10,
+         3.4925e-10, -5.2387e-10, -1.1059e-09,  6.4611e-09, -5.1223e-09,
+        -1.8044e-09, -2.6586e-08], device='cuda:1', grad_fn=<MeanBackward1>)
+tensor([ 6.0360e-07, -3.5069e-07, -2.0000e+00, -2.0000e+00, -4.0000e+00,
+        -4.0000e+00, -6.0000e+00, -6.0000e+00, -8.0000e+00, -7.9999e+00,
+        -1.0000e+01, -9.9999e+00], device='cuda:0', grad_fn=<MeanBackward1>)
+shift_mean_by_head tensor([-5.1969e-08,  1.0000e+00, -9.2186e-08,  1.0000e+00,  7.4090e-06,
+         1.0000e+00, -1.2749e-06,  1.0000e+00,  1.7970e-06,  1.0000e+00,
+         4.1991e-10,  1.0000e+00], device='cuda:0', grad_fn=<MeanBackward1>)
+psi_mean_by_head amp_mean_by_head tensor([ 4.6566e-10,  1.1642e-10,  8.1491e-10, -3.4925e-10, -2.9686e-09,
+        -1.4552e-09,  1.9209e-09,  9.0804e-09, -9.5461e-09,  5.8790e-09,
+         7.4360e-09,  1.4959e-08], device='cuda:0', grad_fn=<MeanBackward1>)
+amp_mean_by_head tensor([1.0000, 1.0000, 1.0000, 1.0000, 1.0000, 1.0000, 1.0000, 1.0000, 0.9999,
+        0.9999, 1.0000, 1.0001], device='cuda:1', grad_fn=<MeanBackward1>)
+scaleExp_by_head tensor([ 1.0603e-06,  2.0680e-07, -2.0000e+00, -2.0000e+00, -4.0000e+00,
+        -4.0000e+00, -6.0000e+00, -6.0000e+00, -8.0000e+00, -7.9999e+00,
+        -1.0000e+01, -9.9999e+00], device='cuda:1', grad_fn=<MeanBackward1>)
+shift_mean_by_head tensor([ 1.2567e-05,  1.0000e+00, -4.6712e-06,  1.0000e+00,  4.4805e-06,
+         1.0000e+00,  2.0440e-07,  1.0000e+00,  4.0700e-06,  1.0000e+00,
+         1.5871e-07,  1.0000e+00], device='cuda:1', grad_fn=<MeanBackward1>)
+psi_mean_by_head tensor([-2.3283e-10,  1.1642e-10,  8.7311e-10,  4.6566e-10, -1.1642e-09,
+        -5.8208e-11,  4.9477e-09,  5.1223e-09, -1.0943e-08,  1.3970e-09,
+         5.0815e-08,  1.0463e-08], device='cuda:1', grad_fn=<MeanBackward1>)
+tensor([1.0000, 1.0000, 1.0000, 1.0000, 1.0000, 1.0000, 1.0000, 1.0000, 0.9999,
+        0.9999, 1.0000, 1.0000], device='cuda:0', grad_fn=<MeanBackward1>)
+scaleExp_by_head tensor([-1.8800e-06, -2.9887e-07, -2.0000e+00, -2.0000e+00, -4.0000e+00,
+        -4.0000e+00, -6.0000e+00, -6.0000e+00, -7.9999e+00, -7.9999e+00,
+        -1.0000e+01, -1.0000e+01], device='cuda:0', grad_fn=<MeanBackward1>)
+shift_mean_by_headamp_mean_by_head  tensor([-2.5427e-06,  1.0000e+00,  3.4756e-06,  1.0000e+00,  8.3204e-06,
+         1.0000e+00,  3.9153e-06,  1.0000e+00,  3.8403e-06,  1.0000e+00,
+        -3.8022e-07,  1.0000e+00], device='cuda:0', grad_fn=<MeanBackward1>)
+psi_mean_by_head tensor([ 4.6566e-10, -1.4552e-10, -2.9104e-10, -2.9104e-10, -1.8044e-09,
+        -1.1642e-10, -4.3656e-09,  1.6298e-09,  5.4133e-09, -3.3760e-09,
+        -1.3533e-08,  1.4552e-09], device='cuda:0', grad_fn=<MeanBackward1>)
+tensor([1.0000, 1.0000, 1.0000, 1.0000, 1.0000, 1.0000, 1.0000, 1.0000, 1.0000,
+        0.9999, 0.9999, 0.9999], device='cuda:1', grad_fn=<MeanBackward1>)
+scaleExp_by_head amp_mean_by_head tensor([ 8.9598e-08, -1.4816e-07, -2.0000e+00, -2.0000e+00, -4.0000e+00,
+        -4.0000e+00, -6.0000e+00, -6.0000e+00, -8.0000e+00, -8.0000e+00,
+        -1.0000e+01, -1.0000e+01], device='cuda:1', grad_fn=<MeanBackward1>)
+shift_mean_by_head tensor([ 2.8008e-06,  1.0000e+00,  3.0604e-06,  1.0000e+00,  7.9894e-06,
+         1.0000e+00,  8.5657e-06,  1.0000e+00,  5.1757e-07,  1.0000e+00,
+        -1.3711e-06,  1.0000e+00], device='cuda:1', grad_fn=<MeanBackward1>)
+psi_mean_by_head tensor([ 2.3283e-10, -2.9104e-10, -4.0745e-10,  5.8208e-11, -5.8208e-10,
+        -2.3283e-10, -1.8626e-09,  5.4715e-09,  6.3446e-09, -3.7835e-09,
+         3.1345e-08,  3.6991e-08], device='cuda:1', grad_fn=<MeanBackward1>)
+tensor([1.0000, 1.0000, 1.0000, 1.0000, 1.0000, 1.0000, 1.0000, 1.0000, 1.0000,
+        0.9999, 1.0000, 1.0000], device='cuda:0', grad_fn=<MeanBackward1>)amp_mean_by_head 
+scaleExp_by_head tensor([ 4.9954e-07, -1.4692e-07, -2.0000e+00, -2.0000e+00, -4.0000e+00,
+        -4.0000e+00, -6.0000e+00, -6.0000e+00, -8.0000e+00, -8.0000e+00,
+        -1.0000e+01, -1.0000e+01], device='cuda:0', grad_fn=<MeanBackward1>)
+shift_mean_by_head tensor([ 2.5608e-06,  1.0000e+00,  5.6145e-07,  1.0000e+00,  4.7127e-06,
+         1.0000e+00,  1.2144e-06,  1.0000e+00, -6.0749e-07,  1.0000e+00,
+         3.6824e-08,  1.0000e+00], device='cuda:0', grad_fn=<MeanBackward1>)
+psi_mean_by_head tensor([ 3.4925e-10,  4.0745e-10, -5.8208e-11,  1.1642e-10, -1.1059e-09,
+         1.7462e-09, -4.6566e-10,  2.6193e-09, -1.1467e-08,  0.0000e+00,
+        -7.7998e-09,  2.6179e-08], device='cuda:0', grad_fn=<MeanBackward1>)
+tensor([1.0000, 1.0000, 1.0000, 1.0000, 1.0000, 1.0000, 1.0000, 0.9999, 0.9999,
+        0.9998, 1.0000, 1.0001], device='cuda:1', grad_fn=<MeanBackward1>)
+scaleExp_by_head tensor([ 6.0360e-07, -3.5069e-07, -2.0000e+00, -2.0000e+00, -4.0000e+00,
+        -4.0000e+00, -6.0000e+00, -6.0000e+00, -8.0000e+00, -7.9999e+00,
+        -1.0000e+01, -9.9999e+00], device='cuda:1', grad_fn=<MeanBackward1>)
+shift_mean_by_head tensor([-5.1969e-08,  1.0000e+00, -9.2186e-08,  1.0000e+00,  7.4090e-06,
+         1.0000e+00, -1.2749e-06,  1.0000e+00,  1.7970e-06,  1.0000e+00,
+         4.1991e-10,  1.0000e+00], device='cuda:1', grad_fn=<MeanBackward1>)
+psi_mean_by_head amp_mean_by_head tensor([ 4.6566e-10,  1.1642e-10,  8.1491e-10, -3.4925e-10, -2.9686e-09,
+        -1.4552e-09,  1.9209e-09,  9.0804e-09, -9.5461e-09,  5.8790e-09,
+         7.4360e-09,  1.4959e-08], device='cuda:1', grad_fn=<MeanBackward1>)
+amp_mean_by_head tensor([1.0000, 1.0000, 1.0000, 1.0000, 1.0000, 1.0000, 1.0000, 1.0000, 0.9999,
+        0.9999, 1.0000, 0.9999], device='cuda:0', grad_fn=<MeanBackward1>)
+scaleExp_by_head tensor([ 1.3332e-07, -5.4436e-08, -2.0000e+00, -2.0000e+00, -4.0000e+00,
+        -4.0000e+00, -6.0000e+00, -6.0000e+00, -7.9999e+00, -7.9999e+00,
+        -1.0000e+01, -1.0000e+01], device='cuda:0', grad_fn=<MeanBackward1>)
+shift_mean_by_head tensor([2.8155e-07, 1.0000e+00, 2.0585e-06, 1.0000e+00, 1.0980e-06, 1.0000e+00,
+        6.9939e-06, 1.0000e+00, 6.5682e-06, 1.0000e+00, 9.8488e-08, 1.0000e+00],
+       device='cuda:0', grad_fn=<MeanBackward1>)
+psi_mean_by_head tensor([-5.8208e-11,  5.8208e-11, -4.0745e-10,  1.1642e-10, -1.5716e-09,
+        -1.4552e-09, -1.1642e-09, -2.1537e-09, -1.1001e-08, -8.7311e-10,
+         3.0515e-08,  2.6979e-08], device='cuda:0', grad_fn=<MeanBackward1>)
+tensor([1.0000, 1.0000, 1.0000, 1.0000, 1.0000, 1.0000, 1.0000, 1.0000, 0.9999,
+        0.9999, 1.0000, 1.0000], device='cuda:1', grad_fn=<MeanBackward1>)
+scaleExp_by_head tensor([-1.8800e-06, -2.9887e-07, -2.0000e+00, -2.0000e+00, -4.0000e+00,
+        -4.0000e+00, -6.0000e+00, -6.0000e+00, -7.9999e+00, -7.9999e+00,
+        -1.0000e+01, -1.0000e+01], device='cuda:1', grad_fn=<MeanBackward1>)
+shift_mean_by_head tensor([-2.5427e-06,  1.0000e+00,  3.4756e-06,  1.0000e+00,  8.3204e-06,
+         1.0000e+00,  3.9153e-06,  1.0000e+00,  3.8403e-06,  1.0000e+00,
+        -3.8022e-07,  1.0000e+00], device='cuda:1', grad_fn=<MeanBackward1>)
+psi_mean_by_head amp_mean_by_headtensor([ 4.6566e-10, -1.4552e-10, -2.9104e-10, -2.9104e-10, -1.8044e-09,
+        -1.1642e-10, -4.3656e-09,  1.6298e-09,  5.4133e-09, -3.3760e-09,
+        -1.3533e-08,  1.4552e-09], device='cuda:1', grad_fn=<MeanBackward1>)
+ amp_mean_by_head tensor([1.0000, 1.0000, 1.0000, 1.0000, 1.0000, 1.0000, 1.0000, 1.0000, 1.0000,
+        1.0000, 1.0000, 1.0001], device='cuda:0', grad_fn=<MeanBackward1>)
+scaleExp_by_head tensor([ 3.3882e-07, -2.7516e-07, -2.0000e+00, -2.0000e+00, -4.0000e+00,
+        -4.0000e+00, -6.0000e+00, -6.0000e+00, -8.0000e+00, -8.0000e+00,
+        -1.0000e+01, -9.9999e+00], device='cuda:0', grad_fn=<MeanBackward1>)
+shift_mean_by_head tensor([ 5.7703e-06,  1.0000e+00,  2.5324e-06,  1.0000e+00, -7.7504e-07,
+         1.0000e+00,  4.9330e-06,  1.0000e+00,  9.2507e-07,  1.0000e+00,
+        -4.7636e-07,  1.0000e+00], device='cuda:0', grad_fn=<MeanBackward1>)
+psi_mean_by_head tensor([ 0.0000e+00,  3.2014e-10,  0.0000e+00, -1.1642e-10, -5.2387e-10,
+        -2.3283e-10,  3.9581e-09,  6.1700e-09, -1.0943e-08,  1.1642e-10,
+        -8.1054e-09,  1.0463e-08], device='cuda:0', grad_fn=<MeanBackward1>)
+tensor([1.0000, 1.0000, 1.0000, 1.0000, 1.0000, 1.0000, 1.0000, 1.0000, 1.0000,
+        0.9999, 1.0000, 1.0000], device='cuda:1', grad_fn=<MeanBackward1>)
+scaleExp_by_head tensor([ 4.9954e-07, -1.4692e-07, -2.0000e+00, -2.0000e+00, -4.0000e+00,
+        -4.0000e+00, -6.0000e+00, -6.0000e+00, -8.0000e+00, -8.0000e+00,
+        -1.0000e+01, -1.0000e+01], device='cuda:1', grad_fn=<MeanBackward1>)
+shift_mean_by_head tensor([ 2.5608e-06,  1.0000e+00,  5.6145e-07,  1.0000e+00,  4.7127e-06,
+         1.0000e+00,  1.2144e-06,  1.0000e+00, -6.0749e-07,  1.0000e+00,
+         3.6824e-08,  1.0000e+00], device='cuda:1', grad_fn=<MeanBackward1>)
+psi_mean_by_head tensor([ 3.4925e-10,  4.0745e-10, -5.8208e-11,  1.1642e-10, -1.1059e-09,
+         1.7462e-09, -4.6566e-10,  2.6193e-09, -1.1467e-08,  0.0000e+00,
+        -7.7998e-09,  2.6179e-08], device='cuda:1', grad_fn=<MeanBackward1>)
+amp_mean_by_head amp_mean_by_head tensor([1.0000, 1.0000, 1.0000, 1.0000, 1.0000, 1.0000, 1.0000, 1.0000, 1.0001,
+        1.0000, 0.9999, 1.0000], device='cuda:0', grad_fn=<MeanBackward1>)
+scaleExp_by_head tensor([-2.2987e-07,  2.8672e-07, -2.0000e+00, -2.0000e+00, -4.0000e+00,
+        -4.0000e+00, -6.0000e+00, -6.0000e+00, -8.0001e+00, -8.0000e+00,
+        -1.0000e+01, -1.0000e+01], device='cuda:0', grad_fn=<MeanBackward1>)
+shift_mean_by_head tensor([-6.0923e-07,  1.0000e+00,  3.8580e-07,  1.0000e+00,  4.5417e-06,
+         1.0000e+00,  3.7885e-06,  1.0000e+00, -5.9327e-06,  1.0000e+00,
+        -7.0596e-07,  1.0000e+00], device='cuda:0', grad_fn=<MeanBackward1>)
+psi_mean_by_head tensor([ 0.0000e+00, -2.9104e-11, -4.6566e-10,  2.9104e-10, -1.6880e-09,
+        -1.1642e-10, -2.4447e-09, -2.8522e-09, -3.4343e-09,  8.7311e-09,
+         9.3816e-08,  2.9264e-08], device='cuda:0', grad_fn=<MeanBackward1>)
+tensor([1.0000, 1.0000, 1.0000, 1.0000, 1.0000, 1.0000, 1.0000, 1.0000, 0.9999,
+        0.9999, 1.0000, 0.9999], device='cuda:1', grad_fn=<MeanBackward1>)
+scaleExp_by_head tensor([ 1.3332e-07, -5.4436e-08, -2.0000e+00, -2.0000e+00, -4.0000e+00,
+        -4.0000e+00, -6.0000e+00, -6.0000e+00, -7.9999e+00, -7.9999e+00,
+        -1.0000e+01, -1.0000e+01], device='cuda:1', grad_fn=<MeanBackward1>)
+shift_mean_by_head tensor([2.8155e-07, 1.0000e+00, 2.0585e-06, 1.0000e+00, 1.0980e-06, 1.0000e+00,
+        6.9939e-06, 1.0000e+00, 6.5682e-06, 1.0000e+00, 9.8488e-08, 1.0000e+00],
+       device='cuda:1', grad_fn=<MeanBackward1>)
+psi_mean_by_head tensor([-5.8208e-11,  5.8208e-11, -4.0745e-10,  1.1642e-10, -1.5716e-09,
+        -1.4552e-09, -1.1642e-09, -2.1537e-09, -1.1001e-08, -8.7311e-10,
+         3.0515e-08,  2.6979e-08], device='cuda:1', grad_fn=<MeanBackward1>)
+amp_mean_by_head tensor([1.0000, 1.0000, 1.0000, 1.0000, 1.0000, 1.0000, 1.0000, 1.0000, 1.0000,
+        1.0000, 1.0000, 1.0001], device='cuda:1', grad_fn=<MeanBackward1>)
+scaleExp_by_head tensor([ 3.3882e-07, -2.7516e-07, -2.0000e+00, -2.0000e+00, -4.0000e+00,
+        -4.0000e+00, -6.0000e+00, -6.0000e+00, -8.0000e+00, -8.0000e+00,
+        -1.0000e+01, -9.9999e+00], device='cuda:1', grad_fn=<MeanBackward1>)
+shift_mean_by_head tensor([ 5.7703e-06,  1.0000e+00,  2.5324e-06,  1.0000e+00, -7.7504e-07,
+         1.0000e+00,  4.9330e-06,  1.0000e+00,  9.2507e-07,  1.0000e+00,
+        -4.7636e-07,  1.0000e+00], device='cuda:1', grad_fn=<MeanBackward1>)
+psi_mean_by_head tensor([ 0.0000e+00,  3.2014e-10,  0.0000e+00, -1.1642e-10, -5.2387e-10,
+        -2.3283e-10,  3.9581e-09,  6.1700e-09, -1.0943e-08,  1.1642e-10,
+        -8.1054e-09,  1.0463e-08], device='cuda:1', grad_fn=<MeanBackward1>)
+amp_mean_by_head tensor([1.0000, 1.0000, 1.0000, 1.0000, 1.0000, 1.0000, 1.0000, 1.0000, 1.0001,
+        1.0000, 0.9999, 1.0000], device='cuda:1', grad_fn=<MeanBackward1>)
+scaleExp_by_head tensor([-2.2987e-07,  2.8672e-07, -2.0000e+00, -2.0000e+00, -4.0000e+00,
+        -4.0000e+00, -6.0000e+00, -6.0000e+00, -8.0001e+00, -8.0000e+00,
+        -1.0000e+01, -1.0000e+01], device='cuda:1', grad_fn=<MeanBackward1>)
+shift_mean_by_head tensor([-6.0923e-07,  1.0000e+00,  3.8580e-07,  1.0000e+00,  4.5417e-06,
+         1.0000e+00,  3.7885e-06,  1.0000e+00, -5.9327e-06,  1.0000e+00,
+        -7.0596e-07,  1.0000e+00], device='cuda:1', grad_fn=<MeanBackward1>)
+psi_mean_by_head tensor([ 0.0000e+00, -2.9104e-11, -4.6566e-10,  2.9104e-10, -1.6880e-09,
+        -1.1642e-10, -2.4447e-09, -2.8522e-09, -3.4343e-09,  8.7311e-09,
+         9.3816e-08,  2.9264e-08], device='cuda:1', grad_fn=<MeanBackward1>)
+  0%|          | 125/107550 [02:00<30:49:02,  1.03s/it]  0%|          | 126/107550 [02:01<30:40:55,  1.03s/it]  0%|          | 127/107550 [02:02<30:35:05,  1.02s/it]  0%|          | 128/107550 [02:03<30:31:39,  1.02s/it]  0%|          | 129/107550 [02:04<30:27:57,  1.02s/it]  0%|          | 130/107550 [02:05<30:23:46,  1.02s/it]  0%|          | 131/107550 [02:06<30:21:27,  1.02s/it]  0%|          | 132/107550 [02:07<30:17:07,  1.01s/it]  0%|          | 133/107550 [02:08<30:19:03,  1.02s/it]  0%|          | 134/107550 [02:09<30:20:30,  1.02s/it]  0%|          | 135/107550 [02:10<30:13:19,  1.01s/it]  0%|          | 136/107550 [02:11<30:16:42,  1.01s/it]  0%|          | 137/107550 [02:12<30:20:33,  1.02s/it]  0%|          | 138/107550 [02:13<30:21:19,  1.02s/it]  0%|          | 139/107550 [02:14<30:19:04,  1.02s/it]  0%|          | 140/107550 [02:15<30:08:46,  1.01s/it]  0%|          | 141/107550 [02:16<30:13:24,  1.01s/it]  0%|          | 142/107550 [02:17<30:09:45,  1.01s/it]  0%|          | 143/107550 [02:18<30:14:05,  1.01s/it]  0%|          | 144/107550 [02:19<30:14:08,  1.01s/it]  0%|          | 145/107550 [02:20<30:16:18,  1.01s/it]  0%|          | 146/107550 [02:21<30:18:16,  1.02s/it]  0%|          | 147/107550 [02:22<30:20:23,  1.02s/it]  0%|          | 148/107550 [02:23<30:21:34,  1.02s/it]  0%|          | 149/107550 [02:24<30:20:58,  1.02s/it]  0%|          | 150/107550 [02:25<30:17:02,  1.02s/it]  0%|          | 151/107550 [02:26<30:16:57,  1.02s/it]  0%|          | 152/107550 [02:27<30:14:28,  1.01s/it]  0%|          | 153/107550 [02:28<30:16:14,  1.01s/it]  0%|          | 154/107550 [02:29<30:17:39,  1.02s/it]  0%|          | 155/107550 [02:30<30:09:59,  1.01s/it]  0%|          | 156/107550 [02:31<30:08:07,  1.01s/it]  0%|          | 157/107550 [02:32<30:11:17,  1.01s/it]  0%|          | 158/107550 [02:33<30:08:47,  1.01s/it]  0%|          | 159/107550 [02:34<30:11:49,  1.01s/it]  0%|          | 160/107550 [02:35<30:07:28,  1.01s/it]  0%|          | 161/107550 [02:36<30:03:07,  1.01s/it]  0%|          | 162/107550 [02:37<30:06:50,  1.01s/it]  0%|          | 163/107550 [02:38<30:05:25,  1.01s/it]  0%|          | 164/107550 [02:39<30:07:25,  1.01s/it]  0%|          | 165/107550 [02:40<30:05:36,  1.01s/it]  0%|          | 166/107550 [02:41<30:03:04,  1.01s/it]  0%|          | 167/107550 [02:42<30:07:42,  1.01s/it]  0%|          | 168/107550 [02:44<30:07:47,  1.01s/it]  0%|          | 169/107550 [02:45<30:10:51,  1.01s/it]  0%|          | 170/107550 [02:46<30:11:19,  1.01s/it]  0%|          | 171/107550 [02:47<30:12:45,  1.01s/it]  0%|          | 172/107550 [02:48<30:09:24,  1.01s/it]  0%|          | 173/107550 [02:49<30:11:44,  1.01s/it]  0%|          | 174/107550 [02:50<30:06:38,  1.01s/it]  0%|          | 175/107550 [02:51<30:09:13,  1.01s/it]  0%|          | 176/107550 [02:52<30:04:28,  1.01s/it]  0%|          | 177/107550 [02:53<30:09:35,  1.01s/it]  0%|          | 178/107550 [02:54<30:08:51,  1.01s/it]  0%|          | 179/107550 [02:55<30:07:39,  1.01s/it]  0%|          | 180/107550 [02:56<30:06:14,  1.01s/it]  0%|          | 181/107550 [02:57<30:00:55,  1.01s/it]  0%|          | 182/107550 [02:58<30:02:45,  1.01s/it]  0%|          | 183/107550 [02:59<30:05:28,  1.01s/it]  0%|          | 184/107550 [03:00<30:06:37,  1.01s/it]  0%|          | 185/107550 [03:01<30:07:42,  1.01s/it]  0%|          | 186/107550 [03:02<30:09:33,  1.01s/it]  0%|          | 187/107550 [03:03<30:08:33,  1.01s/it]  0%|          | 188/107550 [03:04<30:04:52,  1.01s/it]  0%|          | 189/107550 [03:05<29:58:56,  1.01s/it]  0%|          | 190/107550 [03:06<29:59:02,  1.01s/it]  0%|          | 191/107550 [03:07<29:57:19,  1.00s/it]  0%|          | 192/107550 [03:08<29:58:15,  1.01s/it]  0%|          | 193/107550 [03:09<30:00:15,  1.01s/it]  0%|          | 194/107550 [03:10<29:55:34,  1.00s/it]  0%|          | 195/107550 [03:11<29:59:51,  1.01s/it]  0%|          | 196/107550 [03:12<30:00:06,  1.01s/it]  0%|          | 197/107550 [03:13<29:55:19,  1.00s/it]  0%|          | 198/107550 [03:14<29:54:33,  1.00s/it]  0%|          | 199/107550 [03:15<29:54:34,  1.00s/it]  0%|          | 200/107550 [03:16<29:51:03,  1.00s/it]  0%|          | 201/107550 [03:17<29:48:03,  1.00it/s]  0%|          | 202/107550 [03:18<29:50:08,  1.00s/it]  0%|          | 203/107550 [03:19<29:49:28,  1.00s/it]  0%|          | 204/107550 [03:20<29:47:38,  1.00it/s]  0%|          | 205/107550 [03:21<29:49:35,  1.00s/it]  0%|          | 206/107550 [03:22<29:51:17,  1.00s/it]  0%|          | 207/107550 [03:23<29:49:09,  1.00s/it]  0%|          | 208/107550 [03:24<29:49:54,  1.00s/it]  0%|          | 209/107550 [03:25<29:54:14,  1.00s/it]  0%|          | 210/107550 [03:26<29:47:45,  1.00it/s]  0%|          | 211/107550 [03:27<29:51:49,  1.00s/it]  0%|          | 212/107550 [03:28<29:52:43,  1.00s/it]  0%|          | 213/107550 [03:29<29:46:09,  1.00it/s]  0%|          | 214/107550 [03:30<29:45:37,  1.00it/s]  0%|          | 215/107550 [03:31<29:44:03,  1.00it/s]  0%|          | 216/107550 [03:32<29:46:44,  1.00it/s]  0%|          | 217/107550 [03:33<29:42:19,  1.00it/s]  0%|          | 218/107550 [03:34<29:41:55,  1.00it/s]  0%|          | 219/107550 [03:35<29:43:22,  1.00it/s]  0%|          | 220/107550 [03:36<29:49:11,  1.00s/it]  0%|          | 221/107550 [03:37<29:55:00,  1.00s/it]  0%|          | 222/107550 [03:38<29:42:38,  1.00it/s]  0%|          | 223/107550 [03:39<29:46:06,  1.00it/s]  0%|          | 224/107550 [03:40<29:48:27,  1.00it/s]  0%|          | 225/107550 [03:41<29:43:56,  1.00it/s]  0%|          | 226/107550 [03:42<29:41:22,  1.00it/s]  0%|          | 227/107550 [03:43<29:41:29,  1.00it/s]  0%|          | 228/107550 [03:44<29:44:52,  1.00it/s]  0%|          | 229/107550 [03:45<29:41:39,  1.00it/s]  0%|          | 230/107550 [03:46<29:43:16,  1.00it/s]  0%|          | 231/107550 [03:47<29:46:44,  1.00it/s]  0%|          | 232/107550 [03:48<29:49:40,  1.00s/it]  0%|          | 233/107550 [03:49<29:45:29,  1.00it/s]  0%|          | 234/107550 [03:50<29:48:11,  1.00it/s]  0%|          | 235/107550 [03:51<29:49:50,  1.00s/it]  0%|          | 236/107550 [03:52<29:45:31,  1.00it/s]  0%|          | 237/107550 [03:53<29:45:46,  1.00it/s]  0%|          | 238/107550 [03:54<29:42:04,  1.00it/s]  0%|          | 239/107550 [03:55<29:43:17,  1.00it/s]  0%|          | 240/107550 [03:56<29:40:16,  1.00it/s]  0%|          | 241/107550 [03:57<29:42:58,  1.00it/s]  0%|          | 242/107550 [03:58<29:46:44,  1.00it/s]  0%|          | 243/107550 [03:59<29:48:34,  1.00s/it]  0%|          | 244/107550 [04:00<29:44:01,  1.00it/s]  0%|          | 245/107550 [04:01<29:47:41,  1.00it/s]  0%|          | 246/107550 [04:02<29:49:51,  1.00s/it]  0%|          | 247/107550 [04:03<29:46:21,  1.00it/s]  0%|          | 248/107550 [04:04<29:48:28,  1.00s/it]  0%|          | 249/107550 [04:05<29:49:14,  1.00s/it]amp_mean_by_head tensor([1.0000, 1.0000, 1.0000, 1.0000, 0.9999, 1.0001, 1.0001, 1.0002, 1.0002,
+        1.0001, 1.0000, 1.0001], device='cuda:0', grad_fn=<MeanBackward1>)
+scaleExp_by_head tensor([-5.6771e-06,  5.4381e-06, -2.0000e+00, -2.0000e+00, -4.0000e+00,
+        -4.0000e+00, -6.0001e+00, -6.0002e+00, -8.0000e+00, -7.9999e+00,
+        -1.0000e+01, -9.9999e+00], device='cuda:0', grad_fn=<MeanBackward1>)
+shift_mean_by_head tensor([-5.4243e-05,  9.9998e-01, -3.9765e-05,  9.9998e-01,  5.3018e-05,
+         9.9995e-01, -1.8912e-05,  9.9997e-01, -1.4646e-05,  1.0000e+00,
+        -4.1837e-06,  1.0000e+00], device='cuda:0', grad_fn=<MeanBackward1>)
+psi_mean_by_head tensor([ 4.0745e-10, -3.7835e-10,  1.7462e-10,  1.7462e-10, -4.0163e-09,
+         2.8522e-09,  2.4447e-09,  1.8044e-09,  3.2596e-09,  1.3970e-09,
+         4.4965e-08,  8.4838e-09], device='cuda:0', grad_fn=<MeanBackward1>)
+amp_mean_by_head amp_mean_by_head tensor([1.0000, 1.0000, 1.0000, 1.0000, 0.9999, 1.0001, 1.0001, 1.0002, 1.0002,
+        1.0001, 1.0000, 1.0001], device='cuda:1', grad_fn=<MeanBackward1>)
+scaleExp_by_head tensor([1.0000, 1.0000, 1.0000, 1.0000, 1.0001, 1.0001, 0.9999, 1.0002, 0.9998,
+        0.9998, 1.0000, 0.9998], device='cuda:0', grad_fn=<MeanBackward1>)tensor([-5.6771e-06,  5.4381e-06, -2.0000e+00, -2.0000e+00, -4.0000e+00,
+        -4.0000e+00, -6.0001e+00, -6.0002e+00, -8.0000e+00, -7.9999e+00,
+        -1.0000e+01, -9.9999e+00], device='cuda:1', grad_fn=<MeanBackward1>)
+shift_mean_by_head 
+scaleExp_by_head tensor([-5.4243e-05,  9.9998e-01, -3.9765e-05,  9.9998e-01,  5.3018e-05,
+         9.9995e-01, -1.8912e-05,  9.9997e-01, -1.4646e-05,  1.0000e+00,
+        -4.1837e-06,  1.0000e+00], device='cuda:1', grad_fn=<MeanBackward1>)
+psi_mean_by_head tensor([-1.1175e-06, -1.6258e-06, -2.0000e+00, -2.0000e+00, -4.0001e+00,
+        -4.0000e+00, -5.9999e+00, -6.0002e+00, -7.9999e+00, -7.9998e+00,
+        -1.0000e+01, -1.0000e+01], device='cuda:0', grad_fn=<MeanBackward1>)
+tensor([ 4.0745e-10, -3.7835e-10,  1.7462e-10,  1.7462e-10, -4.0163e-09,
+         2.8522e-09,  2.4447e-09,  1.8044e-09,  3.2596e-09,  1.3970e-09,
+         4.4965e-08,  8.4838e-09], device='cuda:1', grad_fn=<MeanBackward1>)
+shift_mean_by_head tensor([1.0521e-05, 1.0000e+00, 4.1455e-05, 1.0000e+00, 5.5437e-05, 1.0000e+00,
+        6.0885e-05, 1.0000e+00, 2.4823e-05, 1.0000e+00, 1.2362e-06, 9.9999e-01],
+       device='cuda:0', grad_fn=<MeanBackward1>)
+psi_mean_by_head tensor([ 1.1642e-10, -3.7835e-10, -1.1059e-09, -1.0477e-09, -4.5402e-09,
+        -2.9104e-09, -2.6193e-09,  7.3342e-09,  5.2969e-09,  5.8208e-10,
+         4.9738e-08,  1.4203e-08], device='cuda:0', grad_fn=<MeanBackward1>)
+amp_mean_by_head amp_mean_by_head tensor([1.0000, 1.0000, 1.0000, 1.0000, 1.0001, 1.0001, 0.9999, 1.0002, 0.9998,
+        0.9998, 1.0000, 0.9998], device='cuda:1', grad_fn=<MeanBackward1>)
+scaleExp_by_head tensor([-1.1175e-06, -1.6258e-06, -2.0000e+00, -2.0000e+00, -4.0001e+00,
+        -4.0000e+00, -5.9999e+00, -6.0002e+00, -7.9999e+00, -7.9998e+00,
+        -1.0000e+01, -1.0000e+01], device='cuda:1', grad_fn=<MeanBackward1>)
+shift_mean_by_head tensor([1.0521e-05, 1.0000e+00, 4.1455e-05, 1.0000e+00, 5.5437e-05, 1.0000e+00,
+        6.0885e-05, 1.0000e+00, 2.4823e-05, 1.0000e+00, 1.2362e-06, 9.9999e-01],
+       device='cuda:1', grad_fn=<MeanBackward1>)
+psi_mean_by_head tensor([1.0000, 1.0000, 1.0000, 1.0000, 1.0001, 1.0000, 1.0002, 1.0001, 0.9995,
+        0.9997, 0.9999, 0.9997], device='cuda:0', grad_fn=<MeanBackward1>)
+scaleExp_by_head tensor([ 1.1642e-10, -3.7835e-10, -1.1059e-09, -1.0477e-09, -4.5402e-09,
+        -2.9104e-09, -2.6193e-09,  7.3342e-09,  5.2969e-09,  5.8208e-10,
+         4.9738e-08,  1.4203e-08], device='cuda:1', grad_fn=<MeanBackward1>)
+tensor([-1.0587e-06, -2.5971e-06, -2.0000e+00, -2.0000e+00, -4.0001e+00,
+        -4.0000e+00, -6.0000e+00, -5.9999e+00, -7.9996e+00, -7.9998e+00,
+        -1.0000e+01, -1.0000e+01], device='cuda:0', grad_fn=<MeanBackward1>)
+shift_mean_by_head tensor([-3.6701e-06,  1.0000e+00,  4.7138e-05,  1.0001e+00, -8.1247e-07,
+         1.0000e+00,  4.9774e-05,  1.0001e+00,  5.7852e-05,  1.0000e+00,
+        -4.1313e-06,  9.9999e-01], device='cuda:0', grad_fn=<MeanBackward1>)
+psi_mean_by_head amp_mean_by_head tensor([ 0.0000e+00,  3.7835e-10, -1.1059e-09, -1.3097e-09,  7.5670e-10,
+        -1.7462e-09, -2.4447e-09,  1.5716e-09,  4.0163e-09,  8.7311e-09,
+        -6.9995e-09, -3.8490e-08], device='cuda:0', grad_fn=<MeanBackward1>)
+amp_mean_by_head tensor([1.0000, 1.0000, 1.0000, 1.0000, 1.0001, 1.0000, 1.0002, 1.0001, 0.9995,
+        0.9997, 0.9999, 0.9997], device='cuda:1', grad_fn=<MeanBackward1>)
+scaleExp_by_head tensor([-1.0587e-06, -2.5971e-06, -2.0000e+00, -2.0000e+00, -4.0001e+00,
+        -4.0000e+00, -6.0000e+00, -5.9999e+00, -7.9996e+00, -7.9998e+00,
+        -1.0000e+01, -1.0000e+01], device='cuda:1', grad_fn=<MeanBackward1>)
+shift_mean_by_head tensor([-3.6701e-06,  1.0000e+00,  4.7138e-05,  1.0001e+00, -8.1247e-07,
+         1.0000e+00,  4.9774e-05,  1.0001e+00,  5.7852e-05,  1.0000e+00,
+        -4.1313e-06,  9.9999e-01], device='cuda:1', grad_fn=<MeanBackward1>)
+psi_mean_by_head tensor([ 0.0000e+00,  3.7835e-10, -1.1059e-09, -1.3097e-09,  7.5670e-10,
+        -1.7462e-09, -2.4447e-09,  1.5716e-09,  4.0163e-09,  8.7311e-09,
+        -6.9995e-09, -3.8490e-08], device='cuda:1', grad_fn=<MeanBackward1>)
+tensor([1.0000, 1.0000, 1.0000, 1.0000, 1.0000, 1.0000, 1.0001, 1.0000, 0.9997,
+        0.9996, 0.9997, 0.9998], device='cuda:0', grad_fn=<MeanBackward1>)
+scaleExp_by_head tensor([ 6.9637e-07, -2.5145e-07, -2.0000e+00, -2.0000e+00, -4.0000e+00,
+        -4.0000e+00, -6.0000e+00, -5.9999e+00, -7.9998e+00, -7.9998e+00,
+        -1.0000e+01, -1.0000e+01], device='cuda:0', grad_fn=<MeanBackward1>)
+shift_mean_by_head amp_mean_by_head tensor([ 1.4136e-05,  1.0000e+00,  3.3241e-05,  1.0000e+00,  2.7054e-05,
+         1.0000e+00,  3.2057e-05,  1.0000e+00,  2.0707e-05,  1.0000e+00,
+        -1.3646e-05,  1.0000e+00], device='cuda:0', grad_fn=<MeanBackward1>)
+psi_mean_by_head tensor([ 4.0745e-10, -2.6193e-10, -1.3970e-09, -2.6193e-10, -3.6671e-09,
+        -2.5611e-09, -1.1642e-10, -2.5611e-09,  3.0850e-09, -3.6089e-09,
+         3.2043e-08, -4.7774e-08], device='cuda:0', grad_fn=<MeanBackward1>)
+amp_mean_by_head tensor([1.0000, 1.0000, 1.0000, 1.0000, 1.0000, 1.0000, 1.0001, 1.0000, 0.9997,
+        0.9996, 0.9997, 0.9998], device='cuda:1', grad_fn=<MeanBackward1>)
+scaleExp_by_head tensor([ 6.9637e-07, -2.5145e-07, -2.0000e+00, -2.0000e+00, -4.0000e+00,
+        -4.0000e+00, -6.0000e+00, -5.9999e+00, -7.9998e+00, -7.9998e+00,
+        -1.0000e+01, -1.0000e+01], device='cuda:1', grad_fn=<MeanBackward1>)
+shift_mean_by_head tensor([ 1.4136e-05,  1.0000e+00,  3.3241e-05,  1.0000e+00,  2.7054e-05,
+         1.0000e+00,  3.2057e-05,  1.0000e+00,  2.0707e-05,  1.0000e+00,
+        -1.3646e-05,  1.0000e+00], device='cuda:1', grad_fn=<MeanBackward1>)
+psi_mean_by_head tensor([ 4.0745e-10, -2.6193e-10, -1.3970e-09, -2.6193e-10, -3.6671e-09,
+        -2.5611e-09, -1.1642e-10, -2.5611e-09,  3.0850e-09, -3.6089e-09,
+         3.2043e-08, -4.7774e-08], device='cuda:1', grad_fn=<MeanBackward1>)
+tensor([1.0000, 1.0000, 1.0000, 1.0000, 1.0000, 1.0000, 1.0000, 1.0000, 0.9996,
+        0.9997, 0.9999, 1.0000], device='cuda:0', grad_fn=<MeanBackward1>)
+amp_mean_by_head scaleExp_by_head tensor([ 5.1471e-07,  6.4514e-07, -2.0000e+00, -2.0000e+00, -4.0000e+00,
+        -4.0000e+00, -6.0000e+00, -5.9999e+00, -7.9998e+00, -7.9998e+00,
+        -1.0000e+01, -1.0000e+01], device='cuda:0', grad_fn=<MeanBackward1>)
+shift_mean_by_head tensor([ 2.3662e-05,  1.0000e+00, -3.4943e-06,  1.0000e+00,  1.4386e-05,
+         1.0000e+00,  6.8841e-06,  1.0000e+00,  1.9887e-05,  1.0000e+00,
+        -1.3434e-06,  1.0000e+00], device='cuda:0', grad_fn=<MeanBackward1>)
+psi_mean_by_head tensor([ 2.3283e-10, -2.3283e-10,  4.0745e-10,  5.2387e-10, -2.6776e-09,
+        -1.2224e-09,  5.2387e-10,  4.8312e-09, -2.3283e-10,  6.4611e-09,
+         3.1345e-08,  4.9462e-08], device='cuda:0', grad_fn=<MeanBackward1>)
+tensor([1.0000, 1.0000, 1.0000, 1.0000, 1.0000, 1.0000, 1.0000, 1.0000, 0.9996,
+        0.9997, 0.9999, 1.0000], device='cuda:1', grad_fn=<MeanBackward1>)
+scaleExp_by_head amp_mean_by_head tensor([ 5.1471e-07,  6.4514e-07, -2.0000e+00, -2.0000e+00, -4.0000e+00,
+        -4.0000e+00, -6.0000e+00, -5.9999e+00, -7.9998e+00, -7.9998e+00,
+        -1.0000e+01, -1.0000e+01], device='cuda:1', grad_fn=<MeanBackward1>)
+shift_mean_by_head tensor([ 2.3662e-05,  1.0000e+00, -3.4943e-06,  1.0000e+00,  1.4386e-05,
+         1.0000e+00,  6.8841e-06,  1.0000e+00,  1.9887e-05,  1.0000e+00,
+        -1.3434e-06,  1.0000e+00], device='cuda:1', grad_fn=<MeanBackward1>)
+psi_mean_by_head tensor([ 2.3283e-10, -2.3283e-10,  4.0745e-10,  5.2387e-10, -2.6776e-09,
+        -1.2224e-09,  5.2387e-10,  4.8312e-09, -2.3283e-10,  6.4611e-09,
+         3.1345e-08,  4.9462e-08], device='cuda:1', grad_fn=<MeanBackward1>)
+amp_mean_by_head tensor([1.0000, 1.0000, 1.0000, 1.0000, 1.0000, 1.0000, 1.0001, 1.0000, 0.9999,
+        0.9997, 0.9997, 0.9998], device='cuda:0', grad_fn=<MeanBackward1>)
+scaleExp_by_head tensor([-1.4323e-07, -2.0462e-07, -2.0000e+00, -2.0000e+00, -4.0000e+00,
+        -4.0000e+00, -6.0000e+00, -6.0000e+00, -8.0000e+00, -7.9998e+00,
+        -1.0000e+01, -1.0000e+01], device='cuda:0', grad_fn=<MeanBackward1>)
+shift_mean_by_head tensor([ 1.0070e-05,  1.0000e+00,  1.4220e-05,  1.0000e+00,  3.4642e-05,
+         1.0000e+00,  2.6187e-05,  1.0000e+00,  1.7414e-06,  1.0000e+00,
+        -5.3520e-06,  1.0000e+00], device='cuda:0', grad_fn=<MeanBackward1>)
+psi_mean_by_head tensor([-2.9104e-10, -4.6566e-10, -4.6566e-10, -1.1642e-10, -3.4925e-09,
+        -1.7462e-10,  5.6461e-09,  2.1537e-09, -2.3283e-09, -3.2014e-09,
+        -4.7439e-08, -1.0143e-08], device='cuda:0', grad_fn=<MeanBackward1>)
+tensor([1.0000, 1.0000, 1.0000, 1.0000, 1.0000, 1.0000, 1.0001, 1.0000, 0.9999,
+        0.9997, 0.9997, 0.9998], device='cuda:1', grad_fn=<MeanBackward1>)
+scaleExp_by_head tensor([-1.4323e-07, -2.0462e-07, -2.0000e+00, -2.0000e+00, -4.0000e+00,
+        -4.0000e+00, -6.0000e+00, -6.0000e+00, -8.0000e+00, -7.9998e+00,
+        -1.0000e+01, -1.0000e+01], device='cuda:1', grad_fn=<MeanBackward1>)
+shift_mean_by_head amp_mean_by_head tensor([ 1.0070e-05,  1.0000e+00,  1.4220e-05,  1.0000e+00,  3.4642e-05,
+         1.0000e+00,  2.6187e-05,  1.0000e+00,  1.7414e-06,  1.0000e+00,
+        -5.3520e-06,  1.0000e+00], device='cuda:1', grad_fn=<MeanBackward1>)
+psi_mean_by_head tensor([-2.9104e-10, -4.6566e-10, -4.6566e-10, -1.1642e-10, -3.4925e-09,
+        -1.7462e-10,  5.6461e-09,  2.1537e-09, -2.3283e-09, -3.2014e-09,
+        -4.7439e-08, -1.0143e-08], device='cuda:1', grad_fn=<MeanBackward1>)
+amp_mean_by_head tensor([1.0000, 1.0000, 1.0000, 1.0000, 1.0000, 1.0000, 1.0000, 0.9999, 0.9997,
+        0.9997, 1.0000, 1.0000], device='cuda:0', grad_fn=<MeanBackward1>)
+scaleExp_by_head tensor([ 4.6015e-08, -7.3935e-07, -2.0000e+00, -2.0000e+00, -4.0000e+00,
+        -4.0000e+00, -6.0000e+00, -6.0000e+00, -7.9999e+00, -7.9997e+00,
+        -1.0000e+01, -1.0000e+01], device='cuda:0', grad_fn=<MeanBackward1>)
+shift_mean_by_head tensor([ 2.3661e-06,  1.0000e+00, -2.6855e-07,  1.0000e+00,  1.6333e-05,
+         1.0000e+00,  7.1802e-06,  9.9999e-01,  6.4250e-06,  1.0000e+00,
+         1.1349e-07,  1.0000e+00], device='cuda:0', grad_fn=<MeanBackward1>)
+psi_mean_by_head tensor([ 2.3283e-10, -1.4552e-10,  5.2387e-10, -2.9104e-11, -4.6566e-10,
+        -1.4552e-09,  1.5134e-09,  4.4820e-09, -1.1118e-08,  9.8953e-09,
+         1.9994e-08,  7.6645e-08], device='cuda:0', grad_fn=<MeanBackward1>)
+tensor([1.0000, 1.0000, 1.0000, 1.0000, 1.0000, 1.0000, 1.0000, 0.9999, 0.9997,
+        0.9997, 1.0000, 1.0000], device='cuda:1', grad_fn=<MeanBackward1>)
+scaleExp_by_head tensor([ 4.6015e-08, -7.3935e-07, -2.0000e+00, -2.0000e+00, -4.0000e+00,
+        -4.0000e+00, -6.0000e+00, -6.0000e+00, -7.9999e+00, -7.9997e+00,
+        -1.0000e+01, -1.0000e+01], device='cuda:1', grad_fn=<MeanBackward1>)
+shift_mean_by_head tensor([ 2.3661e-06,  1.0000e+00, -2.6855e-07,  1.0000e+00,  1.6333e-05,
+         1.0000e+00,  7.1802e-06,  9.9999e-01,  6.4250e-06,  1.0000e+00,
+         1.1349e-07,  1.0000e+00], device='cuda:1', grad_fn=<MeanBackward1>)
+psi_mean_by_head amp_mean_by_head tensor([ 2.3283e-10, -1.4552e-10,  5.2387e-10, -2.9104e-11, -4.6566e-10,
+        -1.4552e-09,  1.5134e-09,  4.4820e-09, -1.1118e-08,  9.8953e-09,
+         1.9994e-08,  7.6645e-08], device='cuda:1', grad_fn=<MeanBackward1>)
+amp_mean_by_head tensor([1.0000, 1.0000, 1.0000, 1.0000, 1.0000, 1.0000, 1.0000, 1.0000, 0.9998,
+        0.9997, 0.9999, 1.0000], device='cuda:0', grad_fn=<MeanBackward1>)
+scaleExp_by_head tensor([-2.1686e-06, -3.6601e-07, -2.0000e+00, -2.0000e+00, -4.0000e+00,
+        -4.0000e+00, -5.9999e+00, -6.0000e+00, -7.9999e+00, -7.9997e+00,
+        -1.0000e+01, -1.0000e+01], device='cuda:0', grad_fn=<MeanBackward1>)
+shift_mean_by_head tensor([-5.0585e-06,  1.0000e+00,  1.1686e-05,  1.0000e+00,  2.2705e-05,
+         1.0000e+00,  1.6515e-05,  1.0000e+00,  8.4856e-06,  1.0000e+00,
+        -1.3824e-06,  1.0000e+00], device='cuda:0', grad_fn=<MeanBackward1>)
+psi_mean_by_head tensor([ 1.7462e-10, -1.4552e-10, -7.5670e-10, -3.4925e-10, -3.3760e-09,
+        -9.3132e-10, -2.3865e-09,  2.0955e-09,  9.3714e-09, -2.2119e-09,
+         1.9747e-08, -5.6316e-09], device='cuda:0', grad_fn=<MeanBackward1>)
+tensor([1.0000, 1.0000, 1.0000, 1.0000, 1.0000, 1.0000, 1.0000, 1.0000, 0.9998,
+        0.9997, 0.9999, 1.0000], device='cuda:1', grad_fn=<MeanBackward1>)
+scaleExp_by_head tensor([-2.1686e-06, -3.6601e-07, -2.0000e+00, -2.0000e+00, -4.0000e+00,
+        -4.0000e+00, -5.9999e+00, -6.0000e+00, -7.9999e+00, -7.9997e+00,
+        -1.0000e+01, -1.0000e+01], device='cuda:1', grad_fn=<MeanBackward1>)
+shift_mean_by_head tensor([-5.0585e-06,  1.0000e+00,  1.1686e-05,  1.0000e+00,  2.2705e-05,
+         1.0000e+00,  1.6515e-05,  1.0000e+00,  8.4856e-06,  1.0000e+00,
+        -1.3824e-06,  1.0000e+00], device='cuda:1', grad_fn=<MeanBackward1>)
+psi_mean_by_head tensor([ 1.7462e-10, -1.4552e-10, -7.5670e-10, -3.4925e-10, -3.3760e-09,
+        -9.3132e-10, -2.3865e-09,  2.0955e-09,  9.3714e-09, -2.2119e-09,
+         1.9747e-08, -5.6316e-09], device='cuda:1', grad_fn=<MeanBackward1>)
+amp_mean_by_head amp_mean_by_head tensor([1.0000, 1.0000, 1.0000, 1.0000, 1.0000, 1.0000, 1.0000, 1.0000, 0.9998,
+        0.9997, 1.0000, 0.9999], device='cuda:0', grad_fn=<MeanBackward1>)
+scaleExp_by_head tensor([ 8.1549e-07, -6.7731e-08, -2.0000e+00, -2.0000e+00, -4.0000e+00,
+        -4.0000e+00, -6.0000e+00, -6.0000e+00, -7.9999e+00, -7.9998e+00,
+        -1.0000e+01, -1.0000e+01], device='cuda:0', grad_fn=<MeanBackward1>)
+shift_mean_by_head tensor([6.7237e-06, 1.0000e+00, 2.1017e-06, 1.0000e+00, 1.3122e-05, 1.0000e+00,
+        4.7033e-06, 1.0000e+00, 4.3300e-06, 1.0000e+00, 1.0010e-07, 1.0000e+00],
+       device='cuda:0', grad_fn=<MeanBackward1>)
+psi_mean_by_head tensor([1.0000, 1.0000, 1.0000, 1.0000, 1.0000, 1.0000, 1.0000, 1.0000, 0.9998,
+        0.9997, 1.0000, 0.9999], device='cuda:1', grad_fn=<MeanBackward1>)
+scaleExp_by_head tensor([-1.1642e-10,  4.3656e-10,  2.9104e-10, -4.9477e-10, -3.8999e-09,
+         2.4447e-09, -5.9372e-09,  2.5029e-09, -4.3656e-09,  8.2655e-09,
+        -7.7998e-09,  2.8769e-08], device='cuda:0', grad_fn=<MeanBackward1>)
+tensor([ 8.1549e-07, -6.7731e-08, -2.0000e+00, -2.0000e+00, -4.0000e+00,
+        -4.0000e+00, -6.0000e+00, -6.0000e+00, -7.9999e+00, -7.9998e+00,
+        -1.0000e+01, -1.0000e+01], device='cuda:1', grad_fn=<MeanBackward1>)
+shift_mean_by_head tensor([6.7237e-06, 1.0000e+00, 2.1017e-06, 1.0000e+00, 1.3122e-05, 1.0000e+00,
+        4.7033e-06, 1.0000e+00, 4.3300e-06, 1.0000e+00, 1.0010e-07, 1.0000e+00],
+       device='cuda:1', grad_fn=<MeanBackward1>)
+psi_mean_by_head tensor([-1.1642e-10,  4.3656e-10,  2.9104e-10, -4.9477e-10, -3.8999e-09,
+         2.4447e-09, -5.9372e-09,  2.5029e-09, -4.3656e-09,  8.2655e-09,
+        -7.7998e-09,  2.8769e-08], device='cuda:1', grad_fn=<MeanBackward1>)
+amp_mean_by_head amp_mean_by_head tensor([1.0000, 1.0000, 1.0000, 1.0000, 1.0000, 1.0000, 1.0000, 1.0000, 0.9997,
+        0.9998, 0.9999, 0.9999], device='cuda:0', grad_fn=<MeanBackward1>)
+scaleExp_by_head tensor([ 3.9471e-07, -1.8332e-07, -2.0000e+00, -2.0000e+00, -4.0000e+00,
+        -4.0000e+00, -5.9999e+00, -6.0000e+00, -7.9998e+00, -7.9998e+00,
+        -1.0000e+01, -1.0000e+01], device='cuda:0', grad_fn=<MeanBackward1>)
+shift_mean_by_head tensor([ 1.9509e-06,  1.0000e+00,  4.6631e-06,  1.0000e+00,  1.0100e-05,
+         1.0000e+00,  1.5220e-05,  1.0000e+00,  1.2905e-05,  1.0000e+00,
+        -6.5345e-07,  1.0000e+00], device='cuda:0', grad_fn=<MeanBackward1>)
+tensor([1.0000, 1.0000, 1.0000, 1.0000, 1.0000, 1.0000, 1.0000, 1.0000, 0.9997,
+        0.9998, 0.9999, 0.9999], device='cuda:1', grad_fn=<MeanBackward1>)
+scaleExp_by_head psi_mean_by_head tensor([ 3.9471e-07, -1.8332e-07, -2.0000e+00, -2.0000e+00, -4.0000e+00,
+        -4.0000e+00, -5.9999e+00, -6.0000e+00, -7.9998e+00, -7.9998e+00,
+        -1.0000e+01, -1.0000e+01], device='cuda:1', grad_fn=<MeanBackward1>)
+shift_mean_by_head tensor([-4.6566e-10, -3.4925e-10, -3.4925e-10,  1.7462e-10, -1.1059e-09,
+        -1.6298e-09,  7.5670e-10,  2.2119e-09, -3.8999e-09, -1.1700e-08,
+        -1.5192e-08, -1.5774e-08], device='cuda:0', grad_fn=<MeanBackward1>)
+tensor([ 1.9509e-06,  1.0000e+00,  4.6631e-06,  1.0000e+00,  1.0100e-05,
+         1.0000e+00,  1.5220e-05,  1.0000e+00,  1.2905e-05,  1.0000e+00,
+        -6.5345e-07,  1.0000e+00], device='cuda:1', grad_fn=<MeanBackward1>)
+psi_mean_by_head tensor([-4.6566e-10, -3.4925e-10, -3.4925e-10,  1.7462e-10, -1.1059e-09,
+        -1.6298e-09,  7.5670e-10,  2.2119e-09, -3.8999e-09, -1.1700e-08,
+        -1.5192e-08, -1.5774e-08], device='cuda:1', grad_fn=<MeanBackward1>)
+amp_mean_by_head amp_mean_by_head tensor([1.0000, 1.0000, 1.0000, 1.0000, 1.0000, 1.0000, 1.0000, 1.0000, 0.9998,
+        0.9999, 0.9998, 1.0000], device='cuda:0', grad_fn=<MeanBackward1>)
+scaleExp_by_head tensor([1.0000, 1.0000, 1.0000, 1.0000, 1.0000, 1.0000, 1.0000, 1.0000, 0.9998,
+        0.9999, 0.9998, 1.0000], device='cuda:1', grad_fn=<MeanBackward1>)
+scaleExp_by_head tensor([ 2.9791e-07, -1.6897e-07, -2.0000e+00, -2.0000e+00, -4.0000e+00,
+        -4.0000e+00, -6.0000e+00, -6.0000e+00, -7.9999e+00, -8.0000e+00,
+        -1.0000e+01, -1.0000e+01], device='cuda:0', grad_fn=<MeanBackward1>)
+shift_mean_by_head tensor([ 2.9791e-07, -1.6897e-07, -2.0000e+00, -2.0000e+00, -4.0000e+00,
+        -4.0000e+00, -6.0000e+00, -6.0000e+00, -7.9999e+00, -8.0000e+00,
+        -1.0000e+01, -1.0000e+01], device='cuda:1', grad_fn=<MeanBackward1>)
+shift_mean_by_head tensor([ 1.2519e-05,  1.0000e+00,  5.2008e-06,  1.0000e+00,  8.3450e-07,
+         1.0000e+00,  1.4105e-05,  1.0000e+00,  6.7573e-06,  1.0000e+00,
+        -1.7679e-06,  1.0000e+00], device='cuda:1', grad_fn=<MeanBackward1>)
+tensor([ 1.2519e-05,  1.0000e+00,  5.2008e-06,  1.0000e+00,  8.3450e-07,
+         1.0000e+00,  1.4105e-05,  1.0000e+00,  6.7573e-06,  1.0000e+00,
+        -1.7679e-06,  1.0000e+00], device='cuda:0', grad_fn=<MeanBackward1>)psi_mean_by_head 
+psi_mean_by_head tensor([-1.1642e-10,  1.7462e-10, -1.0477e-09,  2.9104e-10, -1.6298e-09,
+        -2.2701e-09,  2.6193e-09,  3.4925e-09, -8.9640e-09,  9.7207e-09,
+         5.6592e-08,  4.8938e-08], device='cuda:1', grad_fn=<MeanBackward1>)
+tensor([-1.1642e-10,  1.7462e-10, -1.0477e-09,  2.9104e-10, -1.6298e-09,
+        -2.2701e-09,  2.6193e-09,  3.4925e-09, -8.9640e-09,  9.7207e-09,
+         5.6592e-08,  4.8938e-08], device='cuda:0', grad_fn=<MeanBackward1>)
+amp_mean_by_head amp_mean_by_head tensor([1.0000, 1.0000, 1.0000, 1.0000, 1.0000, 1.0000, 1.0000, 1.0000, 1.0002,
+        1.0000, 0.9998, 1.0000], device='cuda:1', grad_fn=<MeanBackward1>)
+scaleExp_by_head tensor([1.0000, 1.0000, 1.0000, 1.0000, 1.0000, 1.0000, 1.0000, 1.0000, 1.0002,
+        1.0000, 0.9998, 1.0000], device='cuda:0', grad_fn=<MeanBackward1>)tensor([-1.3677e-07,  7.8205e-07, -2.0000e+00, -2.0000e+00, -4.0000e+00,
+        -4.0000e+00, -6.0000e+00, -6.0000e+00, -8.0002e+00, -8.0000e+00,
+        -1.0000e+01, -1.0000e+01], device='cuda:1', grad_fn=<MeanBackward1>)
+shift_mean_by_head 
+scaleExp_by_head tensor([ 7.5286e-07,  1.0000e+00, -1.4089e-06,  1.0000e+00,  7.5797e-06,
+         1.0000e+00,  6.5373e-06,  1.0000e+00, -8.9913e-06,  1.0000e+00,
+        -2.2440e-06,  1.0000e+00], device='cuda:1', grad_fn=<MeanBackward1>)
+psi_mean_by_head tensor([-1.3677e-07,  7.8205e-07, -2.0000e+00, -2.0000e+00, -4.0000e+00,
+        -4.0000e+00, -6.0000e+00, -6.0000e+00, -8.0002e+00, -8.0000e+00,
+        -1.0000e+01, -1.0000e+01], device='cuda:0', grad_fn=<MeanBackward1>)
+shift_mean_by_headtensor([-5.2387e-10,  4.0745e-10, -2.9104e-10, -3.4925e-10, -4.0745e-10,
+         0.0000e+00, -3.3178e-09, -1.4552e-09, -3.3178e-09,  8.7311e-09,
+         1.1336e-08,  2.9264e-08], device='cuda:1', grad_fn=<MeanBackward1>)
+ tensor([ 7.5286e-07,  1.0000e+00, -1.4089e-06,  1.0000e+00,  7.5797e-06,
+         1.0000e+00,  6.5373e-06,  1.0000e+00, -8.9913e-06,  1.0000e+00,
+        -2.2440e-06,  1.0000e+00], device='cuda:0', grad_fn=<MeanBackward1>)
+psi_mean_by_head tensor([-5.2387e-10,  4.0745e-10, -2.9104e-10, -3.4925e-10, -4.0745e-10,
+         0.0000e+00, -3.3178e-09, -1.4552e-09, -3.3178e-09,  8.7311e-09,
+         1.1336e-08,  2.9264e-08], device='cuda:0', grad_fn=<MeanBackward1>)
+  0%|          | 250/107550 [04:06<29:57:17,  1.01s/it][LR] main_decay: lr=5e-06, active=True | main_nodecay: lr=5e-06, active=True | B_decay: lr=N/A, active=False (not in optimizer) | B_nodecay: lr=N/A, active=False (not in optimizer)
+[LR] main_decay: lr=5e-06, active=True | main_nodecay: lr=5e-06, active=True | B_nodecay: lr=N/A, active=False (not in optimizer) | B_decay: lr=N/A, active=False (not in optimizer)
+                                                       {'loss': 9.7998, 'grad_norm': 2.030172109603882, 'learning_rate': 4.98e-06, 'epoch': 0.07, 'lr/main_decay': 5e-06, 'lr/main_nodecay': 5e-06, 'lr/B_nodecay': nan, 'lr/B_decay': nan}
+  0%|          | 250/107550 [04:06<29:57:17,  1.01s/it][INFO|trainer.py:4833] 2025-10-11 13:30:36,522 >> 
+***** Running Evaluation *****
+[INFO|trainer.py:4835] 2025-10-11 13:30:36,522 >>   Num examples = 481
+[INFO|trainer.py:4838] 2025-10-11 13:30:36,522 >>   Batch size = 16
+
+  0%|          | 0/16 [00:00<?, ?it/s][A
+ 12%|█▎        | 2/16 [00:00<00:01, 12.69it/s][A
+ 25%|██▌       | 4/16 [00:00<00:01,  7.74it/s][A
+ 31%|███▏      | 5/16 [00:00<00:01,  7.14it/s][A
+ 38%|███▊      | 6/16 [00:00<00:01,  6.69it/s][A
+ 44%|████▍     | 7/16 [00:00<00:01,  6.44it/s][A
+ 50%|█████     | 8/16 [00:01<00:01,  6.34it/s][A
+ 56%|█████▋    | 9/16 [00:01<00:01,  6.26it/s][A
+ 62%|██████▎   | 10/16 [00:01<00:00,  6.19it/s][A
+ 69%|██████▉   | 11/16 [00:01<00:00,  6.15it/s][A
+ 75%|███████▌  | 12/16 [00:01<00:00,  6.07it/s][A
+ 81%|████████▏ | 13/16 [00:01<00:00,  6.01it/s][A
+ 88%|████████▊ | 14/16 [00:02<00:00,  6.03it/s][A
+ 94%|█████████▍| 15/16 [00:02<00:00,  6.04it/s][A
+100%|██████████| 16/16 [00:02<00:00,  5.97it/s][A[LR] main_decay: lr=5e-06, active=True | main_nodecay: lr=5e-06, active=True | B_nodecay: lr=N/A, active=False (not in optimizer) | B_decay: lr=N/A, active=False (not in optimizer)
+                                                       
+                                               [A{'eval_loss': 9.037068367004395, 'eval_accuracy': 0.05114101004511963, 'eval_runtime': 3.408, 'eval_samples_per_second': 141.14, 'eval_steps_per_second': 4.695, 'epoch': 0.07, 'lr/main_decay': 5e-06, 'lr/main_nodecay': 5e-06, 'lr/B_nodecay': nan, 'lr/B_decay': nan}
+  0%|          | 250/107550 [04:09<29:57:17,  1.01s/it]
+100%|██████████| 16/16 [00:03<00:00,  5.97it/s][A
+                                               [A[LR] main_decay: lr=5e-06, active=True | main_nodecay: lr=5e-06, active=True | B_decay: lr=N/A, active=False (not in optimizer) | B_nodecay: lr=N/A, active=False (not in optimizer)
+  0%|          | 251/107550 [04:11<67:12:47,  2.26s/it]  0%|          | 252/107550 [04:12<55:53:30,  1.88s/it]  0%|          | 253/107550 [04:13<48:02:30,  1.61s/it]  0%|          | 254/107550 [04:14<42:33:36,  1.43s/it]  0%|          | 255/107550 [04:15<38:42:10,  1.30s/it]  0%|          | 256/107550 [04:16<35:55:50,  1.21s/it]  0%|          | 257/107550 [04:17<33:58:19,  1.14s/it]  0%|          | 258/107550 [04:18<32:43:14,  1.10s/it]  0%|          | 259/107550 [04:19<31:50:10,  1.07s/it]  0%|          | 260/107550 [04:20<31:03:19,  1.04s/it]  0%|          | 261/107550 [04:21<30:34:03,  1.03s/it]  0%|          | 262/107550 [04:22<30:15:23,  1.02s/it]  0%|          | 263/107550 [04:23<30:05:46,  1.01s/it]  0%|          | 264/107550 [04:24<29:59:01,  1.01s/it]  0%|          | 265/107550 [04:25<29:55:13,  1.00s/it]  0%|          | 266/107550 [04:26<29:46:13,  1.00it/s]  0%|          | 267/107550 [04:27<29:48:13,  1.00s/it]  0%|          | 268/107550 [04:28<29:50:14,  1.00s/it]  0%|          | 269/107550 [04:29<29:50:31,  1.00s/it]  0%|          | 270/107550 [04:30<29:46:18,  1.00it/s]  0%|          | 271/107550 [04:31<29:45:46,  1.00it/s]  0%|          | 272/107550 [04:32<29:47:05,  1.00it/s]  0%|          | 273/107550 [04:33<29:38:46,  1.01it/s]  0%|          | 274/107550 [04:34<29:34:46,  1.01it/s]  0%|          | 275/107550 [04:35<29:36:15,  1.01it/s]  0%|          | 276/107550 [04:36<29:37:48,  1.01it/s]  0%|          | 277/107550 [04:37<29:41:27,  1.00it/s]  0%|          | 278/107550 [04:38<29:42:44,  1.00it/s]  0%|          | 279/107550 [04:39<29:37:17,  1.01it/s]  0%|          | 280/107550 [04:40<29:36:09,  1.01it/s]  0%|          | 281/107550 [04:41<29:35:10,  1.01it/s]  0%|          | 282/107550 [04:42<29:41:14,  1.00it/s]  0%|          | 283/107550 [04:43<29:43:32,  1.00it/s]  0%|          | 284/107550 [04:44<29:44:52,  1.00it/s]  0%|          | 285/107550 [04:45<29:46:51,  1.00it/s]  0%|          | 286/107550 [04:46<29:47:56,  1.00s/it]  0%|          | 287/107550 [04:47<29:44:36,  1.00it/s]  0%|          | 288/107550 [04:48<29:42:30,  1.00it/s]  0%|          | 289/107550 [04:49<29:40:09,  1.00it/s]  0%|          | 290/107550 [04:50<29:43:56,  1.00it/s]  0%|          | 291/107550 [04:51<29:40:46,  1.00it/s]  0%|          | 292/107550 [04:52<29:46:49,  1.00it/s]  0%|          | 293/107550 [04:53<29:48:26,  1.00s/it]  0%|          | 294/107550 [04:54<29:43:25,  1.00it/s]slurmstepd-elm71: error: *** JOB 324283 ON elm71 CANCELLED AT 2025-10-11T13:31:24 ***
