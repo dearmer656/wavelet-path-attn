@@ -139,7 +139,7 @@ class GPT2PaTHAttention(nn.Module):
                 share_freq_across_heads=getattr(config, "share_freq_across_heads", False),
                 single_A_B=getattr(config, "single_A_B", False),
                 use_beta_modulation=getattr(config, "use_beta_modulation", False),
-                use_wavelet_beta=getattr(config, "use_wavelet_beta", False),
+                use_soft_wavelet_fox=getattr(config, "use_soft_wavelet_fox", False),
                 wavelet_mode=getattr(config, "wavelet_mode", "additive"),
             )
         elif getattr(config, "attn_implementation", None) == "path_attn":
@@ -149,19 +149,19 @@ class GPT2PaTHAttention(nn.Module):
                 num_kv_heads=getattr(config, "num_key_value_heads", None),
                 layer_idx=layer_idx,
                 # 可选开关，从 config 读取（不存在则给默认）
-                use_forget_gate=getattr(config, "path_use_forget_gate", False),
                 use_qk_norm=getattr(config, "path_use_qk_norm", False),
                 use_low_rank_w=getattr(config, "path_use_low_rank_w", True),
                 use_w_shortconv=getattr(config, "path_use_w_shortconv", True),
                 conv_size=getattr(config, "path_conv_size", 3),
                 conv_bias=getattr(config, "path_conv_bias", False),
                 num_harmonics=getattr(config, "num_harmonics", 2),
-                use_wavelet_beta=getattr(config, "use_wavelet_beta", False),
+                use_soft_wavelet_fox=getattr(config, "use_soft_wavelet_fox", False),
                 wavelet_mode=getattr(config, "wavelet_mode", "additive"),
                 logging_steps = config.logging_steps,
                 wavelet_baseline_use = config.wavelet_baseline_use,
                 attn_pdrop = config.attn_pdrop,
                 init_theta = config.init_theta,   # initial theta for path attention ratio
+                use_forget_gate = config.use_forget_gate,
             )
         self.resid_dropout = nn.Dropout(config.resid_pdrop)
 
@@ -784,7 +784,7 @@ class GPT2Model(GPT2PreTrainedModel):
         # Initialize weights and apply final processing
         self.post_init()
         self.d_m = None
-        if config.wavelet_baseline_use:
+        if config.wavelet_baseline_use or config.use_soft_wavelet_fox:
             self.s_tensor, self.beta_tensor = self.make_scale_shift_vectors()
             self.d_m = self.make_decay_per_dim_custom(64, config.block_size, self.s_tensor, self.beta_tensor)
     def make_scale_shift_vectors(self):

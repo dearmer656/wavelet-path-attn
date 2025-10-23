@@ -102,7 +102,7 @@ class ModelArguments:
         },
     )
     # ===== PaTHAttention 专用开关（仅在 --_attn_implementation path_attn 时生效） =====
-    path_use_forget_gate: bool = field(
+    use_forget_gate: bool = field(
         default=False,
         metadata={"help": "Enable forget gate (g) for PaTH attention."},
     )
@@ -167,7 +167,7 @@ class ModelArguments:
         default="additive",
         metadata={"help": "Wavelet mode to use: additive | softmix."},
     )
-    use_wavelet_beta: Optional[bool] = field(
+    use_soft_wavelet_fox: Optional[bool] = field(
         default=False,
         metadata={"help": "Whether use wavelet freq into beta (only for path_attn_wfreq)."},
     )
@@ -811,7 +811,7 @@ def main():
             "You can do it from another script, save it, and load it from here, using --tokenizer_name."
         )
     config.attn_implementation = model_args.attn_implementation
-    config.path_use_forget_gate = model_args.path_use_forget_gate
+    config.use_forget_gate = model_args.use_forget_gate
     config.path_use_qk_norm = model_args.path_use_qk_norm
     config.path_use_low_rank_w = model_args.path_use_low_rank_w
     config.path_use_w_shortconv = model_args.path_use_w_shortconv
@@ -822,7 +822,7 @@ def main():
     config.pe_method = model_args.pe_method
     config.use_beta_modulation = model_args.use_beta_modulation
     config.wavelet_mode = model_args.wavelet_mode
-    config.use_wavelet_beta = model_args.use_wavelet_beta
+    config.use_soft_wavelet_fox = model_args.use_soft_wavelet_fox
     config.logging_steps = training_args.logging_steps
     config.wavelet_baseline_use = model_args.wavelet_baseline_use
     config.init_theta = model_args.init_theta    

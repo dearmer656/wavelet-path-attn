@@ -274,8 +274,8 @@ torchrun --nproc_per_node={args.per_node} --master_port=12425 ./run_clm.py --mod
 --eval_strategy steps --logging_dir ./{args.project_name}_log --logging_steps 250 --save_steps 2500 --attn_implementation {args.attn_implementation} --path_use_qk_norm false \\
 --path_use_low_rank_w true --path_use_w_shortconv false --path_conv_size 3 --warmup_steps 5000 --path_conv_bias false --output_dir runs/{args.project_name} \\
 --gradient_accumulation_steps {args.gradient_accumulation_steps} --num_harmonics {args.num_harmonics} --single_A_B {args.single_A_B} \\
---use_beta_modulation {args.use_beta_modulation} --use_wavelet_beta {args.use_wavelet_beta} --wavelet_mode {args.wavelet_mode} \\
---wavelet_baseline_use {args.wavelet_baseline_use} --init_theta {args.init_theta}
+--use_beta_modulation {args.use_beta_modulation} --use_soft_wavelet_fox {args.use_soft_wavelet_fox} --wavelet_mode {args.wavelet_mode} \\
+--wavelet_baseline_use {args.wavelet_baseline_use} --init_theta {args.init_theta} --use_forget_gate {args.use_forget_gate}
 """
     #################################################### for alibi #################################################### for alibi ###############################################    
 
@@ -660,8 +660,8 @@ torchrun --nproc_per_node={args.per_node} --master_port=12422 ./run_clm.py --mod
 --eval_strategy steps --eval_steps 250 --logging_dir ./{args.project_name}_log --logging_steps {args.logging_steps} --save_steps {save_steps} --attn_implementation {args.attn_implementation} --path_use_qk_norm false \\
 --path_use_low_rank_w true --path_use_w_shortconv false --path_conv_size 3 {warm_up_set} --path_conv_bias false --output_dir runs/{args.project_name} \\
 --gradient_accumulation_steps {args.gradient_accumulation_steps} --b_unfreeze_step {args.b_unfreeze_step} --pe_method {args.pe_method} --single_A_B {args.single_A_B} \\
---use_beta_modulation {args.use_beta_modulation} --use_wavelet_beta {args.use_wavelet_beta} --wavelet_mode {args.wavelet_mode} {pre_train_file} \\
---wavelet_baseline_use {args.wavelet_baseline_use} --init_theta {args.init_theta}
+--use_beta_modulation {args.use_beta_modulation} --use_soft_wavelet_fox {args.use_soft_wavelet_fox} --wavelet_mode {args.wavelet_mode} {pre_train_file} \\
+--wavelet_baseline_use {args.wavelet_baseline_use} --init_theta {args.init_theta} --use_forget_gate {args.use_forget_gate}
 """
 ###################### wikitext training part ####################################
     if args.debug:
@@ -863,10 +863,12 @@ def generate_parser():
     parser.add_argument('--num_harmonics', type=int, default=2, help='')
     parser.add_argument('--logging_steps', type=int, default=250, help='')
     parser.add_argument('--b_unfreeze_step', type=int, default=5000, help='')
-    parser.add_argument('--use_wavelet_beta', type=bool, default=False, help='whether to use wavelet-based beta modulation.')
+    parser.add_argument('--use_soft_wavelet_fox', type=bool, default=False, help='whether to use wavelet-based beta modulation.')
     parser.add_argument('--wavelet_mode', type=str, default='db1', help='wavelet mode for wavelet-based operations.')
     parser.add_argument('--wavelet_baseline_use', type=bool, default=False, help='whether to use wavelet-based beta modulation.')
     parser.add_argument('--init_theta', type=float, default=0.847, help='initial theta for path attention ratio')
+    parser.add_argument('--use_forget_gate', type=bool, default=False, help='whether to use forget gate.')
+    
     ################# freq base related parameters #################################
 
     return parser.parse_args()
