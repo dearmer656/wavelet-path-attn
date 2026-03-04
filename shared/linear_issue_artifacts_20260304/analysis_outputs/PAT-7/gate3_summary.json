@@ -1,0 +1,29 @@
+{
+  "branch": "A",
+  "rule": "exists state with low-margin flip concentration and non-trivial pattern shift",
+  "hit_states": [
+    "SMALL"
+  ],
+  "low_flip": {
+    "NULL": 0.0,
+    "UNIFORM": 0.07397514806642666,
+    "SMALL": 0.11600379884644785,
+    "LARGE": 0.07462974887314874,
+    "OTHER": 0.09058164864141859
+  },
+  "high_flip": {
+    "NULL": 0.0,
+    "UNIFORM": 0.0,
+    "SMALL": 2.4934546814611646e-05,
+    "LARGE": 0.0,
+    "OTHER": 9.342912933394374e-06
+  },
+  "pattern_shift": {
+    "NULL": 0.0,
+    "UNIFORM": 0.00926272073521069,
+    "SMALL": 0.01670354520578912,
+    "LARGE": 0.011262493903179878,
+    "OTHER": 0.008897427145743063
+  },
+  "reason": "机制链闭环，可进入Issue 4"
+}

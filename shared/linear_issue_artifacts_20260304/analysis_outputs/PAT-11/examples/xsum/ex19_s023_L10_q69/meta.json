@@ -1,0 +1,15 @@
+{
+  "sample_id": 23,
+  "task": "xsum",
+  "layer": 10,
+  "head": 11,
+  "query": 69,
+  "L_valid": 176,
+  "state": "SMALL",
+  "margin_base": 0.09630846768895986,
+  "margin_bin": "low",
+  "flip_any_layerquery": 1,
+  "top1_base": 56,
+  "top1_wave": 56,
+  "flip_this_head": 0
+}

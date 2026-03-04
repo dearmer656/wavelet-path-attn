@@ -1,0 +1,23 @@
+{
+  "sample_id": 55,
+  "layer": 10,
+  "head": 11,
+  "query": 189,
+  "task": "hotpotqa",
+  "orig": {
+    "state": "SMALL",
+    "margin_base": 0.020525985725666804,
+    "flip_any": 1,
+    "prefix_delta": -0.008299920458647275,
+    "diag_delta": -0.02712666326772639,
+    "far_delta": 0.1482061638796007
+  },
+  "pert": {
+    "state": "SMALL",
+    "margin_base": 0.10470208514666102,
+    "flip_any": 1,
+    "prefix_delta": 0.344729858554177,
+    "diag_delta": -0.01876098059241664,
+    "far_delta": 0.3230747583488029
+  }
+}

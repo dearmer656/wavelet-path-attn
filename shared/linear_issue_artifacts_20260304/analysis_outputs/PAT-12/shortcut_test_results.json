@@ -1,0 +1,467 @@
+{
+  "decision_branch": "A",
+  "reason": "Prefix perturbation degrades loss and disrupts mechanism signals; mechanism is unlikely a trivial shortcut.",
+  "original": {
+    "tag": "orig",
+    "q33_margin": 0.10835394757641534,
+    "state_stats": {
+      "hotpotqa": {
+        "L10": {
+          "count": 16352,
+          "ratio": {
+            "NULL": 0.0,
+            "UNIFORM": 0.11796722113502936,
+            "SMALL": 0.1853595890410959,
+            "LARGE": 0.1892123287671233,
+            "OTHER": 0.5074608610567515
+          }
+        },
+        "L11": {
+          "count": 16352,
+          "ratio": {
+            "NULL": 0.0,
+            "UNIFORM": 0.25073385518590996,
+            "SMALL": 0.19159735812133072,
+            "LARGE": 0.05491682974559687,
+            "OTHER": 0.5027519569471625
+          }
+        }
+      },
+      "xsum": {
+        "L10": {
+          "count": 10454,
+          "ratio": {
+            "NULL": 0.0,
+            "UNIFORM": 0.12971111536254065,
+            "SMALL": 0.1414769466233021,
+            "LARGE": 0.27377080543332694,
+            "OTHER": 0.4550411325808303
+          }
+        },
+        "L11": {
+          "count": 10454,
+          "ratio": {
+            "NULL": 0.0,
+            "UNIFORM": 0.3013200688731586,
+            "SMALL": 0.22775970920221925,
+            "LARGE": 0.06925578725846566,
+            "OTHER": 0.4016644346661565
+          }
+        }
+      },
+      "all": {
+        "L10": {
+          "count": 26806,
+          "ratio": {
+            "NULL": 0.0,
+            "UNIFORM": 0.1225471909274043,
+            "SMALL": 0.16824591509363576,
+            "LARGE": 0.22218906215026488,
+            "OTHER": 0.48701783182869507
+          }
+        },
+        "L11": {
+          "count": 26806,
+          "ratio": {
+            "NULL": 0.0,
+            "UNIFORM": 0.27046183690218606,
+            "SMALL": 0.20570021636946953,
+            "LARGE": 0.06050884130418563,
+            "OTHER": 0.4633291054241588
+          }
+        }
+      }
+    },
+    "flip_stats": {
+      "hotpotqa": {
+        "L10": {
+          "small_count": 3031,
+          "small_low_count": 1504,
+          "small_low_margin_flip_rate": 0.9860372340425532
+        },
+        "L11": {
+          "small_count": 3133,
+          "small_low_count": 889,
+          "small_low_margin_flip_rate": 0.9910011248593926
+        }
+      },
+      "xsum": {
+        "L10": {
+          "small_count": 1479,
+          "small_low_count": 601,
+          "small_low_margin_flip_rate": 0.9900166389351082
+        },
+        "L11": {
+          "small_count": 2381,
+          "small_low_count": 769,
+          "small_low_margin_flip_rate": 0.9869960988296489
+        }
+      },
+      "all": {
+        "L10": {
+          "small_count": 4510,
+          "small_low_count": 2105,
+          "small_low_margin_flip_rate": 0.9871733966745844
+        },
+        "L11": {
+          "small_count": 5514,
+          "small_low_count": 1658,
+          "small_low_margin_flip_rate": 0.9891435464414958
+        }
+      }
+    },
+    "pattern_stats": {
+      "hotpotqa": {
+        "L10": {
+          "small_count": 3031,
+          "prefix_delta_small_mean": 0.006435900962936387,
+          "diag_delta_small_mean": -0.007871014067894517,
+          "far_delta_small_mean": -0.005017405952702175
+        },
+        "L11": {
+          "small_count": 3133,
+          "prefix_delta_small_mean": 0.0006633156653293097,
+          "diag_delta_small_mean": 0.05712634664798606,
+          "far_delta_small_mean": -0.0654974686037099
+        }
+      },
+      "xsum": {
+        "L10": {
+          "small_count": 1479,
+          "prefix_delta_small_mean": 0.033357565124486455,
+          "diag_delta_small_mean": -0.015252299640930026,
+          "far_delta_small_mean": 0.006173583043170471
+        },
+        "L11": {
+          "small_count": 2381,
+          "prefix_delta_small_mean": 0.01341545677968234,
+          "diag_delta_small_mean": 0.038155358268213986,
+          "far_delta_small_mean": -0.028341764466218333
+        }
+      },
+      "all": {
+        "L10": {
+          "small_count": 4510,
+          "prefix_delta_small_mean": 0.015264535396402584,
+          "diag_delta_small_mean": -0.010291617474218136,
+          "far_delta_small_mean": -0.0013474563462951596
+        },
+        "L11": {
+          "small_count": 5514,
+          "prefix_delta_small_mean": 0.006169816933605436,
+          "diag_delta_small_mean": 0.048934485325491085,
+          "far_delta_small_mean": -0.04945326629116595
+        }
+      }
+    },
+    "loss_stats": {
+      "all": {
+        "mean_loss": 7.222386866807938,
+        "count": 64
+      },
+      "hotpotqa": {
+        "mean_loss": 7.2554518431425095,
+        "count": 32
+      },
+      "xsum": {
+        "mean_loss": 7.189321890473366,
+        "count": 32
+      }
+    },
+    "rows_path": "/project/nlp-work5/hongyu-s/analysis_outputs/PAT-12/__orig/rows.parquet",
+    "base_dump_root": "/project/nlp-work5/hongyu-s/analysis_outputs/PAT-12/__orig/__attn_base",
+    "wave_dump_root": "/project/nlp-work5/hongyu-s/analysis_outputs/PAT-12/__orig/__attn_wave"
+  },
+  "perturbed": {
+    "tag": "pert",
+    "q33_margin": 0.0976662574206581,
+    "state_stats": {
+      "hotpotqa": {
+        "L10": {
+          "count": 16352,
+          "ratio": {
+            "NULL": 0.0,
+            "UNIFORM": 0.12989236790606654,
+            "SMALL": 0.1595523483365949,
+            "LARGE": 0.21092221135029354,
+            "OTHER": 0.499633072407045
+          }
+        },
+        "L11": {
+          "count": 16352,
+          "ratio": {
+            "NULL": 0.0,
+            "UNIFORM": 0.24370107632093935,
+            "SMALL": 0.2154476516634051,
+            "LARGE": 0.041462818003913895,
+            "OTHER": 0.4993884540117417
+          }
+        }
+      },
+      "xsum": {
+        "L10": {
+          "count": 10454,
+          "ratio": {
+            "NULL": 0.0,
+            "UNIFORM": 0.13602448823416874,
+            "SMALL": 0.12052802754926344,
+            "LARGE": 0.2969198392959633,
+            "OTHER": 0.44652764492060454
+          }
+        },
+        "L11": {
+          "count": 10454,
+          "ratio": {
+            "NULL": 0.0,
+            "UNIFORM": 0.2874497799885211,
+            "SMALL": 0.2444040558637842,
+            "LARGE": 0.06332504304572413,
+            "OTHER": 0.40482112110197055
+          }
+        }
+      },
+      "all": {
+        "L10": {
+          "count": 26806,
+          "ratio": {
+            "NULL": 0.0,
+            "UNIFORM": 0.13228381705588302,
+            "SMALL": 0.1443333582033873,
+            "LARGE": 0.2444601954786242,
+            "OTHER": 0.4789226292621055
+          }
+        },
+        "L11": {
+          "count": 26806,
+          "ratio": {
+            "NULL": 0.0,
+            "UNIFORM": 0.2607625158546594,
+            "SMALL": 0.226740282026412,
+            "LARGE": 0.049988808475714394,
+            "OTHER": 0.4625083936432142
+          }
+        }
+      }
+    },
+    "flip_stats": {
+      "hotpotqa": {
+        "L10": {
+          "small_count": 2609,
+          "small_low_count": 1339,
+          "small_low_margin_flip_rate": 0.9887976101568334
+        },
+        "L11": {
+          "small_count": 3523,
+          "small_low_count": 927,
+          "small_low_margin_flip_rate": 0.9902912621359223
+        }
+      },
+      "xsum": {
+        "L10": {
+          "small_count": 1260,
+          "small_low_count": 537,
+          "small_low_margin_flip_rate": 0.9981378026070763
+        },
+        "L11": {
+          "small_count": 2555,
+          "small_low_count": 797,
+          "small_low_margin_flip_rate": 0.986198243412798
+        }
+      },
+      "all": {
+        "L10": {
+          "small_count": 3869,
+          "small_low_count": 1876,
+          "small_low_margin_flip_rate": 0.9914712153518124
+        },
+        "L11": {
+          "small_count": 6078,
+          "small_low_count": 1724,
+          "small_low_margin_flip_rate": 0.988399071925754
+        }
+      }
+    },
+    "pattern_stats": {
+      "hotpotqa": {
+        "L10": {
+          "small_count": 2609,
+          "prefix_delta_small_mean": 0.01633991911314469,
+          "diag_delta_small_mean": -0.013204957402315419,
+          "far_delta_small_mean": 0.006593486620057369
+        },
+        "L11": {
+          "small_count": 3523,
+          "prefix_delta_small_mean": -0.003810330826625738,
+          "diag_delta_small_mean": 0.04056713186255991,
+          "far_delta_small_mean": -0.04455427929940142
+        }
+      },
+      "xsum": {
+        "L10": {
+          "small_count": 1260,
+          "prefix_delta_small_mean": 0.03202492079002381,
+          "diag_delta_small_mean": -0.01337450402326245,
+          "far_delta_small_mean": 0.007998660291176388
+        },
+        "L11": {
+          "small_count": 2555,
+          "prefix_delta_small_mean": 0.022231957798423886,
+          "diag_delta_small_mean": 0.03314098154691492,
+          "far_delta_small_mean": -0.02420418804542949
+        }
+      },
+      "all": {
+        "L10": {
+          "small_count": 3869,
+          "prefix_delta_small_mean": 0.021447983758496898,
+          "diag_delta_small_mean": -0.013260172895309282,
+          "far_delta_small_mean": 0.007051103271804581
+        },
+        "L11": {
+          "small_count": 6078,
+          "prefix_delta_small_mean": 0.0071370280804163464,
+          "diag_delta_small_mean": 0.037445411879592994,
+          "far_delta_small_mean": -0.03599974110363007
+        }
+      }
+    },
+    "loss_stats": {
+      "all": {
+        "mean_loss": 7.869578387588263,
+        "count": 64
+      },
+      "hotpotqa": {
+        "mean_loss": 8.001670777797699,
+        "count": 32
+      },
+      "xsum": {
+        "mean_loss": 7.737485997378826,
+        "count": 32
+      }
+    },
+    "rows_path": "/project/nlp-work5/hongyu-s/analysis_outputs/PAT-12/__pert/rows.parquet",
+    "base_dump_root": "/project/nlp-work5/hongyu-s/analysis_outputs/PAT-12/__pert/__attn_base",
+    "wave_dump_root": "/project/nlp-work5/hongyu-s/analysis_outputs/PAT-12/__pert/__attn_wave"
+  },
+  "delta": {
+    "state_ratio_delta": {
+      "hotpotqa": {
+        "L10": {
+          "NULL": 0.0,
+          "UNIFORM": 0.011925146771037176,
+          "SMALL": -0.025807240704500994,
+          "LARGE": 0.021709882583170248,
+          "OTHER": -0.007827788649706457
+        },
+        "L11": {
+          "NULL": 0.0,
+          "UNIFORM": -0.0070327788649706124,
+          "SMALL": 0.02385029354207438,
+          "LARGE": -0.013454011741682974,
+          "OTHER": -0.003363502935420759
+        }
+      },
+      "xsum": {
+        "L10": {
+          "NULL": 0.0,
+          "UNIFORM": 0.006313372871628087,
+          "SMALL": -0.02094891907403866,
+          "LARGE": 0.023149033862636337,
+          "OTHER": -0.00851348766022575
+        },
+        "L11": {
+          "NULL": 0.0,
+          "UNIFORM": -0.013870288884637483,
+          "SMALL": 0.016644346661564946,
+          "LARGE": -0.005930744212741534,
+          "OTHER": 0.003156686435814071
+        }
+      },
+      "all": {
+        "L10": {
+          "NULL": 0.0,
+          "UNIFORM": 0.009736626128478712,
+          "SMALL": -0.02391255689024846,
+          "LARGE": 0.02227113332835931,
+          "OTHER": -0.008095202566589577
+        },
+        "L11": {
+          "NULL": 0.0,
+          "UNIFORM": -0.009699321047526632,
+          "SMALL": 0.02104006565694247,
+          "LARGE": -0.010520032828471235,
+          "OTHER": -0.0008207117809445608
+        }
+      }
+    },
+    "flip_delta": {
+      "hotpotqa": {
+        "L10": {
+          "small_low_margin_flip_rate_delta": 0.0027603761142802608
+        },
+        "L11": {
+          "small_low_margin_flip_rate_delta": -0.0007098627234702892
+        }
+      },
+      "xsum": {
+        "L10": {
+          "small_low_margin_flip_rate_delta": 0.008121163671968135
+        },
+        "L11": {
+          "small_low_margin_flip_rate_delta": -0.0007978554168508456
+        }
+      },
+      "all": {
+        "L10": {
+          "small_low_margin_flip_rate_delta": 0.004297818677228005
+        },
+        "L11": {
+          "small_low_margin_flip_rate_delta": -0.0007444745157417776
+        }
+      }
+    },
+    "pattern_delta": {
+      "hotpotqa": {
+        "L10": {
+          "prefix_delta_small_mean_delta": 0.009904018150208301,
+          "diag_delta_small_mean_delta": -0.005333943334420901,
+          "far_delta_small_mean_delta": 0.011610892572759544
+        },
+        "L11": {
+          "prefix_delta_small_mean_delta": -0.004473646491955047,
+          "diag_delta_small_mean_delta": -0.01655921478542615,
+          "far_delta_small_mean_delta": 0.020943189304308482
+        }
+      },
+      "xsum": {
+        "L10": {
+          "prefix_delta_small_mean_delta": -0.001332644334462646,
+          "diag_delta_small_mean_delta": 0.0018777956176675766,
+          "far_delta_small_mean_delta": 0.0018250772480059166
+        },
+        "L11": {
+          "prefix_delta_small_mean_delta": 0.008816501018741546,
+          "diag_delta_small_mean_delta": -0.005014376721299063,
+          "far_delta_small_mean_delta": 0.004137576420788842
+        }
+      },
+      "all": {
+        "L10": {
+          "prefix_delta_small_mean_delta": 0.006183448362094314,
+          "diag_delta_small_mean_delta": -0.002968555421091146,
+          "far_delta_small_mean_delta": 0.008398559618099741
+        },
+        "L11": {
+          "prefix_delta_small_mean_delta": 0.0009672111468109106,
+          "diag_delta_small_mean_delta": -0.011489073445898092,
+          "far_delta_small_mean_delta": 0.013453525187535877
+        }
+      }
+    },
+    "loss_delta": {
+      "hotpotqa": 0.7462189346551895,
+      "xsum": 0.5481641069054604,
+      "all": 0.6471915207803249
+    }
+  }
+}

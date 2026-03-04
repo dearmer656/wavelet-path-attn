@@ -1,0 +1,30 @@
+[INFO] PAT-5 args: ckpt_wavelet=/cl/work5/hongyu-s/transformers/examples/pytorch/language-modeling/runs/token_even_mix_2epoch_wavelet_farhead_suite/exp9_scale_coupled_shift_alllayers_nolayergate_10epoch_a6000x4_seed42/checkpoint-15000 layers=[10, 11] num_samples=64 hotpot=32 xsum=32 fft(nfft/very_low/low/mid)=512/0.05/0.1/0.25 exclude_self=False seed=42 device=cuda
+[INFO] loaded mixed records: total=64 hotpot=32 xsum=32
+[INFO] effective valid length stats (mask&!pad&!eos): min=56 mean=434.94 max=512
+[INFO] filter rules: query/key must satisfy attention_mask=1 and token!=pad and token!=eos, causal key<=query, exclude_self=False
+[INFO] running wavelet dump forward + collecting router probabilities...
+[INFO] scales_by_layer={'10': [1.0, 4.0, 16.0, 64.0, 256.0, 1024.0, 4096.0, 16384.0], '11': [1.0, 4.0, 16.0, 64.0, 256.0, 1024.0, 4096.0, 16384.0]}
+[INFO] router head-consistency @ (b,l,q): count=55672 max_abs_diff max/mean/p95/p99=0.000e+00/0.000e+00/0.000e+00/0.000e+00, tol=1.0e-06
+[WARN] layer-query state low count: layer=10 state=NULL count=0 (<200)
+[INFO] layer-query state count: layer=10 state=UNIFORM count=3523
+[INFO] layer-query state count: layer=10 state=SMALL count=4648
+[INFO] layer-query state count: layer=10 state=LARGE count=6093
+[WARN] layer-query state low count: layer=11 state=NULL count=0 (<200)
+[INFO] layer-query state count: layer=11 state=UNIFORM count=7449
+[INFO] layer-query state count: layer=11 state=SMALL count=5753
+[INFO] layer-query state count: layer=11 state=LARGE count=1728
+[WARN] s_eff sanity: state=NULL has no finite values
+[INFO] s_eff quantiles by state UNIFORM: p10=4.076052 p50=4.729028 p90=5.634808
+[INFO] s_eff quantiles by state SMALL: p10=3.420861 p50=3.682702 p90=3.863674
+[INFO] s_eff quantiles by state LARGE: p10=5.145999 p50=5.365503 p90=6.002772
+[INFO] saved /project/nlp-work5/hongyu-s/analysis_outputs/PAT-5/gate1_deltaE_profiles_by_state.json
+[INFO] saved /project/nlp-work5/hongyu-s/analysis_outputs/PAT-5/gate1_deltaE_fft_layerquery.json
+[INFO] saved /project/nlp-work5/hongyu-s/analysis_outputs/PAT-5/gate1_scale_purity_argmax.json
+[INFO] saved /project/nlp-work5/hongyu-s/analysis_outputs/PAT-5/gate1_summary.md
+[WARN] delta semantic sanity FAIL task=hotpotqa layer=L10: centroid_small-large=0.001840 high_small-large=-0.000029 | 语义不匹配或实现问题
+[WARN] delta semantic sanity FAIL task=hotpotqa layer=L11: centroid_small-large=-0.001090 high_small-large=-0.000203 | 语义不匹配或实现问题
+[INFO] delta semantic sanity PASS task=xsum layer=L10: centroid_small-large=0.002592 high_small-large=0.000103
+[WARN] delta semantic sanity FAIL task=xsum layer=L11: centroid_small-large=-0.005289 high_small-large=-0.000264 | 语义不匹配或实现问题
+[INFO] delta semantic sanity PASS task=all layer=L10: centroid_small-large=0.001904 high_small-large=0.000018
+[WARN] delta semantic sanity FAIL task=all layer=L11: centroid_small-large=-0.002814 high_small-large=-0.000229 | 语义不匹配或实现问题
+[INFO] done

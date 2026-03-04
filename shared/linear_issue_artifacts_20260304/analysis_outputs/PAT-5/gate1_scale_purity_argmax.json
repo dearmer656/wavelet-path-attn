@@ -1,0 +1,733 @@
+{
+  "config": {
+    "state_unit": "(sample,layer,query)",
+    "head_aggregation": "mean",
+    "exclude_self": false,
+    "one_hot_threshold": 0.9,
+    "high_conf_threshold": 0.7,
+    "metrics": [
+      "spectral_centroid_mean",
+      "high_band_mean",
+      "very_low_band_mean",
+      "low_mid_band_mean"
+    ],
+    "decision_gate_rule": "pure argmax(one_hot) min-scale vs max-scale should show stable directional gap with non-trivial effect in deep layer (L10/L11)."
+  },
+  "by_task": {
+    "hotpotqa": {
+      "L10": {
+        "one_hot": {
+          "n_total": 15904,
+          "n_active": 15904,
+          "n_min_scale": 0,
+          "n_max_scale": 0,
+          "argmax_hist": {
+            "0": 13,
+            "1": 8,
+            "2": 6663,
+            "3": 693,
+            "4": 8449,
+            "5": 20,
+            "7": 58
+          },
+          "tests_min_vs_max": {
+            "spectral_centroid_mean": {
+              "n_a": 0,
+              "n_b": 0,
+              "mean_a": 0.0,
+              "mean_b": 0.0,
+              "diff_a_minus_b": 0.0,
+              "cohen_d": 0.0,
+              "pvalue_perm": NaN
+            },
+            "high_band_mean": {
+              "n_a": 0,
+              "n_b": 0,
+              "mean_a": 0.0,
+              "mean_b": 0.0,
+              "diff_a_minus_b": 0.0,
+              "cohen_d": 0.0,
+              "pvalue_perm": NaN
+            },
+            "very_low_band_mean": {
+              "n_a": 0,
+              "n_b": 0,
+              "mean_a": 0.0,
+              "mean_b": 0.0,
+              "diff_a_minus_b": 0.0,
+              "cohen_d": 0.0,
+              "pvalue_perm": NaN
+            },
+            "low_mid_band_mean": {
+              "n_a": 0,
+              "n_b": 0,
+              "mean_a": 0.0,
+              "mean_b": 0.0,
+              "diff_a_minus_b": 0.0,
+              "cohen_d": 0.0,
+              "pvalue_perm": NaN
+            }
+          }
+        },
+        "high_conf": {
+          "n_total": 15904,
+          "n_active": 15904,
+          "n_min_scale": 0,
+          "n_max_scale": 0,
+          "argmax_hist": {
+            "0": 13,
+            "1": 8,
+            "2": 6663,
+            "3": 693,
+            "4": 8449,
+            "5": 20,
+            "7": 58
+          },
+          "tests_min_vs_max": {
+            "spectral_centroid_mean": {
+              "n_a": 0,
+              "n_b": 0,
+              "mean_a": 0.0,
+              "mean_b": 0.0,
+              "diff_a_minus_b": 0.0,
+              "cohen_d": 0.0,
+              "pvalue_perm": NaN
+            },
+            "high_band_mean": {
+              "n_a": 0,
+              "n_b": 0,
+              "mean_a": 0.0,
+              "mean_b": 0.0,
+              "diff_a_minus_b": 0.0,
+              "cohen_d": 0.0,
+              "pvalue_perm": NaN
+            },
+            "very_low_band_mean": {
+              "n_a": 0,
+              "n_b": 0,
+              "mean_a": 0.0,
+              "mean_b": 0.0,
+              "diff_a_minus_b": 0.0,
+              "cohen_d": 0.0,
+              "pvalue_perm": NaN
+            },
+            "low_mid_band_mean": {
+              "n_a": 0,
+              "n_b": 0,
+              "mean_a": 0.0,
+              "mean_b": 0.0,
+              "diff_a_minus_b": 0.0,
+              "cohen_d": 0.0,
+              "pvalue_perm": NaN
+            }
+          }
+        }
+      },
+      "L11": {
+        "one_hot": {
+          "n_total": 15904,
+          "n_active": 15904,
+          "n_min_scale": 0,
+          "n_max_scale": 0,
+          "argmax_hist": {
+            "0": 54,
+            "1": 68,
+            "2": 10215,
+            "3": 3236,
+            "4": 1591,
+            "5": 39,
+            "6": 64,
+            "7": 637
+          },
+          "tests_min_vs_max": {
+            "spectral_centroid_mean": {
+              "n_a": 0,
+              "n_b": 0,
+              "mean_a": 0.0,
+              "mean_b": 0.0,
+              "diff_a_minus_b": 0.0,
+              "cohen_d": 0.0,
+              "pvalue_perm": NaN
+            },
+            "high_band_mean": {
+              "n_a": 0,
+              "n_b": 0,
+              "mean_a": 0.0,
+              "mean_b": 0.0,
+              "diff_a_minus_b": 0.0,
+              "cohen_d": 0.0,
+              "pvalue_perm": NaN
+            },
+            "very_low_band_mean": {
+              "n_a": 0,
+              "n_b": 0,
+              "mean_a": 0.0,
+              "mean_b": 0.0,
+              "diff_a_minus_b": 0.0,
+              "cohen_d": 0.0,
+              "pvalue_perm": NaN
+            },
+            "low_mid_band_mean": {
+              "n_a": 0,
+              "n_b": 0,
+              "mean_a": 0.0,
+              "mean_b": 0.0,
+              "diff_a_minus_b": 0.0,
+              "cohen_d": 0.0,
+              "pvalue_perm": NaN
+            }
+          }
+        },
+        "high_conf": {
+          "n_total": 15904,
+          "n_active": 15904,
+          "n_min_scale": 0,
+          "n_max_scale": 0,
+          "argmax_hist": {
+            "0": 54,
+            "1": 68,
+            "2": 10215,
+            "3": 3236,
+            "4": 1591,
+            "5": 39,
+            "6": 64,
+            "7": 637
+          },
+          "tests_min_vs_max": {
+            "spectral_centroid_mean": {
+              "n_a": 0,
+              "n_b": 0,
+              "mean_a": 0.0,
+              "mean_b": 0.0,
+              "diff_a_minus_b": 0.0,
+              "cohen_d": 0.0,
+              "pvalue_perm": NaN
+            },
+            "high_band_mean": {
+              "n_a": 0,
+              "n_b": 0,
+              "mean_a": 0.0,
+              "mean_b": 0.0,
+              "diff_a_minus_b": 0.0,
+              "cohen_d": 0.0,
+              "pvalue_perm": NaN
+            },
+            "very_low_band_mean": {
+              "n_a": 0,
+              "n_b": 0,
+              "mean_a": 0.0,
+              "mean_b": 0.0,
+              "diff_a_minus_b": 0.0,
+              "cohen_d": 0.0,
+              "pvalue_perm": NaN
+            },
+            "low_mid_band_mean": {
+              "n_a": 0,
+              "n_b": 0,
+              "mean_a": 0.0,
+              "mean_b": 0.0,
+              "diff_a_minus_b": 0.0,
+              "cohen_d": 0.0,
+              "pvalue_perm": NaN
+            }
+          }
+        }
+      }
+    },
+    "xsum": {
+      "L10": {
+        "one_hot": {
+          "n_total": 10972,
+          "n_active": 10972,
+          "n_min_scale": 0,
+          "n_max_scale": 0,
+          "argmax_hist": {
+            "0": 5,
+            "1": 15,
+            "2": 4076,
+            "3": 577,
+            "4": 6073,
+            "5": 43,
+            "6": 2,
+            "7": 181
+          },
+          "tests_min_vs_max": {
+            "spectral_centroid_mean": {
+              "n_a": 0,
+              "n_b": 0,
+              "mean_a": 0.0,
+              "mean_b": 0.0,
+              "diff_a_minus_b": 0.0,
+              "cohen_d": 0.0,
+              "pvalue_perm": NaN
+            },
+            "high_band_mean": {
+              "n_a": 0,
+              "n_b": 0,
+              "mean_a": 0.0,
+              "mean_b": 0.0,
+              "diff_a_minus_b": 0.0,
+              "cohen_d": 0.0,
+              "pvalue_perm": NaN
+            },
+            "very_low_band_mean": {
+              "n_a": 0,
+              "n_b": 0,
+              "mean_a": 0.0,
+              "mean_b": 0.0,
+              "diff_a_minus_b": 0.0,
+              "cohen_d": 0.0,
+              "pvalue_perm": NaN
+            },
+            "low_mid_band_mean": {
+              "n_a": 0,
+              "n_b": 0,
+              "mean_a": 0.0,
+              "mean_b": 0.0,
+              "diff_a_minus_b": 0.0,
+              "cohen_d": 0.0,
+              "pvalue_perm": NaN
+            }
+          }
+        },
+        "high_conf": {
+          "n_total": 10972,
+          "n_active": 10972,
+          "n_min_scale": 0,
+          "n_max_scale": 0,
+          "argmax_hist": {
+            "0": 5,
+            "1": 15,
+            "2": 4076,
+            "3": 577,
+            "4": 6073,
+            "5": 43,
+            "6": 2,
+            "7": 181
+          },
+          "tests_min_vs_max": {
+            "spectral_centroid_mean": {
+              "n_a": 0,
+              "n_b": 0,
+              "mean_a": 0.0,
+              "mean_b": 0.0,
+              "diff_a_minus_b": 0.0,
+              "cohen_d": 0.0,
+              "pvalue_perm": NaN
+            },
+            "high_band_mean": {
+              "n_a": 0,
+              "n_b": 0,
+              "mean_a": 0.0,
+              "mean_b": 0.0,
+              "diff_a_minus_b": 0.0,
+              "cohen_d": 0.0,
+              "pvalue_perm": NaN
+            },
+            "very_low_band_mean": {
+              "n_a": 0,
+              "n_b": 0,
+              "mean_a": 0.0,
+              "mean_b": 0.0,
+              "diff_a_minus_b": 0.0,
+              "cohen_d": 0.0,
+              "pvalue_perm": NaN
+            },
+            "low_mid_band_mean": {
+              "n_a": 0,
+              "n_b": 0,
+              "mean_a": 0.0,
+              "mean_b": 0.0,
+              "diff_a_minus_b": 0.0,
+              "cohen_d": 0.0,
+              "pvalue_perm": NaN
+            }
+          }
+        }
+      },
+      "L11": {
+        "one_hot": {
+          "n_total": 10972,
+          "n_active": 10972,
+          "n_min_scale": 0,
+          "n_max_scale": 0,
+          "argmax_hist": {
+            "0": 41,
+            "1": 29,
+            "2": 6312,
+            "3": 2935,
+            "4": 1144,
+            "5": 46,
+            "6": 94,
+            "7": 371
+          },
+          "tests_min_vs_max": {
+            "spectral_centroid_mean": {
+              "n_a": 0,
+              "n_b": 0,
+              "mean_a": 0.0,
+              "mean_b": 0.0,
+              "diff_a_minus_b": 0.0,
+              "cohen_d": 0.0,
+              "pvalue_perm": NaN
+            },
+            "high_band_mean": {
+              "n_a": 0,
+              "n_b": 0,
+              "mean_a": 0.0,
+              "mean_b": 0.0,
+              "diff_a_minus_b": 0.0,
+              "cohen_d": 0.0,
+              "pvalue_perm": NaN
+            },
+            "very_low_band_mean": {
+              "n_a": 0,
+              "n_b": 0,
+              "mean_a": 0.0,
+              "mean_b": 0.0,
+              "diff_a_minus_b": 0.0,
+              "cohen_d": 0.0,
+              "pvalue_perm": NaN
+            },
+            "low_mid_band_mean": {
+              "n_a": 0,
+              "n_b": 0,
+              "mean_a": 0.0,
+              "mean_b": 0.0,
+              "diff_a_minus_b": 0.0,
+              "cohen_d": 0.0,
+              "pvalue_perm": NaN
+            }
+          }
+        },
+        "high_conf": {
+          "n_total": 10972,
+          "n_active": 10972,
+          "n_min_scale": 0,
+          "n_max_scale": 0,
+          "argmax_hist": {
+            "0": 41,
+            "1": 29,
+            "2": 6312,
+            "3": 2935,
+            "4": 1144,
+            "5": 46,
+            "6": 94,
+            "7": 371
+          },
+          "tests_min_vs_max": {
+            "spectral_centroid_mean": {
+              "n_a": 0,
+              "n_b": 0,
+              "mean_a": 0.0,
+              "mean_b": 0.0,
+              "diff_a_minus_b": 0.0,
+              "cohen_d": 0.0,
+              "pvalue_perm": NaN
+            },
+            "high_band_mean": {
+              "n_a": 0,
+              "n_b": 0,
+              "mean_a": 0.0,
+              "mean_b": 0.0,
+              "diff_a_minus_b": 0.0,
+              "cohen_d": 0.0,
+              "pvalue_perm": NaN
+            },
+            "very_low_band_mean": {
+              "n_a": 0,
+              "n_b": 0,
+              "mean_a": 0.0,
+              "mean_b": 0.0,
+              "diff_a_minus_b": 0.0,
+              "cohen_d": 0.0,
+              "pvalue_perm": NaN
+            },
+            "low_mid_band_mean": {
+              "n_a": 0,
+              "n_b": 0,
+              "mean_a": 0.0,
+              "mean_b": 0.0,
+              "diff_a_minus_b": 0.0,
+              "cohen_d": 0.0,
+              "pvalue_perm": NaN
+            }
+          }
+        }
+      }
+    },
+    "all": {
+      "L10": {
+        "one_hot": {
+          "n_total": 26876,
+          "n_active": 26876,
+          "n_min_scale": 0,
+          "n_max_scale": 0,
+          "argmax_hist": {
+            "0": 18,
+            "1": 23,
+            "2": 10739,
+            "3": 1270,
+            "4": 14522,
+            "5": 63,
+            "6": 2,
+            "7": 239
+          },
+          "tests_min_vs_max": {
+            "spectral_centroid_mean": {
+              "n_a": 0,
+              "n_b": 0,
+              "mean_a": 0.0,
+              "mean_b": 0.0,
+              "diff_a_minus_b": 0.0,
+              "cohen_d": 0.0,
+              "pvalue_perm": NaN
+            },
+            "high_band_mean": {
+              "n_a": 0,
+              "n_b": 0,
+              "mean_a": 0.0,
+              "mean_b": 0.0,
+              "diff_a_minus_b": 0.0,
+              "cohen_d": 0.0,
+              "pvalue_perm": NaN
+            },
+            "very_low_band_mean": {
+              "n_a": 0,
+              "n_b": 0,
+              "mean_a": 0.0,
+              "mean_b": 0.0,
+              "diff_a_minus_b": 0.0,
+              "cohen_d": 0.0,
+              "pvalue_perm": NaN
+            },
+            "low_mid_band_mean": {
+              "n_a": 0,
+              "n_b": 0,
+              "mean_a": 0.0,
+              "mean_b": 0.0,
+              "diff_a_minus_b": 0.0,
+              "cohen_d": 0.0,
+              "pvalue_perm": NaN
+            }
+          }
+        },
+        "high_conf": {
+          "n_total": 26876,
+          "n_active": 26876,
+          "n_min_scale": 0,
+          "n_max_scale": 0,
+          "argmax_hist": {
+            "0": 18,
+            "1": 23,
+            "2": 10739,
+            "3": 1270,
+            "4": 14522,
+            "5": 63,
+            "6": 2,
+            "7": 239
+          },
+          "tests_min_vs_max": {
+            "spectral_centroid_mean": {
+              "n_a": 0,
+              "n_b": 0,
+              "mean_a": 0.0,
+              "mean_b": 0.0,
+              "diff_a_minus_b": 0.0,
+              "cohen_d": 0.0,
+              "pvalue_perm": NaN
+            },
+            "high_band_mean": {
+              "n_a": 0,
+              "n_b": 0,
+              "mean_a": 0.0,
+              "mean_b": 0.0,
+              "diff_a_minus_b": 0.0,
+              "cohen_d": 0.0,
+              "pvalue_perm": NaN
+            },
+            "very_low_band_mean": {
+              "n_a": 0,
+              "n_b": 0,
+              "mean_a": 0.0,
+              "mean_b": 0.0,
+              "diff_a_minus_b": 0.0,
+              "cohen_d": 0.0,
+              "pvalue_perm": NaN
+            },
+            "low_mid_band_mean": {
+              "n_a": 0,
+              "n_b": 0,
+              "mean_a": 0.0,
+              "mean_b": 0.0,
+              "diff_a_minus_b": 0.0,
+              "cohen_d": 0.0,
+              "pvalue_perm": NaN
+            }
+          }
+        }
+      },
+      "L11": {
+        "one_hot": {
+          "n_total": 26876,
+          "n_active": 26876,
+          "n_min_scale": 0,
+          "n_max_scale": 0,
+          "argmax_hist": {
+            "0": 95,
+            "1": 97,
+            "2": 16527,
+            "3": 6171,
+            "4": 2735,
+            "5": 85,
+            "6": 158,
+            "7": 1008
+          },
+          "tests_min_vs_max": {
+            "spectral_centroid_mean": {
+              "n_a": 0,
+              "n_b": 0,
+              "mean_a": 0.0,
+              "mean_b": 0.0,
+              "diff_a_minus_b": 0.0,
+              "cohen_d": 0.0,
+              "pvalue_perm": NaN
+            },
+            "high_band_mean": {
+              "n_a": 0,
+              "n_b": 0,
+              "mean_a": 0.0,
+              "mean_b": 0.0,
+              "diff_a_minus_b": 0.0,
+              "cohen_d": 0.0,
+              "pvalue_perm": NaN
+            },
+            "very_low_band_mean": {
+              "n_a": 0,
+              "n_b": 0,
+              "mean_a": 0.0,
+              "mean_b": 0.0,
+              "diff_a_minus_b": 0.0,
+              "cohen_d": 0.0,
+              "pvalue_perm": NaN
+            },
+            "low_mid_band_mean": {
+              "n_a": 0,
+              "n_b": 0,
+              "mean_a": 0.0,
+              "mean_b": 0.0,
+              "diff_a_minus_b": 0.0,
+              "cohen_d": 0.0,
+              "pvalue_perm": NaN
+            }
+          }
+        },
+        "high_conf": {
+          "n_total": 26876,
+          "n_active": 26876,
+          "n_min_scale": 0,
+          "n_max_scale": 0,
+          "argmax_hist": {
+            "0": 95,
+            "1": 97,
+            "2": 16527,
+            "3": 6171,
+            "4": 2735,
+            "5": 85,
+            "6": 158,
+            "7": 1008
+          },
+          "tests_min_vs_max": {
+            "spectral_centroid_mean": {
+              "n_a": 0,
+              "n_b": 0,
+              "mean_a": 0.0,
+              "mean_b": 0.0,
+              "diff_a_minus_b": 0.0,
+              "cohen_d": 0.0,
+              "pvalue_perm": NaN
+            },
+            "high_band_mean": {
+              "n_a": 0,
+              "n_b": 0,
+              "mean_a": 0.0,
+              "mean_b": 0.0,
+              "diff_a_minus_b": 0.0,
+              "cohen_d": 0.0,
+              "pvalue_perm": NaN
+            },
+            "very_low_band_mean": {
+              "n_a": 0,
+              "n_b": 0,
+              "mean_a": 0.0,
+              "mean_b": 0.0,
+              "diff_a_minus_b": 0.0,
+              "cohen_d": 0.0,
+              "pvalue_perm": NaN
+            },
+            "low_mid_band_mean": {
+              "n_a": 0,
+              "n_b": 0,
+              "mean_a": 0.0,
+              "mean_b": 0.0,
+              "diff_a_minus_b": 0.0,
+              "cohen_d": 0.0,
+              "pvalue_perm": NaN
+            }
+          }
+        }
+      }
+    }
+  },
+  "gate_decision": {
+    "branch": "B",
+    "rule": "at least one deep layer(L10/L11) passes pure-argmax directional and effect-size checks",
+    "deep_layer_checks": [
+      {
+        "layer": 10,
+        "hit": false,
+        "spectral_centroid": {
+          "n_a": 0,
+          "n_b": 0,
+          "mean_a": 0.0,
+          "mean_b": 0.0,
+          "diff_a_minus_b": 0.0,
+          "cohen_d": 0.0,
+          "pvalue_perm": NaN
+        },
+        "high_band": {
+          "n_a": 0,
+          "n_b": 0,
+          "mean_a": 0.0,
+          "mean_b": 0.0,
+          "diff_a_minus_b": 0.0,
+          "cohen_d": 0.0,
+          "pvalue_perm": NaN
+        }
+      },
+      {
+        "layer": 11,
+        "hit": false,
+        "spectral_centroid": {
+          "n_a": 0,
+          "n_b": 0,
+          "mean_a": 0.0,
+          "mean_b": 0.0,
+          "diff_a_minus_b": 0.0,
+          "cohen_d": 0.0,
+          "pvalue_perm": NaN
+        },
+        "high_band": {
+          "n_a": 0,
+          "n_b": 0,
+          "mean_a": 0.0,
+          "mean_b": 0.0,
+          "diff_a_minus_b": 0.0,
+          "cohen_d": 0.0,
+          "pvalue_perm": NaN
+        }
+      }
+    ],
+    "reason": "pure-argmax下差异不足或方向不稳，建议进入Issue 1b"
+  }
+}

@@ -1,0 +1,15 @@
+{
+  "sample_id": 60,
+  "task": "hotpotqa",
+  "layer": 10,
+  "head": 11,
+  "query": 40,
+  "L_valid": 512,
+  "state": "SMALL",
+  "margin_base": 0.127028434631877,
+  "margin_bin": "low",
+  "flip_any_layerquery": 1,
+  "top1_base": 38,
+  "top1_wave": 38,
+  "flip_this_head": 0
+}

@@ -1,0 +1,187 @@
+{
+  "branch": "A",
+  "pass_reason": "PASS by patched Criterion B (shape): profile_L2 + CI are stable in both L10 and L11.",
+  "pass_criterion": "B_shape_hotfix",
+  "evidence": {
+    "inputs": {
+      "bootstrap_json": "/project/nlp-work5/hongyu-s/analysis_outputs/PAT-1c-1/bootstrap_ci.json",
+      "profiles_json": "/project/nlp-work5/hongyu-s/analysis_outputs/PAT-1c-1/deltaE_profiles_rel_abs_minmax.json",
+      "prev_decision_json": "/project/nlp-work5/hongyu-s/analysis_outputs/PAT-1c-2/remediation_retest_gate1c.json",
+      "prev_spec_md": "/project/nlp-work5/hongyu-s/analysis_outputs/PAT-1c-2/gate1c_spec_update.md"
+    },
+    "threshold": 0.12,
+    "criterion_B_shape_hotfix": {
+      "definition": "profile_rel_l2_small_vs_large > threshold AND CI95_low > threshold in L10/L11",
+      "layer_results": {
+        "L10": {
+          "profile_l2": {
+            "obs": 0.1569449465312871,
+            "ci95": [
+              0.14738146698213364,
+              0.1673585513572502
+            ]
+          },
+          "pass": true
+        },
+        "L11": {
+          "profile_l2": {
+            "obs": 0.21256072384924388,
+            "ci95": [
+              0.2002174332290499,
+              0.22485598857568428
+            ]
+          },
+          "pass": true
+        }
+      },
+      "pass": true
+    },
+    "criterion_A_frequency_diagnostic": {
+      "definition": "centroid_small-large > 0 and CI95 excludes 0 in L10/L11",
+      "layer_results": {
+        "L10": {
+          "centroid": {
+            "obs": 0.003888565647837088,
+            "ci95": [
+              0.0029756583828876603,
+              0.004723471284825894
+            ],
+            "ci_excludes_zero": true
+          },
+          "pass": true
+        },
+        "L11": {
+          "centroid": {
+            "obs": -0.00438056135205161,
+            "ci95": [
+              -0.005927651941636416,
+              -0.0028207871777723137
+            ],
+            "ci_excludes_zero": true
+          },
+          "pass": false
+        }
+      },
+      "pass": false,
+      "used_as_B_gate": false
+    },
+    "spatial_direction_descriptive": {
+      "L10": {
+        "d_prefix_small": 0.14335728248261473,
+        "d_prefix_large": 0.1448779313858272,
+        "d_prefix_small_minus_large": -0.0015206489032124626
+      },
+      "L11": {
+        "d_prefix_small": 0.15759251048011563,
+        "d_prefix_large": 0.16987882833584309,
+        "d_prefix_small_minus_large": -0.012286317855727452
+      }
+    },
+    "previous_decision": {
+      "branch": "B",
+      "reason": "A/B 均未满足：L10/L11 方向相反且无法由 task split 解释",
+      "evidence": {
+        "prerequisite": {
+          "n_min_n_max_pass": true,
+          "counts_all": {
+            "L10": {
+              "min_scale_idx": 0,
+              "max_scale_idx": 7,
+              "min_scale_value": 1.0,
+              "max_scale_value": 16384.0,
+              "n_total": 27836,
+              "n_active": 27836,
+              "n_min": 19,
+              "n_max": 247
+            },
+            "L11": {
+              "min_scale_idx": 0,
+              "max_scale_idx": 7,
+              "min_scale_value": 1.0,
+              "max_scale_value": 16384.0,
+              "n_total": 27836,
+              "n_active": 27836,
+              "n_min": 99,
+              "n_max": 1059
+            }
+          }
+        },
+        "criterion_A_frequency": {
+          "definition": "centroid_small-large > 0 and 95% CI excludes 0 (L10/L11)",
+          "layer_results": {
+            "L10": {
+              "centroid": {
+                "obs": 0.003888565647837088,
+                "ci95": [
+                  0.0029756583828876603,
+                  0.004723471284825894
+                ],
+                "ci_excludes_zero": true
+              },
+              "pass": true
+            },
+            "L11": {
+              "centroid": {
+                "obs": -0.00438056135205161,
+                "ci95": [
+                  -0.005927651941636416,
+                  -0.0028207871777723137
+                ],
+                "ci_excludes_zero": true
+              },
+              "pass": false
+            }
+          },
+          "pass": false
+        },
+        "criterion_B_shape": {
+          "definition": "profile_L2 small-vs-large separation >= threshold with CI lower bound >= threshold",
+          "layer_results": {
+            "L10": {
+              "profile_l2": {
+                "obs": 0.1569449465312871,
+                "ci95": [
+                  0.14738146698213364,
+                  0.1673585513572502
+                ]
+              },
+              "threshold": 0.12,
+              "pass": true
+            },
+            "L11": {
+              "profile_l2": {
+                "obs": 0.21256072384924388,
+                "ci95": [
+                  0.2002174332290499,
+                  0.22485598857568428
+                ]
+              },
+              "threshold": 0.12,
+              "pass": true
+            }
+          },
+          "separation_pass": true,
+          "directionality": {
+            "all_task_centroid_sign": {
+              "L10": 1,
+              "L11": -1
+            },
+            "consistent": false,
+            "task_split_signs": {
+              "hotpotqa": {
+                "L10_sign": 1,
+                "L11_sign": -1
+              },
+              "xsum": {
+                "L10_sign": 1,
+                "L11_sign": -1
+              }
+            },
+            "task_explainable": false
+          },
+          "pass": false
+        }
+      }
+    }
+  }
+}

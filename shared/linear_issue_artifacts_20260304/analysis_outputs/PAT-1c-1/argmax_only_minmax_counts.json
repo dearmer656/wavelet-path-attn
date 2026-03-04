@@ -1,0 +1,83 @@
+{
+  "config": {
+    "state_unit": "(sample,layer,query)",
+    "argmax_definition": "argmax(pi_scale), min/max idx via argmin/argmax(scales)",
+    "layers": [
+      10,
+      11
+    ]
+  },
+  "by_task": {
+    "hotpotqa": {
+      "L10": {
+        "min_scale_idx": 0,
+        "max_scale_idx": 7,
+        "min_scale_value": 1.0,
+        "max_scale_value": 16384.0,
+        "n_total": 16384,
+        "n_active": 16384,
+        "n_min": 14,
+        "n_max": 59
+      },
+      "L11": {
+        "min_scale_idx": 0,
+        "max_scale_idx": 7,
+        "min_scale_value": 1.0,
+        "max_scale_value": 16384.0,
+        "n_total": 16384,
+        "n_active": 16384,
+        "n_min": 54,
+        "n_max": 664
+      }
+    },
+    "xsum": {
+      "L10": {
+        "min_scale_idx": 0,
+        "max_scale_idx": 7,
+        "min_scale_value": 1.0,
+        "max_scale_value": 16384.0,
+        "n_total": 11452,
+        "n_active": 11452,
+        "n_min": 5,
+        "n_max": 188
+      },
+      "L11": {
+        "min_scale_idx": 0,
+        "max_scale_idx": 7,
+        "min_scale_value": 1.0,
+        "max_scale_value": 16384.0,
+        "n_total": 11452,
+        "n_active": 11452,
+        "n_min": 45,
+        "n_max": 395
+      }
+    },
+    "all": {
+      "L10": {
+        "min_scale_idx": 0,
+        "max_scale_idx": 7,
+        "min_scale_value": 1.0,
+        "max_scale_value": 16384.0,
+        "n_total": 27836,
+        "n_active": 27836,
+        "n_min": 19,
+        "n_max": 247
+      },
+      "L11": {
+        "min_scale_idx": 0,
+        "max_scale_idx": 7,
+        "min_scale_value": 1.0,
+        "max_scale_value": 16384.0,
+        "n_total": 27836,
+        "n_active": 27836,
+        "n_min": 99,
+        "n_max": 1059
+      }
+    }
+  },
+  "dod": {
+    "L10": true,
+    "L11": true,
+    "all_layers_pass": true
+  }
+}

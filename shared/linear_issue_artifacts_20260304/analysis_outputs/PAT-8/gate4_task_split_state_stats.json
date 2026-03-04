@@ -1,0 +1,197 @@
+{
+  "inputs": {
+    "gate2_dataset": "/project/nlp-work5/hongyu-s/analysis_outputs/PAT-6/gate2_router_choice_dataset.parquet",
+    "gate3_pattern_csv": "/project/nlp-work5/hongyu-s/analysis_outputs/PAT-7/gate3_pattern_metrics_by_state.csv",
+    "gate3_js_csv": "/project/nlp-work5/hongyu-s/analysis_outputs/PAT-7/gate3_state_contribution_to_JS.csv"
+  },
+  "state_stats": {
+    "by_layer_task": {
+      "10": {
+        "hotpotqa": {
+          "count": 7998,
+          "ratio": {
+            "UNIFORM": 0.25543885971492875,
+            "SMALL": 0.3633408352088022,
+            "LARGE": 0.3812203050762691
+          }
+        },
+        "xsum": {
+          "count": 6173,
+          "ratio": {
+            "UNIFORM": 0.23813380852097846,
+            "SMALL": 0.28106269236999837,
+            "LARGE": 0.48080349910902315
+          }
+        }
+      },
+      "11": {
+        "hotpotqa": {
+          "count": 8020,
+          "ratio": {
+            "UNIFORM": 0.49788029925187033,
+            "SMALL": 0.37605985037406486,
+            "LARGE": 0.12605985037406484
+          }
+        },
+        "xsum": {
+          "count": 6827,
+          "ratio": {
+            "UNIFORM": 0.49509301303647285,
+            "SMALL": 0.4000292954445584,
+            "LARGE": 0.1048776915189688
+          }
+        }
+      }
+    },
+    "task_gaps": {
+      "10": {
+        "UNIFORM": 0.017305051193950288,
+        "SMALL": 0.08227814283880386,
+        "LARGE": -0.09958319403275406
+      },
+      "11": {
+        "UNIFORM": 0.0027872862153974776,
+        "SMALL": -0.023969445070493534,
+        "LARGE": 0.021182158855096042
+      }
+    }
+  },
+  "chain_gaps": {
+    "flip_pattern_gaps": {
+      "10": {
+        "UNIFORM": {
+          "flip_rate_gap_hotpot_minus_xsum": -0.009799971347731098,
+          "prefix_delta_gap_hotpot_minus_xsum": -0.0049962271052828,
+          "diag_delta_gap_hotpot_minus_xsum": 0.0015941652069855006,
+          "far_delta_gap_hotpot_minus_xsum": -0.0024843848624415002,
+          "sink_delta_gap_hotpot_minus_xsum": -0.0009110661171160999
+        },
+        "SMALL": {
+          "flip_rate_gap_hotpot_minus_xsum": -0.0211031722281892,
+          "prefix_delta_gap_hotpot_minus_xsum": -0.011674595600331,
+          "diag_delta_gap_hotpot_minus_xsum": 0.0053713737017361,
+          "far_delta_gap_hotpot_minus_xsum": -0.0048170179186767,
+          "sink_delta_gap_hotpot_minus_xsum": -0.0019839152220343997
+        },
+        "LARGE": {
+          "flip_rate_gap_hotpot_minus_xsum": 0.0015855318354124001,
+          "prefix_delta_gap_hotpot_minus_xsum": -0.0019647909943651,
+          "diag_delta_gap_hotpot_minus_xsum": -0.00010806524576469946,
+          "far_delta_gap_hotpot_minus_xsum": 0.0006906429392450012,
+          "sink_delta_gap_hotpot_minus_xsum": -0.0003506000298274
+        }
+      },
+      "11": {
+        "UNIFORM": {
+          "flip_rate_gap_hotpot_minus_xsum": -0.006481700118063798,
+          "prefix_delta_gap_hotpot_minus_xsum": -0.0056887107906845,
+          "diag_delta_gap_hotpot_minus_xsum": 0.0017197692101844002,
+          "far_delta_gap_hotpot_minus_xsum": -0.0027340698624142004,
+          "sink_delta_gap_hotpot_minus_xsum": -0.0008041310600908
+        },
+        "SMALL": {
+          "flip_rate_gap_hotpot_minus_xsum": -0.012658105805855698,
+          "prefix_delta_gap_hotpot_minus_xsum": -0.0096645328706415,
+          "diag_delta_gap_hotpot_minus_xsum": 0.002936057667153,
+          "far_delta_gap_hotpot_minus_xsum": -0.0057561616522709,
+          "sink_delta_gap_hotpot_minus_xsum": -0.0012501782918643998
+        },
+        "LARGE": {
+          "flip_rate_gap_hotpot_minus_xsum": -0.006224763307936299,
+          "prefix_delta_gap_hotpot_minus_xsum": -0.0032503345726764997,
+          "diag_delta_gap_hotpot_minus_xsum": 0.0011437818650351997,
+          "far_delta_gap_hotpot_minus_xsum": -0.0017787410577375,
+          "sink_delta_gap_hotpot_minus_xsum": -0.0006172609216982
+        }
+      }
+    },
+    "js_gaps": {
+      "10": {
+        "UNIFORM": {
+          "js_mean_gap_hotpot_minus_xsum": -0.00016443859231200005,
+          "js_contrib_gap_hotpot_minus_xsum": -0.0057077336112593
+        },
+        "SMALL": {
+          "js_mean_gap_hotpot_minus_xsum": -0.0007351776814136001,
+          "js_contrib_gap_hotpot_minus_xsum": 0.00037872380839321096
+        },
+        "LARGE": {
+          "js_mean_gap_hotpot_minus_xsum": 1.618075587679998e-05,
+          "js_contrib_gap_hotpot_minus_xsum": 0.006911027602074488
+        },
+        "OTHER": {
+          "js_mean_gap_hotpot_minus_xsum": -0.0002635074511805,
+          "js_contrib_gap_hotpot_minus_xsum": -0.0015820177992239004
+        }
+      },
+      "11": {
+        "UNIFORM": {
+          "js_mean_gap_hotpot_minus_xsum": -0.00020164188104640002,
+          "js_contrib_gap_hotpot_minus_xsum": -0.035426697691677805
+        },
+        "SMALL": {
+          "js_mean_gap_hotpot_minus_xsum": -0.0004523865375718999,
+          "js_contrib_gap_hotpot_minus_xsum": -0.0647965763827103
+        },
+        "LARGE": {
+          "js_mean_gap_hotpot_minus_xsum": -5.177072023379998e-05,
+          "js_contrib_gap_hotpot_minus_xsum": 0.006438571259086898
+        },
+        "OTHER": {
+          "js_mean_gap_hotpot_minus_xsum": -0.0003402761925962,
+          "js_contrib_gap_hotpot_minus_xsum": 0.09378470281529161
+        }
+      }
+    }
+  },
+  "decision_gate": {
+    "branch": "A",
+    "rule": ">=3 salient task-gap signals across state ratio / flip / prefix shift",
+    "num_gap_hits": 7,
+    "gap_hits": [
+      [
+        "state_ratio_gap",
+        "10",
+        "SMALL",
+        0.08227814283880386
+      ],
+      [
+        "state_ratio_gap",
+        "10",
+        "LARGE",
+        -0.09958319403275406
+      ],
+      [
+        "flip_gap",
+        "10",
+        "SMALL",
+        -0.0211031722281892
+      ],
+      [
+        "prefix_gap",
+        "10",
+        "SMALL",
+        -0.011674595600331
+      ],
+      [
+        "prefix_gap",
+        "11",
+        "UNIFORM",
+        -0.0056887107906845
+      ],
+      [
+        "flip_gap",
+        "11",
+        "SMALL",
+        -0.012658105805855698
+      ],
+      [
+        "prefix_gap",
+        "11",
+        "SMALL",
+        -0.0096645328706415
+      ]
+    ],
+    "reason": "任务差异清晰，可用于功能性解释"
+  }
+}

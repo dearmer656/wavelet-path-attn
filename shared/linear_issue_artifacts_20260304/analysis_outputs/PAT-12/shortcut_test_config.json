@@ -1,0 +1,29 @@
+{
+  "option": "prefix_shuffle",
+  "prefix_k": 64,
+  "seed": 42,
+  "layers": [
+    10,
+    11
+  ],
+  "heads_by_layer": {
+    "10": [
+      11,
+      5,
+      2
+    ],
+    "11": [
+      8,
+      10,
+      0
+    ]
+  },
+  "state_unit": "(layer,query)",
+  "mask_policy": "attention_mask unchanged; only input_ids[:K] shuffled within valid prefix",
+  "inputs": {
+    "layerquery_rows": "/project/nlp-work5/hongyu-s/analysis_outputs/PAT-10/gate4_layerquery_rows.parquet",
+    "cached_wave_dump_root": "/project/nlp-work5/hongyu-s/transformers/examples/pytorch/language-modeling/analysis_program/out/conditioning_hotpot_xsum_s64/__attn_wave",
+    "ckpt_wavelet": "/project/nlp-work5/hongyu-s/transformers/examples/pytorch/language-modeling/runs/token_even_mix_2epoch_wavelet_farhead_suite/exp9_scale_coupled_shift_alllayers_nolayergate_10epoch_a6000x4_seed42/checkpoint-15000",
+    "ckpt_baseline": "/project/nlp-work5/hongyu-s/transformers/examples/pytorch/language-modeling/runs/token_even_mix_PA/checkpoint-15000"
+  }
+}

@@ -1,0 +1,23 @@
+{
+  "sample_id": 27,
+  "layer": 11,
+  "head": 8,
+  "query": 16,
+  "task": "xsum",
+  "orig": {
+    "state": "SMALL",
+    "margin_base": 0.10085347464375778,
+    "flip_any": 1,
+    "prefix_delta": -0.17512457338140128,
+    "diag_delta": 0.1537714302124062,
+    "far_delta": 0.0
+  },
+  "pert": {
+    "state": "SMALL",
+    "margin_base": 0.4941268421279981,
+    "flip_any": 1,
+    "prefix_delta": 0.24606672269859867,
+    "diag_delta": -0.2296850398114321,
+    "far_delta": 0.0
+  }
+}

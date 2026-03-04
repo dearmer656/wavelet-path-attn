@@ -1,0 +1,25 @@
+[INFO] PAT-6 args: ckpt=/cl/work5/hongyu-s/transformers/examples/pytorch/language-modeling/runs/token_even_mix_2epoch_wavelet_farhead_suite/exp9_scale_coupled_shift_alllayers_nolayergate_10epoch_a6000x4_seed42/checkpoint-15000 layers=[10, 11] num_samples=64 states=['SMALL', 'LARGE', 'UNIFORM', 'NULL'] prefix_k=8 fft=512/0.1/0.25 exclude_self=False test_size=0.2 seed=42 device=cuda
+[INFO] loaded mixed records: total=64 hotpot=32 xsum=32
+[INFO] effective valid length stats (mask&!pad&!eos): min=56 mean=434.94 max=512
+[INFO] filter rules: query/key must satisfy attention_mask=1 and token!=pad and token!=eos, causal key<=query, exclude_self=False
+[INFO] scales_by_layer={'10': [1.0, 4.0, 16.0, 64.0, 256.0, 1024.0, 4096.0, 16384.0], '11': [1.0, 4.0, 16.0, 64.0, 256.0, 1024.0, 4096.0, 16384.0]}
+[INFO] router head-consistency @ (b,l,q): count=55672 max_abs_diff max/mean/p95/p99=0.000e+00/0.000e+00/0.000e+00/0.000e+00, tol=1.0e-06
+[INFO] state thresholds: NULL p0>=0.8, UNIFORM p0<=0.2 & entropy>=1.677290, SMALL s_eff<=3.905097, LARGE s_eff>=5.100327
+[WARN] layer-query state low count: layer=10 state=NULL count=0 (<200)
+[INFO] layer-query state count: layer=10 state=UNIFORM count=3523
+[INFO] layer-query state count: layer=10 state=SMALL count=4648
+[INFO] layer-query state count: layer=10 state=LARGE count=6093
+[WARN] layer-query state low count: layer=11 state=NULL count=0 (<200)
+[INFO] layer-query state count: layer=11 state=UNIFORM count=7449
+[INFO] layer-query state count: layer=11 state=SMALL count=5753
+[INFO] layer-query state count: layer=11 state=LARGE count=1728
+[WARN] s_eff sanity: state=NULL has no finite values
+[INFO] s_eff quantiles by state UNIFORM: p10=4.076052 p50=4.729028 p90=5.634808
+[INFO] s_eff quantiles by state SMALL: p10=3.420861 p50=3.682702 p90=3.863674
+[INFO] s_eff quantiles by state LARGE: p10=5.145999 p50=5.365503 p90=6.002772
+[INFO] loaded wave dumps from /project/nlp-work5/hongyu-s/analysis_outputs/PAT-1b/run2/__attn_wave
+[INFO] dataset rows=29018 state_counts={'UNIFORM': 10886, 'SMALL': 10388, 'LARGE': 7744}
+[INFO] saved /project/nlp-work5/hongyu-s/analysis_outputs/PAT-6/gate2_router_choice_dataset.parquet
+[INFO] saved /project/nlp-work5/hongyu-s/analysis_outputs/PAT-6/gate2_router_choice_model.json
+[INFO] saved /project/nlp-work5/hongyu-s/analysis_outputs/PAT-6/gate2_rules.md
+[INFO] gate2 decision: branch=A best=tree prior=0.1872 best=0.3933 gain=0.2061 task_stability=True
