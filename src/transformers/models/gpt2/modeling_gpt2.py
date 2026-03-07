@@ -23,7 +23,7 @@ from typing import Callable, Optional, Union
 import torch
 from torch import nn
 from torch.nn import BCEWithLogitsLoss, CrossEntropyLoss, MSELoss
-
+import os
 from ...activations import ACT2FN, get_activation
 from ...cache_utils import Cache, DynamicCache, EncoderDecoderCache
 from ...generation import GenerationMixin
@@ -49,8 +49,6 @@ from ...utils.deprecation import deprecate_kwarg
 from ...utils.model_parallel_utils import assert_device_map, get_device_map
 from .configuration_gpt2 import GPT2Config
 
-from transformers.models.llama.modeling_llama import LlamaRotaryEmbedding
-from transformers.models.llama.modeling_llama import apply_rotary_pos_emb
 
 from einops import rearrange
 
@@ -60,10 +58,45 @@ try:
 except Exception as _e:
     _PaTHAttention = None
     _PaTHAttentionWfreq = None
+from fla.layers.freq_analysis_utils import *
 # from fla.layers.path_attn import PaTHAttention as _PaTHAttention
 logger = logging.get_logger(__name__)
 
+class PWavMeanLogger:
+    """One-shot logger for per-layer P_wav mean heatmaps."""
 
+    def __init__(self, save_dir: str = "analysis/pwav_mean", cmap: str = "hot") -> None:
+        self.save_dir = save_dir
+        self.cmap = cmap
+        self.recorded_layers: set[int] = set()
+        os.makedirs(save_dir, exist_ok=True)
+
+    def update(self, layer_idx: int, p_wav: torch.Tensor) -> None:
+        # Only log once per layer to avoid spamming the disk during long runs.
+        if p_wav is None:
+            return
+        if layer_idx in self.recorded_layers:
+            return
+        self.recorded_layers.add(layer_idx)
+
+        with torch.no_grad():
+            # 平均掉 batch 和 head，得到 [T,T]
+            mean_map = p_wav.mean(dim=(0, 1)).detach().float().cpu()
+
+        fig, ax = plt.subplots(figsize=(6, 5))
+        im = ax.imshow(mean_map, cmap=self.cmap, aspect="auto")
+        ax.set_xlabel("Key position j")
+        ax.set_ylabel("Query position i")
+        ax.set_title(f"P_wav mean (layer {layer_idx})")
+        fig.colorbar(im, ax=ax)
+        fig.tight_layout()
+
+        fig_path = os.path.join(self.save_dir, f"layer_{layer_idx:02d}_pwav_mean.png")
+        fig.savefig(fig_path)
+        plt.close(fig)
+
+        tensor_path = os.path.join(self.save_dir, f"layer_{layer_idx:02d}_pwav_mean.pt")
+        torch.save(mean_map, tensor_path)
 def eager_attention_forward(module, query, key, value, attention_mask, head_mask=None, **kwargs):
     attn_weights = torch.matmul(query, key.transpose(-1, -2))
 
@@ -140,7 +173,7 @@ class GPT2PaTHAttention(nn.Module):
                 single_A_B=getattr(config, "single_A_B", False),
                 use_beta_modulation=getattr(config, "use_beta_modulation", False),
                 use_soft_wavelet_fox=getattr(config, "use_soft_wavelet_fox", False),
-                wavelet_mode=getattr(config, "wavelet_mode", "additive"),
+                wavelet_mode=getattr(config, "wavelet_mode", "router_rel"),
             )
         elif getattr(config, "attn_implementation", None) == "path_attn":
             self.core = _PaTHAttention(
@@ -156,12 +189,13 @@ class GPT2PaTHAttention(nn.Module):
                 conv_bias=getattr(config, "path_conv_bias", False),
                 num_harmonics=getattr(config, "num_harmonics", 2),
                 use_soft_wavelet_fox=getattr(config, "use_soft_wavelet_fox", False),
-                wavelet_mode=getattr(config, "wavelet_mode", "additive"),
+                wavelet_mode=getattr(config, "wavelet_mode", "router_rel"),
                 logging_steps = config.logging_steps,
                 wavelet_baseline_use = config.wavelet_baseline_use,
                 attn_pdrop = config.attn_pdrop,
                 init_theta = config.init_theta,   # initial theta for path attention ratio
                 use_forget_gate = config.use_forget_gate,
+                config=config,
             )
         self.resid_dropout = nn.Dropout(config.resid_pdrop)
 
@@ -178,6 +212,9 @@ class GPT2PaTHAttention(nn.Module):
         output_attentions: Optional[bool] = False,
         attention_mask_2d: Optional[torch.Tensor] = None,   # 我们在 GPT2Model 额外传入的 2D 0/1 mask
         wavelet_decay_table: Optional[torch.Tensor] = None, # 我们在 GPT2Model 额外传入的 wavelet 衰减表
+        geom_p = 0,
+        analyzer=None,
+        input_ids=None,
         **kwargs,
     ):
         if encoder_hidden_states is not None:
@@ -194,21 +231,25 @@ class GPT2PaTHAttention(nn.Module):
         # 如需解码加速，后续可扩展成模块内维护 self._path_cache。
         path_cache = getattr(self, "_path_cache", None) if use_cache else None
         # print(hidden_states, 'in GPT2PaTHAttention.')
-        # pdb.set_trace()
-        attn_out, _weights, path_cache = self.core(
+        router1, router2 = None, None
+        attn_out, _weights, path_cache, dis_loss, router1, router2 = self.core(
             hidden_states,
             attention_mask=mask_2d,          # 2D 0/1 mask（或 None）
             past_key_values=path_cache,      # PaTH 自己的 cache（dict）
             output_attentions=output_attentions,
             use_cache=use_cache,
             wavelet_decay_table=wavelet_decay_table,
+            geom_p=geom_p,
+            analyzer=analyzer,
+            input_ids=input_ids,
+            **kwargs,  # 透传如 global_step/max_steps 等额外上下文
         )
         if use_cache:
             self._path_cache = path_cache
 
         attn_out = self.resid_dropout(attn_out)
         # GPT2Block 期望返回 (attn_output, attn_weights)
-        return attn_out, None
+        return attn_out, None, dis_loss, router1, router2
 from rotary_embedding_torch import RotaryEmbedding
 class GPT2Attention(nn.Module):
     def __init__(self, config, is_cross_attention=False, layer_idx=None):
@@ -222,12 +263,21 @@ class GPT2Attention(nn.Module):
             ),
             persistent=False,
         )
+   
+
         self.register_buffer("masked_bias", torch.tensor(-1e4), persistent=False)
 
         self.embed_dim = config.hidden_size
         self.num_heads = config.num_attention_heads
         self.head_dim = self.embed_dim // self.num_heads
         self.split_size = self.embed_dim
+        if config.wavelet_router and config.pe_method == 'no_pe':
+            self.router = nn.Sequential(
+                nn.Linear(self.embed_dim, 32, bias=False),
+                nn.Linear(32, self.num_heads * self.config.router_band_num, bias=False),
+            )
+        else:
+            self.router = None            
         if self.head_dim * self.num_heads != self.embed_dim:
             raise ValueError(
                 f"`embed_dim` must be divisible by num_heads (got `embed_dim`: {self.embed_dim} and `num_heads`:"
@@ -336,6 +386,7 @@ class GPT2Attention(nn.Module):
         encoder_attention_mask: Optional[torch.FloatTensor] = None,
         output_attentions: Optional[bool] = False,
         rope=None,
+        wavelet_decay_table=None,
         **kwargs,
     ) -> tuple[Union[torch.Tensor, tuple[torch.Tensor]], ...]:
         is_cross_attention = encoder_hidden_states is not None
@@ -400,6 +451,35 @@ class GPT2Attention(nn.Module):
             key_states = self.rotary_emb.rotate_queries_or_keys(key_states)
             # query_states = query_states.permute(0, 2, 1, 3)
             # key_states = key_states.permute(0, 2, 1, 3)
+        router1 = None
+        if self.router is not None:
+            jitter_std = getattr(self.config, "router_jitter_std", 0.0)   # e.g. 0.01
+            jitter_apply_in_eval = getattr(self.config, "router_jitter_apply_in_eval", False)
+            jitter_scale_by_logit_std = getattr(self.config, "router_jitter_scale_by_logit_std", True)      
+            def _add_gaussian_jitter(logits: torch.Tensor, std: float) -> torch.Tensor:
+                """
+                logits: [B,T,H,S]
+                std: base noise std in logit space
+                """
+                if std <= 0:
+                    return logits
+                if (not self.training) and (not jitter_apply_in_eval):
+                    return logits
+
+                if jitter_scale_by_logit_std:
+                    # scale noise by per-(B,T,H) logit std over S to be robust to logit magnitude
+                    # detach so the scaling factor doesn't backprop weirdly
+                    scale = logits.detach().std(dim=-1, keepdim=True).clamp_min(1e-6)
+                    noise = torch.randn_like(logits) * (std * scale)
+                else:
+                    noise = torch.randn_like(logits) * std
+
+                return logits + noise
+            B,H,T,D = query_states.shape
+            router1_logits = self.router(hidden_states)          # [B,T,H*S]
+            router1_logits = router1_logits.view(B, T, H, self.config.router_band_num)      # [B,T,H,S]
+            router1_logits = _add_gaussian_jitter(router1_logits, jitter_std)
+            router1 = torch.softmax(router1_logits / 1.0, dim=-1)  # [B,T,H,S]            
 
         if using_eager and self.reorder_and_upcast_attn and self.config.pe_method!='rotary':
             attn_output, attn_weights = self._upcast_and_reordered_attn(
@@ -415,6 +495,8 @@ class GPT2Attention(nn.Module):
                 head_mask=head_mask,
                 dropout=self.attn_dropout.p if self.training else 0.0,
                 is_causal=is_causal,
+                wavelet_decay_table=wavelet_decay_table,
+                router=router1,
                 **kwargs,
             )
         attn_output = attn_output.reshape(*attn_output.shape[:-2], -1).contiguous()
@@ -474,13 +556,16 @@ class GPT2Block(GradientCheckpointingLayer):
         output_attentions: Optional[bool] = False,
         rope=None,
         wavelet_decay_table=None,
+        geom_p=0,
+        analyzer=None,
+        input_ids=None,
         **kwargs,
     ) -> Union[tuple[torch.Tensor], Optional[tuple[torch.Tensor, tuple[torch.FloatTensor, ...]]]]:
         residual = hidden_states
         hidden_states = self.ln_1(hidden_states)
         # print(hidden_states, 'in GPT2Block.')
-        # pdb.set_trace()
-        attn_output, self_attn_weights = self.attn(
+        router1, router2 = None, None
+        attn_output, self_attn_weights, dis_loss, router1, router2 = self.attn(
             hidden_states,
             past_key_values=past_key_values,
             cache_position=cache_position,
@@ -490,6 +575,9 @@ class GPT2Block(GradientCheckpointingLayer):
             output_attentions=output_attentions,
             rope=rope,
             wavelet_decay_table=wavelet_decay_table,
+            geom_p=geom_p,
+            analyzer=analyzer,
+            input_ids=input_ids,
             **kwargs,
         )
         # residual connection
@@ -528,7 +616,7 @@ class GPT2Block(GradientCheckpointingLayer):
             if encoder_hidden_states is not None:
                 outputs += (cross_attn_weights,)
 
-        return outputs
+        return outputs, dis_loss, router1, router2
 
 
 # Copied from transformers.models.xlm.modeling_xlm.XLMSequenceSummary with XLM->GPT2
@@ -758,6 +846,141 @@ DEPARALLELIZE_DOCSTRING = r"""
 """
 
 import pdb
+import torch
+import matplotlib.pyplot as plt
+from tqdm import tqdm
+
+# 假设你的 tensor 叫 x，形状为 [64, 257]
+# x = your_tensor
+
+# 示例：如果你只是想测试，可以取消注释这句
+# x = torch.randn(64, 257)
+def plot_tensor_grouped_lines(x: torch.Tensor):
+    plt.figure(figsize=(10, 6))
+
+    num_groups = 64 // 16  # =4
+
+    for i in tqdm(range(num_groups), desc="Plotting groups"):
+        start = i * 16
+        
+        # 将这 16 条线合成为一条（可选），这里按照你的要求：每 16 条画一条折线
+        # 你需要的是把这 16 行的每一个元素画出来，同时画 16 条线的话可以改成循环画
+        # === 根据题意，我理解为：把每组16行平均后画一条线 ===
+        # y = x[start:end].mean(dim=0).tolist()
+        y = x[start].tolist()
+        
+        plt.plot(y, label=f"dim {start}")
+
+    plt.legend()
+    plt.title("Tensor grouped-by-16 line plot")
+    plt.xlabel("Index (257 dim)")
+    plt.ylabel("Value")
+    os.makedirs("wavelet_spectrum", exist_ok=True)
+    plt.savefig("wavelet_spectrum/tensor_64x257_group16_plot.png", dpi=300)
+    print("Saved to wavelet_spectrum/tensor_64x257_group16_plot.png")
+@torch.no_grad()
+def build_wavelet_dtt_bands(
+    wavelet_dtt: torch.Tensor,   # [D, T, T]
+    K: int = 8,
+    method: str = "freq_proxy",  # "freq_proxy" or "scale_d"
+    scale_d: torch.Tensor | None = None,  # [D], optional
+    compute_dtype: torch.dtype = torch.float32,
+    chunk_d: int = 1024,         # for big D
+):
+    """
+    Returns:
+      wavelet_dtt_bands: [K, D, T, T]  (each band masks a subset of D)
+      masks           : [K, D]         (0/1 float mask)
+      score_d         : [D]            (used for sorting / bucketing)
+      order           : [D]            (indices sorted by score_d ascending)
+    """
+    assert wavelet_dtt.dim() == 3, f"expect [D,T,T], got {tuple(wavelet_dtt.shape)}"
+    D, T1, T2 = wavelet_dtt.shape
+    assert T1 == T2, f"expect square [T,T], got {T1}x{T2}"
+
+    device = wavelet_dtt.device
+    wav = wavelet_dtt.to(dtype=compute_dtype)
+
+    # ---- (A) build score_d for bucketing ----
+    if method == "scale_d":
+        assert scale_d is not None, "method='scale_d' needs scale_d: [D]"
+        assert scale_d.shape == (D,), f"scale_d should be [D], got {tuple(scale_d.shape)}"
+        score_d = scale_d.to(device=device, dtype=compute_dtype).clone()
+
+    elif method == "freq_proxy":
+        # proxy: average absolute finite differences along both axes
+        # higher => more rapidly varying kernel => "higher-frequency-ish"
+        score_d = torch.empty(D, device=device, dtype=compute_dtype)
+
+        # chunk to avoid big intermediate allocations if D large
+        for s in tqdm(range(0, D, chunk_d), desc="Scoring wavelet_dtt by freq proxy"):
+            e = min(D, s + chunk_d)
+            x = wav[s:e]  # [d',T,T]
+
+            # diffs
+            dx_t = (x[:, 1:, :] - x[:, :-1, :]).abs().mean(dim=(1, 2))    # [d']
+            dx_n = (x[:, :, 1:] - x[:, :, :-1]).abs().mean(dim=(1, 2))    # [d']
+
+            score_d[s:e] = dx_t + dx_n
+
+    else:
+        raise ValueError(f"Unknown method: {method}")
+
+    # ---- (B) sort + split D into K buckets ----
+    order = torch.argsort(score_d, dim=0)  # ascending
+    chunks = torch.chunk(order, K)         # nearly equal size
+
+    masks = torch.zeros((K, D), device=device, dtype=compute_dtype)
+    for k, ids in enumerate(chunks):
+        masks[k, ids] = 1.0
+
+    # ---- (C) apply masks to create bands ----
+    # [K,D,1,1] * [1,D,T,T] => [K,D,T,T]
+    wavelet_dtt_bands = masks[:, :, None, None] * wavelet_dtt[None, :, :, :].to(dtype=compute_dtype)
+
+    return wavelet_dtt_bands, masks, score_d, order
+from pathlib import Path
+def build_bucket_offsets(*, T: int, K: int, config) -> list:
+    mode = str(getattr(config, "shift_offset_mode", "linear"))
+
+    cap = int(getattr(config, "shift_offset_cap", 0))           # 0 => no cap
+    off_min = int(getattr(config, "shift_offset_min", 0))
+
+    def _apply_cap(x: int) -> int:
+        if cap and cap > 0:
+            x = min(x, cap)
+        # 不能超过 T-1，否则必然全被 mask 掉
+        x = min(x, T - 1)
+        # 最小值约束
+        x = max(x, off_min)
+        return int(x)
+
+    if mode == "linear":
+        stride = int(getattr(config, "shift_stride", 16))
+        center = int(getattr(config, "shift_center", 8))
+        offsets = [0] + [stride * j + center for j in range(1, K)]
+        return [_apply_cap(x) for x in offsets]
+
+    if mode == "list":
+        offsets = list(getattr(config, "shift_offsets", []))
+        assert len(offsets) == K, f"shift_offsets must have length K={K}, got {len(offsets)}"
+        return [_apply_cap(int(x)) for x in offsets]
+
+    if mode == "ratio":
+        ratios = list(getattr(config, "shift_offsets_ratio", []))
+        assert len(ratios) == K, f"shift_offsets_ratio must have length K={K}, got {len(ratios)}"
+        offsets = [int(round(r * T)) for r in ratios]
+        return [_apply_cap(x) for x in offsets]
+
+    if mode == "geom":
+        a = float(getattr(config, "shift_geom_a", 32.0))
+        r = float(getattr(config, "shift_geom_r", 2.0))
+        offsets = [0]
+        for j in range(1, K):
+            offsets.append(int(round(a * (r ** (j - 1)))))
+        return [_apply_cap(x) for x in offsets]
+
+    raise ValueError(f"Unknown shift_offset_mode={mode}")   
 @auto_docstring
 class GPT2Model(GPT2PreTrainedModel):
     _supports_param_buffer_assignment = False
@@ -766,10 +989,12 @@ class GPT2Model(GPT2PreTrainedModel):
         super().__init__(config)
 
         self.embed_dim = config.hidden_size
-
         self.wte = nn.Embedding(config.vocab_size, self.embed_dim)
-        if config.pe_method != 'rotary' and config.attn_implementation == 'eager':
-            self.wpe = nn.Embedding(config.max_position_embeddings, self.embed_dim)
+        if config.pe_method == 'no_pe':
+            pass
+        else:
+            if config.pe_method != 'rotary' and config.attn_implementation == 'eager':
+                self.wpe = nn.Embedding(config.max_position_embeddings, self.embed_dim)
 
         self.drop = nn.Dropout(config.embd_pdrop)
         self.h = nn.ModuleList([GPT2Block(config, layer_idx=i) for i in range(config.num_hidden_layers)])
@@ -782,49 +1007,249 @@ class GPT2Model(GPT2PreTrainedModel):
         self._attn_implementation = config._attn_implementation
 
         # Initialize weights and apply final processing
+
         self.post_init()
+        self.config=config
+        wavelet_mode = str(getattr(config, "wavelet_mode", "router_rel")).strip().lower()
+        self._skip_wavelet_decay_table = wavelet_mode in ("logit_bias_ctxscale_shift_v0", "logit_bias_ctxscale_shift_v0_film")
+        self.scale_range = config.scale_range
+        self.s_tensor = None
+        self.beta_tensor = None
+        if not self._skip_wavelet_decay_table:
+            if config.scale_type == 'learnable':
+                self.S = 8  # 你现在 interval 那套基本就是 8 个 scale
+
+                # 用你当前 custom 作为初始化
+                # 例如 scale_range=(0,16), interval=2 -> i=[0,2,4,...14]
+                init_exps = list(range(self.scale_range[0], self.scale_range[1], (self.scale_range[1]-self.scale_range[0])//self.S))
+                init_scales = torch.tensor([2**i for i in init_exps], dtype=torch.float32)  # [S]
+
+                # 初始化 a0 和 r：a0 = init_scales[0], r = (init_scales[-1]/init_scales[0])**(1/(S-1))
+                a0_init = init_scales[0].item()
+                r_init  = (init_scales[-1].item()/init_scales[0].item()) ** (1.0/(self.S-1))
+
+                self.theta_a0 = torch.nn.Parameter(torch.tensor([math.log(a0_init)], dtype=torch.float32, device='cuda'))
+                self.theta_r  = torch.nn.Parameter(torch.tensor([math.log(math.expm1(r_init-1))], dtype=torch.float32, device='cuda'))
+            if config.scale_type == 'custom':
+                self.s_tensor, self.beta_tensor = self.make_scale_shift_vectors()
+            elif config.scale_type == 'uniform':
+                self.s_tensor, self.beta_tensor = self.make_uniform_scale_shift_vectors()
+            elif config.scale_type == 'learnable':
+                pass
+            elif config.scale_type == 'none':
+                self.s_tensor = None
+                self.beta_tensor = None
+            else:
+                raise ValueError(f"Unknown scale_type: {config.scale_type}")
         self.d_m = None
-        if config.wavelet_baseline_use or config.use_soft_wavelet_fox:
-            self.s_tensor, self.beta_tensor = self.make_scale_shift_vectors()
-            self.d_m = self.make_decay_per_dim_custom(64, config.block_size, self.s_tensor, self.beta_tensor)
-    def make_scale_shift_vectors(self):
+        if (not self._skip_wavelet_decay_table) and config.scale_type != 'learnable':
+            use_time_shift = getattr(config, 'use_time_shift', False)
+            if use_time_shift:
+                K = getattr(config, 'shift_bucket_K', 4)
+                # bucket_offsets = torch.tensor([0] + [16*j + 8 for j in range(1, K)], device=self.s_tensor.device)
+                bucket_offsets = build_bucket_offsets(T=config.block_size, K=K, config=config)
+                self.d_m = self.make_decay_per_dim_custom_bucketed(64, config.block_size, self.s_tensor, self.beta_tensor, bucket_offsets)
+            else:
+                self.d_m = self.make_decay_per_dim_custom(64, config.block_size, self.s_tensor, self.beta_tensor)
+        # if config.wavelet_router:
+        #     self.d_m, _, _, _ = build_wavelet_dtt_bands(self.d_m)
+        if config.analyzer:
+            # self.analyzer = LayerAttentionAnalyzer(num_layers=config.num_hidden_layers, num_heads=12)
+            # self.analyzer.reset()
+            # self.scale_wise_analyzer = ScaleWiseAnalyzer(n_layers=config.num_hidden_layers, n_heads=12, head_dim=64, device='cuda', save_dir=f'scale_wise_analyzer_logs_{config.model_name_or_path}')
+            # self.router_analyzer = RouterAnalyzer(
+            #                             n_layers=config.num_hidden_layers,
+            #                             n_heads=config.num_attention_heads,
+            #                             n_scales=8,
+            #                             save_dir=f'router_analysis_{config.model_name_or_path}',
+            #                             device="cuda",              # 统计放 CPU 更省显存
+            #                             compute_dtype=torch.float32,
+            #                         )
+            self.analyzer_tools = {
+                'layer_attention_analyzer': LayerAttentionAnalyzer(num_layers=config.num_hidden_layers, num_heads=12),
+                'scale_wise_analyzer': ScaleWiseAnalyzer(n_layers=config.num_hidden_layers, n_heads=12, head_dim=64, device='cuda', save_dir=f'L_{config.block_size}_scale_wise_analyzer_logs_{config.model_name_or_path}'),
+                'router_analyzer': RouterAnalyzer(
+                                        n_layers=config.num_hidden_layers,
+                                        n_heads=config.num_attention_heads,
+                                        n_scales=8,
+                                        save_dir=f'L{config.block_size}_router_analysis_{config.model_name_or_path}',
+                                        device="cuda",              # 统计放 CPU 更省显存
+                                        compute_dtype=torch.float32,
+                                    ),
+                'token_scale_dumper': TokenScaleDumper(TokenScaleDumperConfig(
+                                                                                out_dir=f'L{config.block_size}_router_analysis_{config.model_name_or_path}',
+                                                                                tag="exp_router",
+                                                                                compress=False,
+                                                                                max_rows_per_shard=2_000_000,
+                                                                                flush_every=200_000,
+                                                                                low_frac=0.25,        # last 25% scales are "low-freq"
+                                                                                pos_segments=3,
+                                                                            )),
+                'pwav_mean_logger' : PWavMeanLogger(save_dir=f'L{config.block_size}_score_matrix_analysis_{config.model_name_or_path}'),
+            }
+        # X = torch.fft.rfft(self.d_m[:, -1,:], dim=-1, norm='ortho')   # [B, Q, K, H, D]
+        # A = X.abs()
+        # A_log = torch.log(A.clamp_min(1e-6))
+        # # pdb.set_trace()
+        # plot_tensor_grouped_lines(A_log)
+    def make_scale_shift_vectors(self, learnable_switch: bool = False):
+        shift_list = [0,1,2,3,4,5,6,7]
+        # shift_list = [0] * 8
+        device = 'cuda'
+
+        if learnable_switch:
+            a0 = self.theta_a0.exp().squeeze(0)                        # scalar
+            r  = (1.0 + torch.nn.functional.softplus(self.theta_r)).squeeze(0)  # scalar >1
+            k  = torch.arange(self.S, device=device, dtype=torch.float32)       # [S]
+            scales = a0 * (r ** k)                                     # [S]
+        else:
+            interval = (self.scale_range[1] - self.scale_range[0]) // 8
+            scale_list = [2**i for i in range(self.scale_range[0], self.scale_range[1], interval)]
+            scales = torch.tensor(scale_list, dtype=torch.float32, device=device)  # [S]
+
+        s_list = []
+        beta_list = []
+        for sc in scales:
+            for sh in shift_list:
+                s_list.append(sc)
+                beta_list.append(float(sh))
+
+        s_tensor = torch.stack(s_list).to(torch.float32)
+        beta_tensor = torch.tensor(beta_list, dtype=torch.float32, device=device)
+        return s_tensor, beta_tensor
+    # def make_scale_shift_vectors(self, learnable_switch: bool = False):
+    #     """
+    #     1) 定义 scale_list = [2^1, 2^2, ..., 2^15]  共 15 个值
+    #     2) 定义 shift_list = [0, 32, 64, 96]         共 4 个值
+    #     3) 组合成 d_h=15*4=60 维的 s 向量与 beta 向量:
+    #     s = [2^1,2^1,2^1,2^1, 2^2,2^2,2^2,2^2, …, 2^15,2^15,2^15,2^15]
+    #     beta = [0,32,64,96, 0,32,64,96, …, 0,32,64,96]
+    #     返回:
+    #     - s_tensor:  shape=(d_h,) dtype=float32
+    #     - beta_tensor:shape=(d_h,) dtype=float32
+    #     """
+    #     interval = (self.scale_range[1] - self.scale_range[0]) // 8
+    #     scale_list = [2**i for i in range(self.scale_range[0], self.scale_range[1], interval)]  # [2^1, 2^2, …, 2^15]
+    #     shift_list = [0, 1, 2, 3, 4, 5, 6, 7]
+    #     s = []
+    #     beta = []
+    #     for sc in scale_list:
+    #         for sh in shift_list:
+    #             s.append(float(sc))
+    #             if self.config.scale_use_for_shift:
+    #                 beta.append(float(sc * sh))
+    #             else:
+    #                 beta.append(float(sh))
+
+    #     # 现在 len(s) == len(beta) == 15*4 = 60
+    #     s_tensor = torch.tensor(s, dtype=torch.float32, device='cuda')
+    #     beta_tensor = torch.tensor(beta, dtype=torch.float32, device='cuda')
+    #     return s_tensor, beta_tensor
+    def make_uniform_scale_shift_vectors(self):
         """
-        1) 定义 scale_list = [2^1, 2^2, ..., 2^15]  共 15 个值
-        2) 定义 shift_list = [0, 32, 64, 96]         共 4 个值
-        3) 组合成 d_h=15*4=60 维的 s 向量与 beta 向量:
-        s = [2^1,2^1,2^1,2^1, 2^2,2^2,2^2,2^2, …, 2^15,2^15,2^15,2^15]
-        beta = [0,32,64,96, 0,32,64,96, …, 0,32,64,96]
-        返回:
-        - s_tensor:  shape=(d_h,) dtype=float32
-        - beta_tensor:shape=(d_h,) dtype=float32
+        Log-uniform scale list + fixed shift list
+
+        - scale 在 [2^scale_range[0], 2^scale_range[1]] 上 log-space 均匀
+        - scale 个数 = d_h / len(shift_list)
+        - 不改变 d_h，不改变 shift_list
         """
-        # scale_list = [0.01 + i*0.01286 for i in range(8)]
-        # scale_list = [self.config.decay_rate for _ in range(8)]
-        # scale_list = list(np.linspace(0.0001, 0.005, 8))
-        scale_list = [2**i for i in range(8)]  # [2^1, 2^2, …, 2^15]
-        # scale_list = [0 for _ in range(8)]
-        # scale_list = [1 / (2 * k) for k in range(5, 21)]   # [2^1, 2^2, …, 2^15]
-        # scale_list = [1] + scale_list
+
+        device = 'cuda'
+
+        # -------------------------
+        # 1) shift list（保持不变）
+        # -------------------------
         shift_list = [0, 1, 2, 3, 4, 5, 6, 7]
-        # shift_list = [0, 0, 0, 0, 0, 0, 0, 0]
-        # shift_list = [0, 32, 64, 96, 128, 160, 192, 224]
+        # shift_list = [0] * 8
+        num_shifts = len(shift_list)
+
+        # -------------------------
+        # 2) scale 个数由 d_h 决定
+        # -------------------------
+        num_scales = 8
+
+        # -------------------------
+        # 3) log-uniform scale list
+        # -------------------------
+        scale_min = 2 ** self.scale_range[0]
+        scale_max = 2 ** self.scale_range[1]
+
+        # log-space 均匀
+        scale_list = torch.logspace(
+            start=torch.log10(torch.tensor(scale_min, dtype=torch.float32)),
+            end=torch.log10(torch.tensor(scale_max, dtype=torch.float32)),
+            steps=num_scales,
+            base=10.0,
+            device=device
+        )
+
+        # （可选）如果你希望 scale 是“干净”的整数
+        # scale_list = torch.round(scale_list)
+
+        # -------------------------
+        # 4) 组合 scale × shift
+        # -------------------------
         s = []
         beta = []
+
         for sc in scale_list:
             for sh in shift_list:
-                s.append(float(sc))
+                s.append(sc)
                 beta.append(float(sh))
 
-        # 现在 len(s) == len(beta) == 15*4 = 60
-        s_tensor = torch.tensor(s, dtype=torch.float32, device='cuda')
-        beta_tensor = torch.tensor(beta, dtype=torch.float32, device='cuda')
-        return s_tensor, beta_tensor
+        s_tensor = torch.stack(s).to(device)           # (d_h,)
+        beta_tensor = torch.tensor(beta, device=device, dtype=torch.float32)
 
+        return s_tensor, beta_tensor    
+    def make_decay_per_dim_custom_bucketed(
+        self,
+        d_h: int,
+        L: int,
+        s: torch.Tensor,        # [d_h]
+        beta: torch.Tensor,     # [d_h]
+        bucket_offsets: torch.Tensor,  # [K] (e.g., [0, 24, 40, ...])
+        device: str = "cuda",
+        dtype: torch.dtype = torch.float32,
+        enable_tqdm: bool = False,
+    ):
+        """
+        Return: p_bucketed [K, d_h, L, L], each is tril() causal.
+        Implements: u = (diff - (beta + bucket_offset)) / s
+        """
+        assert s is not None and beta is not None
+        assert s.shape[0] == d_h and beta.shape[0] == d_h
+
+        s = s.to(device=device, dtype=dtype)
+        beta = beta.to(device=device, dtype=dtype)
+        bucket_offsets = torch.tensor(bucket_offsets, dtype=dtype, device=device)
+
+        # diff[m,n] = m - n
+        idx = torch.arange(L, device=device, dtype=dtype)
+        diff = idx.view(L, 1) - idx.view(1, L)  # [L,L]
+
+        a = s.view(d_h, 1, 1)       # [d_h,1,1]
+        b = beta.view(d_h, 1, 1)    # [d_h,1,1]
+
+        K = bucket_offsets.numel()
+        out = torch.empty((K, d_h, L, L), device=device, dtype=dtype)
+
+        it = range(K)
+        if enable_tqdm:
+            it = tqdm(it, desc="build wavelet_dtt buckets", total=K)
+
+        for k in it:
+            t = bucket_offsets[k].view(1, 1, 1)          # scalar broadcast
+            u = (diff.unsqueeze(0) - (b + t)) / a        # [d_h,L,L]
+            p = (1.0 - u**2) * torch.exp(-0.5 * u**2)    # [d_h,L,L]
+            out[k] = p.tril()                            # causal
+        return out.view(K, 8, d_h // 8, L, L).mean(dim=2)  # [K, d_h, L, L]
     def make_decay_per_dim_custom(self, d_h: int, L: int, s: torch.Tensor, beta: torch.Tensor, device='cuda'):
         """
          改造后直接输出 p_{m,n} 矩阵，shape=(d_h, L, L)
         """
          # 1) 构造位置差 diff_{m,n} = m - n
+        if s is None or beta is None:
+            return None
         idx = torch.arange(L, device=device).float()             # (L,)
         m = idx.view(L, 1)                                      # (L,1)
         n = idx.view(1, L)                                      # (1,L)
@@ -841,7 +1266,129 @@ class GPT2Model(GPT2PreTrainedModel):
         p = (1 - u**2) * torch.exp(-0.5 * u**2)                 # (d_h,L,L)
 
          # 返回 shape=(d_h, L, L)，自注意力里再做 sqrt(d) 缩放和合并
-        return p
+        return p.tril()
+    # def make_decay_per_dim_custom(self,
+    #                           d_h: int,
+    #                           L: int,
+    #                           s: torch.Tensor,
+    #                           beta: torch.Tensor,
+    #                           device: str = "cuda",
+    #                           target_norm: float = 1.0):
+    #     idx = torch.arange(L, device=device, dtype=torch.float32)
+    #     m = idx.view(L, 1)
+    #     n = idx.view(1, L)
+    #     diff = m - n  # (L,L)
+
+    #     a = s.view(d_h, 1, 1)
+    #     b = beta.view(d_h, 1, 1)
+
+    #     u = (diff.unsqueeze(0) - b) / a              # (d_h, L, L)
+    #     p = (1.0 - u**2) * torch.exp(-0.5 * u**2)    # (d_h, L, L)
+
+    #     tril_mask = torch.tril(torch.ones(L, L, device=device, dtype=torch.float32))
+    #     mask = tril_mask.unsqueeze(0)                # (1, L, L)
+
+    #     p_causal = p * mask                          # (d_h, L, L)
+
+    #     # 关键一句：对最后一维做 L2 norm 归一
+    #     w = torch.nn.functional.normalize(p_causal, p=2, dim=-1, eps=1e-8)
+    #     w = w * target_norm
+
+    #     return w   # [d_h, L, L]
+
+    # def make_decay_per_dim_custom(self,
+    #                             d_h: int,
+    #                             L: int,
+    #                             s: torch.Tensor,
+    #                             beta: torch.Tensor,
+    #                             device: str = "cuda",
+    #                             target_m2: float = 1.0):
+    #     """
+    #     输出 w_{d,i,j}, shape = (d_h, L, L)
+    #     - 先按 Ricker wavelet 公式得到 p
+    #     - 施加 causal tril mask（只保留下三角 i>=j）
+    #     - 再对 mask 后的有效区域做二阶矩归一，让 E[w^2] ~= target_m2
+    #     """
+
+    #     # 1) 位置差 diff_{m,n} = m - n
+    #     idx = torch.arange(L, device=device, dtype=torch.float32)  # (L,)
+    #     m = idx.view(L, 1)                                         # (L,1)
+    #     n = idx.view(1, L)                                         # (1,L)
+    #     diff = m - n                                               # (L,L)
+
+    #     # 2) 扩展 scale a 和 shift b 到 (d_h,1,1)
+    #     a = s.view(d_h, 1, 1)                                      # (d_h,1,1)
+    #     b = beta.view(d_h, 1, 1)                                   # (d_h,1,1)
+
+    #     # 3) u = (diff - b) / a
+    #     u = (diff.unsqueeze(0) - b) / a                            # (d_h,L,L)
+
+    #     # 4) 原始 Ricker wavelet 分数 p_{d,i,j}
+    #     p = (1.0 - u**2) * torch.exp(-0.5 * u**2)                  # (d_h,L,L)
+
+    #     # === 关键变化从这里开始 ===
+
+    #     # 5) causal mask: 只保留下三角 (i >= j)
+    #     tril_mask = torch.tril(torch.ones(L, L, device=device, dtype=torch.float32))  # (L,L)
+    #     mask = tril_mask.unsqueeze(0)                                                 # (1,L,L)
+
+    #     p_causal = p * mask  # 上三角直接置 0（不会被用到）
+
+    #     # 6) 在 mask 后的有效区域上做「全局二阶矩归一」
+    #     #    目标: E[w^2] ~= target_m2，避免整体坍缩或爆炸
+    #     eps = 1e-8
+    #     # valid 元素数量：d_h * 有效(i,j)个数
+    #     num_valid = (mask > 0).sum() * d_h
+
+    #     # 注意只统计有效区域
+    #     m2 = (p_causal.pow(2) * mask).sum() / (num_valid + eps)    # 标量
+
+    #     alpha = (target_m2 / (m2 + eps)).sqrt()                    # 标量
+
+    #     w = p_causal * alpha                                       # [d_h,L,L]
+
+    #     return w
+    # def make_decay_per_dim_custom(self, d_h: int, L: int,
+    #                             s: torch.Tensor, beta: torch.Tensor,
+    #                             device='cuda'):
+    #     """
+    #     输出 p_{m,n}，shape=(d_h, L, L)。
+    #     改动：
+    #     1) 严格上三角位置（m < n）替换为“每一行的最小值”
+    #     2) 对最后一维做 softmax
+    #     """
+    #     # 1) 位置差 diff_{m,n} = m - n
+    #     idx = torch.arange(L, device=device, dtype=torch.float32)  # (L,)
+    #     m = idx.view(L, 1)                                         # (L,1)
+    #     n = idx.view(1, L)                                         # (1,L)
+    #     diff = m - n                                               # (L,L)
+
+    #     # 2) 扩展 scale a 和 shift b 到 (d_h,1,1)
+    #     a = s.view(d_h, 1, 1)                                      # (d_h,1,1)
+    #     b = beta.view(d_h, 1, 1)                                   # (d_h,1,1)
+
+    #     # 3) u = (diff - b) / a
+    #     u = (diff.unsqueeze(0) - b) / a                            # (d_h,L,L)
+
+    #     # 4) 原始分数 p_{m,n} = (1 - u^2) * exp(-0.5 * u^2)
+    #     p = (1 - u**2) * torch.exp(-0.5 * u**2)                   # (d_h,L,L)
+    #     p = p / (p.norm(dim=-1, keepdim=True) + 1e-12)
+    #     # 5) 严格上三角掩码（True 表示 m < n）
+    #     # upper_mask = torch.triu(torch.ones(L, L, device=device, dtype=torch.bool), diagonal=1)  # (L,L)
+
+    #     # 6) 每一行（固定 m）最小值，沿最后一维求最小：(d_h, L, 1)
+    #     # row_min = p.amin(dim=-1, keepdim=True)
+
+    #     # 7) 将严格上三角置为对应行的最小值
+    #     # p = torch.where(upper_mask, row_min, p)
+
+    #     # 8) 对最后一维做 softmax
+    #     # p = 2 * torch.sigmoid(p) ###keep consistent with fox paper
+
+    #     # p = torch.sigmoid(p) ###keep consistent with fox paper
+    #     # return p - 1
+
+    #     return p
     @add_start_docstrings(PARALLELIZE_DOCSTRING)
     def parallelize(self, device_map=None):
         # Check validity of device_map
@@ -916,6 +1463,7 @@ class GPT2Model(GPT2PreTrainedModel):
         output_attentions: Optional[bool] = None,
         output_hidden_states: Optional[bool] = None,
         return_dict: Optional[bool] = None,
+        geom_p=0,
         **kwargs,
     ) -> Union[tuple, BaseModelOutputWithPastAndCrossAttentions]:
         r"""
@@ -994,7 +1542,9 @@ class GPT2Model(GPT2PreTrainedModel):
             hidden_states = inputs_embeds
         elif self.config.pe_method == 'rotary':
             assert self.config.attn_implementation == "eager", "only in eager mode you can use rotary."
-            hidden_states = inputs_embeds   
+            hidden_states = inputs_embeds
+        elif self.config.pe_method == 'no_pe':
+            hidden_states = inputs_embeds
         else:
             position_embeds = self.wpe(position_ids)
             hidden_states = inputs_embeds + position_embeds.to(inputs_embeds.device)
@@ -1047,6 +1597,12 @@ class GPT2Model(GPT2PreTrainedModel):
         all_self_attentions = () if output_attentions else None
         all_cross_attentions = () if output_attentions and self.config.add_cross_attention else None
         all_hidden_states = () if output_hidden_states else None
+        dis_loss_total = hidden_states.new_zeros([])
+        if self.config.scale_type == 'learnable' and not self._skip_wavelet_decay_table:
+            s_tensor, beta_tensor = self.make_scale_shift_vectors(learnable_switch=True)
+            self.d_m = self.make_decay_per_dim_custom(64, self.config.block_size, s_tensor, beta_tensor)
+        router1_idx_layers = []
+        router2_idx_layers = []
         for i, block in enumerate(self.h):
             # Model parallel
             if self.model_parallel:
@@ -1056,7 +1612,7 @@ class GPT2Model(GPT2PreTrainedModel):
             if output_hidden_states:
                 all_hidden_states = all_hidden_states + (hidden_states,)
 
-            outputs = block(
+            outputs, cur_dis_loss, router1, router2 = block(
                 hidden_states,
                 past_key_values if not (self.gradient_checkpointing and self.training) else None,
                 cache_position,
@@ -1069,10 +1625,20 @@ class GPT2Model(GPT2PreTrainedModel):
                 attention_mask_2d=attention_mask,  # ← 传给 PaTH 用的 2D 0/1 mask；其他实现会忽略
                 rope=rope,
                 wavelet_decay_table=self.d_m,
+                geom_p=geom_p,
+                analyzer=self.analyzer_tools if self.config.analyzer else None,
+                # Always pass input_ids when available so eval-time attention exports
+                # can recover token_id/token text even when analyzer is disabled.
+                input_ids=input_ids,
+                # analyzer=self.analyzer if self.config.analyzer else None,
+                # scale_wise_analyzer=self.scale_wise_analyzer if self.config.analyzer else None,
+                # router_analyzer=self.router_analyzer if self.config.analyzer else None,
                 **kwargs,
             )
 
-
+            router1_idx_layers.append(router1)
+            router2_idx_layers.append(router2)
+            dis_loss_total += cur_dis_loss
             hidden_states = outputs[0]
 
             if output_attentions:
@@ -1085,7 +1651,14 @@ class GPT2Model(GPT2PreTrainedModel):
                 for k, v in self.device_map.items():
                     if i == v[-1] and "cuda:" + str(k) != self.last_device:
                         hidden_states = hidden_states.to("cuda:" + str(k + 1))
-
+        try:
+            router1_idx = torch.stack(router1_idx_layers, dim=0)  # [L,B,T,H]
+            router2_idx = torch.stack(router2_idx_layers, dim=0)
+            self.last_router1_idx = router1_idx.detach()
+            self.last_router2_idx = router2_idx.detach()
+        
+        except:
+            pass
         hidden_states = self.ln_f(hidden_states)
 
         hidden_states = hidden_states.view(output_shape)
@@ -1107,7 +1680,7 @@ class GPT2Model(GPT2PreTrainedModel):
             hidden_states=all_hidden_states,
             attentions=all_self_attentions,
             cross_attentions=all_cross_attentions,
-        )
+        ), dis_loss_total
 
 
 @auto_docstring(
@@ -1123,7 +1696,6 @@ class GPT2LMHeadModel(GPT2PreTrainedModel, GenerationMixin):
         super().__init__(config)
         self.transformer = GPT2Model(config)
         self.lm_head = nn.Linear(config.n_embd, config.vocab_size, bias=False)
-
         # Model parallel
         self.model_parallel = False
         self.device_map = None
@@ -1181,6 +1753,7 @@ class GPT2LMHeadModel(GPT2PreTrainedModel, GenerationMixin):
         output_hidden_states: Optional[bool] = None,
         return_dict: Optional[bool] = None,
         logits_to_keep: Union[int, torch.Tensor] = 0,
+        geom_p = 0,
         **kwargs,
     ) -> Union[tuple, CausalLMOutputWithCrossAttentions]:
         r"""
@@ -1203,7 +1776,7 @@ class GPT2LMHeadModel(GPT2PreTrainedModel, GenerationMixin):
         """
         return_dict = return_dict if return_dict is not None else self.config.use_return_dict
 
-        transformer_outputs = self.transformer(
+        transformer_outputs, dis_loss = self.transformer(
             input_ids,
             past_key_values=past_key_values,
             attention_mask=attention_mask,
@@ -1218,9 +1791,9 @@ class GPT2LMHeadModel(GPT2PreTrainedModel, GenerationMixin):
             output_attentions=output_attentions,
             output_hidden_states=output_hidden_states,
             return_dict=return_dict,
+            geom_p=geom_p,
         )
         hidden_states = transformer_outputs[0]
-
         # Set device for model parallelism
         if self.model_parallel:
             torch.cuda.set_device(self.transformer.first_device)
@@ -1238,13 +1811,19 @@ class GPT2LMHeadModel(GPT2PreTrainedModel, GenerationMixin):
                 vocab_size=self.config.vocab_size,
                 **kwargs,
             )
+        # Keep auxiliary dis_loss (including router entropy regularization) explicit in
+        # training objective when LM loss exists.
+        if loss is not None:
+            loss = loss + (float(geom_p) * dis_loss)
 
+        # loss += self.dis_loss_coe * dis_loss
         if not return_dict:
             output = (logits,) + transformer_outputs[1:]
             return ((loss,) + output) if loss is not None else output
 
         return CausalLMOutputWithCrossAttentions(
             loss=loss,
+            auxiliary_loss=dis_loss,
             logits=logits,
             past_key_values=transformer_outputs.past_key_values,
             hidden_states=transformer_outputs.hidden_states,
