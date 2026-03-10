@@ -185,10 +185,15 @@ class ModelArguments:
         default=3,
         metadata={"help": "Kernel size for W ShortConvolution."},
     )
-    num_harmonics: int = field(
-        default=2,
-        metadata={"help": "number of harmonics"},
-    )    
+    num_harmonics: Optional[int] = field(
+        default=None,
+        metadata={
+            "help": (
+                "Number of harmonics for PaTH attention. "
+                "If omitted, keep the value stored in the loaded checkpoint/config."
+            )
+        },
+    )
     path_conv_bias: bool = field(
         default=False,
         metadata={"help": "Use bias in W ShortConvolution."},
@@ -246,6 +251,22 @@ class ModelArguments:
     use_soft_wavelet_fox: Optional[bool] = field(
         default=False,
         metadata={"help": "Whether use wavelet freq into beta (only for path_attn_wfreq)."},
+    )
+    lw_residual_hw_enable: bool = field(
+        default=False,
+        metadata={"help": "Enable LW residual HW router specialization (shared LW logits + head-wise residual)."},
+    )
+    lw_residual_hw_alpha: float = field(
+        default=0.1,
+        metadata={"help": "Residual scale alpha for LW residual HW: z_res = z_lw + alpha * delta."},
+    )
+    lw_residual_hw_l2: float = field(
+        default=1e-4,
+        metadata={"help": "L2 penalty coefficient mu for LW residual delta logits."},
+    )
+    lw_residual_hw_freeze_steps: int = field(
+        default=1500,
+        metadata={"help": "Freeze delta for first N global steps, then unfreeze in the same run."},
     )
     config_overrides: Optional[str] = field(
         default=None,
@@ -3885,7 +3906,9 @@ def main():
     config.path_use_w_shortconv = model_args.path_use_w_shortconv
     config.path_conv_size = model_args.path_conv_size
     config.path_conv_bias = model_args.path_conv_bias
-    config.num_harmonics = model_args.num_harmonics
+    # Important for checkpoint compatibility: only override when explicitly provided.
+    if model_args.num_harmonics is not None:
+        config.num_harmonics = int(model_args.num_harmonics)
     config.share_freq_across_heads = model_args.share_freq_across_heads
     config.pe_method = model_args.pe_method
     config.use_beta_modulation = model_args.use_beta_modulation
@@ -4023,6 +4046,27 @@ def main():
         "wavelet_ctxscale_disable_layer_gate",
         bool(getattr(config, "wavelet_ctxscale_disable_layer_gate", False)),
     )
+    # LW residual HW specialization: CLI + cfg_path configurable, defaults preserve legacy behavior.
+    config.lw_residual_hw_enable = cfg_bool(
+        cfg,
+        "lw_residual_hw_enable",
+        bool(getattr(model_args, "lw_residual_hw_enable", False)),
+    )
+    config.lw_residual_hw_alpha = cfg_float(
+        cfg,
+        "lw_residual_hw_alpha",
+        float(getattr(model_args, "lw_residual_hw_alpha", 0.1)),
+    )
+    config.lw_residual_hw_l2 = cfg_float(
+        cfg,
+        "lw_residual_hw_l2",
+        float(getattr(model_args, "lw_residual_hw_l2", 1e-4)),
+    )
+    config.lw_residual_hw_freeze_steps = cfg_int(
+        cfg,
+        "lw_residual_hw_freeze_steps",
+        int(getattr(model_args, "lw_residual_hw_freeze_steps", 1500)),
+    )
     logger.info(
         "[WaveletCfg] wavelet_ctxscale_disable_layer_gate=%s (cfg_has_key=%s, cfg_path=%s)",
         str(getattr(config, "wavelet_ctxscale_disable_layer_gate", False)),
@@ -4067,6 +4111,60 @@ def main():
     config.log_rel_param_keywords = str(training_args.rel_param_keywords)
     config.rel_alpha = float(training_args.rel_alpha)
     config.attn_rel_alpha = float(training_args.rel_alpha)
+    # Honor eval heatmap dump controls from cfg for PaTH attention export.
+    config.eval_attn_heatmap_enabled = cfg_bool(
+        cfg, "eval_attn_heatmap_enabled", bool(getattr(config, "eval_attn_heatmap_enabled", False))
+    )
+    config.eval_attn_heatmap_layers = cfg_str(
+        cfg, "eval_attn_heatmap_layers", str(getattr(config, "eval_attn_heatmap_layers", "all"))
+    )
+    config.eval_attn_heatmap_case_limit = cfg_int(
+        cfg, "eval_attn_heatmap_case_limit", int(getattr(config, "eval_attn_heatmap_case_limit", 1))
+    )
+    config.eval_attn_heatmap_case_index = cfg_int(
+        cfg, "eval_attn_heatmap_case_index", int(getattr(config, "eval_attn_heatmap_case_index", 0))
+    )
+    config.eval_attn_heatmap_save_png = cfg_bool(
+        cfg, "eval_attn_heatmap_save_png", bool(getattr(config, "eval_attn_heatmap_save_png", True))
+    )
+    config.eval_attn_heatmap_save_pt = cfg_bool(
+        cfg, "eval_attn_heatmap_save_pt", bool(getattr(config, "eval_attn_heatmap_save_pt", False))
+    )
+    config.eval_attn_heatmap_save_pt_logits = cfg_bool(
+        cfg,
+        "eval_attn_heatmap_save_pt_logits",
+        bool(getattr(config, "eval_attn_heatmap_save_pt_logits", False)),
+    )
+    config.eval_attn_heatmap_save_pt_outputs = cfg_bool(
+        cfg,
+        "eval_attn_heatmap_save_pt_outputs",
+        bool(getattr(config, "eval_attn_heatmap_save_pt_outputs", False)),
+    )
+    config.eval_attn_heatmap_outdir = cfg_str(
+        cfg, "eval_attn_heatmap_outdir", str(getattr(config, "eval_attn_heatmap_outdir", "analysis"))
+    )
+    config.eval_attn_heatmap_run_tag = cfg_str(
+        cfg, "eval_attn_heatmap_run_tag", str(getattr(config, "eval_attn_heatmap_run_tag", "default"))
+    )
+    config.eval_attn_heatmap_separate_step = cfg_bool(
+        cfg,
+        "eval_attn_heatmap_separate_step",
+        bool(getattr(config, "eval_attn_heatmap_separate_step", False)),
+    )
+    config.eval_attn_heatmap_stop_after_case = cfg_bool(
+        cfg,
+        "eval_attn_heatmap_stop_after_case",
+        bool(getattr(config, "eval_attn_heatmap_stop_after_case", False)),
+    )
+    logger.info(
+        "[HeatmapCfg] enabled=%s case_limit=%s save_pt=%s save_logits=%s outdir=%s run_tag=%s",
+        str(bool(getattr(config, "eval_attn_heatmap_enabled", False))),
+        str(int(getattr(config, "eval_attn_heatmap_case_limit", 1))),
+        str(bool(getattr(config, "eval_attn_heatmap_save_pt", False))),
+        str(bool(getattr(config, "eval_attn_heatmap_save_pt_logits", False))),
+        str(getattr(config, "eval_attn_heatmap_outdir", "")),
+        str(getattr(config, "eval_attn_heatmap_run_tag", "")),
+    )
     if train_eval_disable_expensive_stats:
         # Force-disable eval-side rel stats collection in train-time eval.
         config.log_rel_eval_every = 0
