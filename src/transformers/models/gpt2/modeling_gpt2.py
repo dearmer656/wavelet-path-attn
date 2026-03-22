@@ -100,6 +100,15 @@ class PWavMeanLogger:
 def eager_attention_forward(module, query, key, value, attention_mask, head_mask=None, **kwargs):
     attn_weights = torch.matmul(query, key.transpose(-1, -2))
 
+    # Wavelet relative position bias (pe_method='wavelet', relative_type='4')
+    wavelet_rel_buf = kwargs.get("wavelet_relative_tensor", None)
+    if wavelet_rel_buf is not None:
+        q_len = query.size(-2)
+        k_len = key.size(-2)
+        W = wavelet_rel_buf[:, :q_len, :k_len]  # [D, q_len, k_len]
+        rel = torch.einsum("bhld,dln->bhln", query, W)
+        attn_weights = attn_weights + rel
+
     if module.scale_attn_weights:
         attn_weights = attn_weights / torch.full(
             [], value.size(-1) ** 0.5, dtype=attn_weights.dtype, device=attn_weights.device
@@ -304,6 +313,28 @@ class GPT2Attention(nn.Module):
         self.is_causal = True
         if config.pe_method == 'rotary':
             self.rotary_emb = RotaryEmbedding(dim = 32)
+
+        # Wavelet relative PE: precompute (head_dim, block_size, block_size) buffer
+        if config.pe_method == 'wavelet' and getattr(config, 'relative_type', None) == '4':
+            scales = [1, 2, 4, 8, 16, 32, 64, 128]
+            shifts = [0, 1, 2, 3, 4, 5, 6, 7]
+            pairs = [(s, t) for s in scales for t in shifts]  # 64 pairs
+            if len(pairs) != self.head_dim:
+                raise ValueError(
+                    f"wavelet PE expects head_dim={len(pairs)} (8 scales × 8 shifts), "
+                    f"got head_dim={self.head_dim}"
+                )
+            block_size = config.max_position_embeddings
+            i_idx = torch.arange(block_size, dtype=torch.float32).unsqueeze(1)  # [L, 1]
+            j_idx = torch.arange(block_size, dtype=torch.float32).unsqueeze(0)  # [1, L]
+            W = torch.zeros(self.head_dim, block_size, block_size)
+            for d, (s, t) in enumerate(pairs):
+                u = (i_idx - j_idx) / s - t  # [L, L]
+                W[d] = (1.0 - u ** 2) * torch.exp(-0.5 * u ** 2)
+            self.register_buffer("wavelet_relative_tensor", W, persistent=False)
+        else:
+            self.wavelet_relative_tensor = None
+
         self.pruned_heads = set()
 
     def prune_heads(self, heads):
@@ -444,7 +475,10 @@ class GPT2Attention(nn.Module):
 
         using_eager = self.config._attn_implementation == "eager"
         attention_interface: Callable = eager_attention_forward
-        if self.config._attn_implementation != "eager" and self.config.pe_method != 'rotary':
+        # wavelet PE requires eager (custom rel bias injected via kwarg)
+        if self.config.pe_method == 'wavelet' and getattr(self.config, 'relative_type', None) == '4':
+            using_eager = True
+        elif self.config._attn_implementation != "eager" and self.config.pe_method != 'rotary':
             attention_interface = ALL_ATTENTION_FUNCTIONS[self.config._attn_implementation]
         if self.config.pe_method == 'rotary':
             query_states = self.rotary_emb.rotate_queries_or_keys(query_states)
@@ -481,11 +515,14 @@ class GPT2Attention(nn.Module):
             router1_logits = _add_gaussian_jitter(router1_logits, jitter_std)
             router1 = torch.softmax(router1_logits / 1.0, dim=-1)  # [B,T,H,S]            
 
-        if using_eager and self.reorder_and_upcast_attn and self.config.pe_method!='rotary':
+        if using_eager and self.reorder_and_upcast_attn and self.config.pe_method not in ('rotary', 'wavelet'):
             attn_output, attn_weights = self._upcast_and_reordered_attn(
                 query_states, key_states, value_states, attention_mask, head_mask
             )
         else:
+            wavelet_rel_kwarg = {}
+            if self.wavelet_relative_tensor is not None:
+                wavelet_rel_kwarg["wavelet_relative_tensor"] = self.wavelet_relative_tensor
             attn_output, attn_weights = attention_interface(
                 self,
                 query_states,
@@ -497,13 +534,16 @@ class GPT2Attention(nn.Module):
                 is_causal=is_causal,
                 wavelet_decay_table=wavelet_decay_table,
                 router=router1,
+                **wavelet_rel_kwarg,
                 **kwargs,
             )
         attn_output = attn_output.reshape(*attn_output.shape[:-2], -1).contiguous()
         attn_output = self.c_proj(attn_output)
         attn_output = self.resid_dropout(attn_output)
 
-        return attn_output, attn_weights
+        # Return 5-tuple to match GPT2Block.forward unpacking
+        zero = attn_output.new_zeros(())
+        return attn_output, attn_weights, zero, None, None
 
 
 class GPT2MLP(nn.Module):
@@ -990,10 +1030,11 @@ class GPT2Model(GPT2PreTrainedModel):
 
         self.embed_dim = config.hidden_size
         self.wte = nn.Embedding(config.vocab_size, self.embed_dim)
-        if config.pe_method == 'no_pe':
+        attn_impl = getattr(config, "attn_implementation", getattr(config, "_attn_implementation", "eager"))
+        if config.pe_method in ('no_pe', 'wavelet'):
             pass
         else:
-            if config.pe_method != 'rotary' and config.attn_implementation == 'eager':
+            if config.pe_method != 'rotary' and attn_impl == 'eager':
                 self.wpe = nn.Embedding(config.max_position_embeddings, self.embed_dim)
 
         self.drop = nn.Dropout(config.embd_pdrop)
@@ -1538,12 +1579,13 @@ class GPT2Model(GPT2PreTrainedModel):
         rope = None
         if position_ids is None:
             position_ids = cache_position.unsqueeze(0)
-        if self.config.attn_implementation in ['path_attn', 'path_attn_wfreq']:
+        attn_impl = getattr(self.config, "attn_implementation", getattr(self.config, "_attn_implementation", "eager"))
+        if attn_impl in ['path_attn', 'path_attn_wfreq']:
             hidden_states = inputs_embeds
         elif self.config.pe_method == 'rotary':
-            assert self.config.attn_implementation == "eager", "only in eager mode you can use rotary."
+            assert attn_impl == "eager", "only in eager mode you can use rotary."
             hidden_states = inputs_embeds
-        elif self.config.pe_method == 'no_pe':
+        elif self.config.pe_method in ('no_pe', 'wavelet'):
             hidden_states = inputs_embeds
         else:
             position_embeds = self.wpe(position_ids)
