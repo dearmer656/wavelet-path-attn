@@ -156,7 +156,9 @@ def eager_attention_forward(module, query, key, value, attention_mask, head_mask
     # After the causal mask above, lower triangle of attn_weights is finite; blending is safe.
     _path_logits = kwargs.get('_path_logits', None)
     _path_lam = kwargs.get('_path_lam', None)
-    if _path_logits is not None and _path_lam is not None:
+    # Guard: skip for cross-attention — causal-triangle blend is meaningless there (q_len != k_len
+    # in general, and no causal ordering applies between encoder and decoder sequences).
+    if _path_logits is not None and _path_lam is not None and not module.is_cross_attention:
         _T = attn_weights.shape[-1]
         _causal_blend = torch.ones(_T, _T, device=attn_weights.device, dtype=torch.bool).tril()
         attn_weights = torch.where(
@@ -616,7 +618,8 @@ class GPT2Attention(nn.Module):
                 wavelet_rel_kwarg["wavelet_relative_tensor"] = self.wavelet_relative_tensor
             # PaTH logit blending: compute path logits via path_ut_base_raw (pure PyTorch,
             # full autograd — w/beta/path_lam all receive gradients normally).
-            if self.wavelet_relative_tensor is not None and hasattr(self, 'path_lam') and _path_ut_base_raw is not None:
+            if (self.wavelet_relative_tensor is not None and hasattr(self, 'path_lam')
+                    and _path_ut_base_raw is not None and not self.is_cross_attention):
                 _B, _H, _T_q, _D = query_states.shape
                 _T_k = key_states.shape[-2]
                 # Skip during KV-cache generation (T_q=1, T_k=full sequence length).
@@ -630,17 +633,13 @@ class GPT2Attention(nn.Module):
                     else:
                         _warmup = 1.0
                     _lam_eff = self.path_lam.clamp(0.0, 1.0) * _warmup
-                    # q/k: [B,H,T,D] → [B,T,H,D]; w and beta in float32 as required by path_ut_base_raw
-                    _q = query_states.permute(0, 2, 1, 3).contiguous()
-                    _k = key_states.permute(0, 2, 1, 3).contiguous()
-                    _w = self.path_w_proj(hidden_states).view(_B, _T_q, _H, _D).to(torch.float32)
-                    _beta = torch.sigmoid(self.path_beta_proj(hidden_states)).to(torch.float32) * 2.0
-                    # path_ut_base_raw: same PyTorch-level computation as path_attention_with_wavelet_QH.
-                    # Performance note: path_ut_base_raw is O(T²) and includes triangular solves;
-                    # detach the output so backward only flows through path_lam (linear blend) and
-                    # not through the full O(T²) path graph.  Once the blend is confirmed useful,
-                    # remove detach() to also train w/beta.
+                    # All inputs to path_ut_base_raw are detached: only path_lam trains.
+                    # Remove no_grad() + use .detach()-free inputs to also train w/beta.
                     with torch.no_grad():
+                        _q = query_states.permute(0, 2, 1, 3).contiguous()
+                        _k = key_states.permute(0, 2, 1, 3).contiguous()
+                        _w = self.path_w_proj(hidden_states).view(_B, _T_q, _H, _D).to(torch.float32)
+                        _beta = torch.sigmoid(self.path_beta_proj(hidden_states)).to(torch.float32) * 2.0
                         _E_base, _, _, _ = _path_ut_base_raw(_q, _k, _w, _beta)
                     _path_logits = (_E_base * (_D ** -0.5)).to(torch.float32)
                     wavelet_rel_kwarg['_path_logits'] = _path_logits
