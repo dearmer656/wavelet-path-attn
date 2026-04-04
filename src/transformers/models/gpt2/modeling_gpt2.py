@@ -55,11 +55,11 @@ from einops import rearrange
 try:
     from fla.layers.path_attn import PaTHAttention as _PaTHAttention
     from fla.layers.path_attn import PaTHAttentionWfreq as _PaTHAttentionWfreq
-    from fla.ops.path_attn.parallel import parallel_path_attn as _parallel_path_attn
+    from fla.layers.path_attn import path_ut_base_raw as _path_ut_base_raw
 except Exception as _e:
     _PaTHAttention = None
     _PaTHAttentionWfreq = None
-    _parallel_path_attn = None
+    _path_ut_base_raw = None
 from fla.layers.freq_analysis_utils import *
 # from fla.layers.path_attn import PaTHAttention as _PaTHAttention
 logger = logging.get_logger(__name__)
@@ -152,19 +152,17 @@ def eager_attention_forward(module, query, key, value, attention_mask, head_mask
         attn_weights = attn_weights + causal_mask
 
     # PaTH logit blending: combined = (1-λ)*wavelet_logit + λ*path_logit
-    # path_logits is [B,H,T,T] float32 in base-2 scale; convert to natural scale.
-    # -inf positions in path (intra-block diagonal / future): fall back to pure wavelet logit.
-    # nan_to_num(neginf=0) on the path term prevents 0*(-inf)=nan in the True branch of
-    # torch.where, which would propagate nan into gradients even at non-selected positions.
+    # path_logits is [B,H,T,T] float32 in natural scale, lower-triangular (upper=0 not -inf),
+    # computed by path_ut_base_raw (PyTorch autograd, w/beta gradients fully intact).
+    # We blend only in causal positions (lower triangle); upper triangle keeps attn_weights (-inf).
     _path_logits = kwargs.get('_path_logits', None)
     _path_lam = kwargs.get('_path_lam', None)
     if _path_logits is not None and _path_lam is not None:
-        _LOG2 = math.log(2)
-        _path_nat_safe = _path_logits.to(attn_weights.dtype).nan_to_num(neginf=0.0) * _LOG2
-        _path_valid = _path_logits.isfinite()
+        _T = attn_weights.shape[-1]
+        _causal = torch.ones(_T, _T, device=attn_weights.device, dtype=torch.bool).tril()
         attn_weights = torch.where(
-            _path_valid,
-            (1.0 - _path_lam) * attn_weights + _path_lam * _path_nat_safe,
+            _causal,
+            (1.0 - _path_lam) * attn_weights + _path_lam * _path_logits.to(attn_weights.dtype),
             attn_weights,
         )
 
@@ -375,7 +373,7 @@ class GPT2Attention(nn.Module):
             # and this layer_idx is listed in config.path_blend_layers)
             _path_blend_layers = getattr(config, 'path_blend_layers', None)
             _use_path_blend = (
-                _parallel_path_attn is not None and
+                _path_ut_base_raw is not None and
                 _path_blend_layers is not None and
                 layer_idx is not None and
                 layer_idx in _path_blend_layers
@@ -612,36 +610,32 @@ class GPT2Attention(nn.Module):
             wavelet_rel_kwarg = {}
             if self.wavelet_relative_tensor is not None:
                 wavelet_rel_kwarg["wavelet_relative_tensor"] = self.wavelet_relative_tensor
-            # PaTH logit blending: compute path logits and effective λ
-            if self.wavelet_relative_tensor is not None and hasattr(self, 'path_lam') and _parallel_path_attn is not None:
+            # PaTH logit blending: compute path logits via path_ut_base_raw (pure PyTorch,
+            # full autograd — w/beta/path_lam all receive gradients normally).
+            if self.wavelet_relative_tensor is not None and hasattr(self, 'path_lam') and _path_ut_base_raw is not None:
                 _B, _H, _T_q, _D = query_states.shape
                 _T_k = key_states.shape[-2]
-                # [Fix-1] Skip during KV-cache generation where T_q != T_k (e.g. T_q=1).
-                # parallel_path_attn requires k.shape == w.shape; mismatched lengths
-                # would cause a shape assertion inside the triton kernel.
+                # Skip during KV-cache generation (T_q=1, T_k=full sequence length).
                 if _T_q == _T_k:
-                    # [Fix-3] Warmup: increment only during training; always use scale=1.0
-                    # during eval so that path_lam is fully active after a checkpoint load.
+                    # Warmup: increment only during training; use scale=1.0 during eval so
+                    # path_lam is fully active after a checkpoint load (non-persistent buffer
+                    # resets to 0 on reload).
                     if self.training:
                         self._path_warmup_step.add_(1)
                         _warmup = min(float(self._path_warmup_step.item()) / 2000.0, 1.0)
                     else:
                         _warmup = 1.0
                     _lam_eff = self.path_lam.clamp(0.0, 1.0) * _warmup
-                    # q/k/v: [B,H,T,D] → [B,T,H,D]; w and beta in float32 as required by path_attn
+                    # q/k: [B,H,T,D] → [B,T,H,D]; w and beta in float32 as required by path_ut_base_raw
                     _q = query_states.permute(0, 2, 1, 3).contiguous()
                     _k = key_states.permute(0, 2, 1, 3).contiguous()
-                    _v = value_states.permute(0, 2, 1, 3).contiguous()
-                    # [Fix-2] path_w_proj / path_beta_proj participate in the autograd graph up
-                    # to the triton kernel boundary.  The triton kernel (parallel_path_fwd_fn)
-                    # has no vjp, so logit_out is a fresh tensor with no grad_fn; gradients for
-                    # w/beta are cut there.  Only path_lam receives gradients through the linear
-                    # blending below.  w/beta stay at their random initialisation throughout
-                    # training — they provide the state-cumulative transformation but are not
-                    # optimised.  detach() is used explicitly to avoid building a wasted graph.
-                    _w = self.path_w_proj(hidden_states).view(_B, _T_q, _H, _D).to(torch.float32).detach()
-                    _beta = torch.sigmoid(self.path_beta_proj(hidden_states)).to(torch.float32).detach() * 2.0
-                    _path_logits, _ = _parallel_path_attn(_q, _k, _v, _w, _beta, return_logits=True)
+                    _w = self.path_w_proj(hidden_states).view(_B, _T_q, _H, _D).to(torch.float32)
+                    _beta = torch.sigmoid(self.path_beta_proj(hidden_states)).to(torch.float32) * 2.0
+                    # E_base_raw: [B,H,T,T] lower-triangular (upper=0), natural scale, unscaled.
+                    # path_ut_base_raw is the same PyTorch-level computation used inside
+                    # path_attention_with_wavelet_QH — full autograd, w/beta gradients intact.
+                    _E_base, _, _, _ = _path_ut_base_raw(_q, _k, _w, _beta)
+                    _path_logits = (_E_base * (_D ** -0.5)).to(torch.float32)
                     wavelet_rel_kwarg['_path_logits'] = _path_logits
                     wavelet_rel_kwarg['_path_lam'] = _lam_eff
             attn_output, attn_weights = attention_interface(
