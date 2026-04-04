@@ -146,25 +146,29 @@ def eager_attention_forward(module, query, key, value, attention_mask, head_mask
         mask_value = torch.full([], mask_value, dtype=attn_weights.dtype, device=attn_weights.device)
         attn_weights = torch.where(causal_mask, attn_weights.to(attn_weights.dtype), mask_value)
 
-    if attention_mask is not None:
-        # Apply the attention mask
-        causal_mask = attention_mask[:, :, :, : key.shape[-2]]
-        attn_weights = attn_weights + causal_mask
-
-    # PaTH logit blending: combined = (1-λ)*wavelet_logit + λ*path_logit
-    # path_logits is [B,H,T,T] float32 in natural scale, lower-triangular (upper=0 not -inf),
-    # computed by path_ut_base_raw (PyTorch autograd, w/beta gradients fully intact).
-    # We blend only in causal positions (lower triangle); upper triangle keeps attn_weights (-inf).
+    # PaTH logit blending: must happen BEFORE attention_mask to preserve padding/key-mask semantics.
+    # attention_mask is additive (subtracts large value from masked positions); if we blend after it,
+    # large-negative padding values get diluted by finite path_logits when lam > 0, effectively
+    # unmasking padding tokens.  By blending here — after the causal mask (future = finfo.min) but
+    # before the additive attention_mask — the padding mask is applied on top of the blended logit
+    # and its semantics are preserved.
+    # path_logits: [B,H,T,T] float32, natural scale, lower-triangular (upper=0).
+    # After the causal mask above, lower triangle of attn_weights is finite; blending is safe.
     _path_logits = kwargs.get('_path_logits', None)
     _path_lam = kwargs.get('_path_lam', None)
     if _path_logits is not None and _path_lam is not None:
         _T = attn_weights.shape[-1]
-        _causal = torch.ones(_T, _T, device=attn_weights.device, dtype=torch.bool).tril()
+        _causal_blend = torch.ones(_T, _T, device=attn_weights.device, dtype=torch.bool).tril()
         attn_weights = torch.where(
-            _causal,
+            _causal_blend,
             (1.0 - _path_lam) * attn_weights + _path_lam * _path_logits.to(attn_weights.dtype),
             attn_weights,
         )
+
+    if attention_mask is not None:
+        # Apply the attention mask
+        causal_mask = attention_mask[:, :, :, : key.shape[-2]]
+        attn_weights = attn_weights + causal_mask
 
     attn_weights = nn.functional.softmax(attn_weights, dim=-1)
 
@@ -631,10 +635,13 @@ class GPT2Attention(nn.Module):
                     _k = key_states.permute(0, 2, 1, 3).contiguous()
                     _w = self.path_w_proj(hidden_states).view(_B, _T_q, _H, _D).to(torch.float32)
                     _beta = torch.sigmoid(self.path_beta_proj(hidden_states)).to(torch.float32) * 2.0
-                    # E_base_raw: [B,H,T,T] lower-triangular (upper=0), natural scale, unscaled.
-                    # path_ut_base_raw is the same PyTorch-level computation used inside
-                    # path_attention_with_wavelet_QH — full autograd, w/beta gradients intact.
-                    _E_base, _, _, _ = _path_ut_base_raw(_q, _k, _w, _beta)
+                    # path_ut_base_raw: same PyTorch-level computation as path_attention_with_wavelet_QH.
+                    # Performance note: path_ut_base_raw is O(T²) and includes triangular solves;
+                    # detach the output so backward only flows through path_lam (linear blend) and
+                    # not through the full O(T²) path graph.  Once the blend is confirmed useful,
+                    # remove detach() to also train w/beta.
+                    with torch.no_grad():
+                        _E_base, _, _, _ = _path_ut_base_raw(_q, _k, _w, _beta)
                     _path_logits = (_E_base * (_D ** -0.5)).to(torch.float32)
                     wavelet_rel_kwarg['_path_logits'] = _path_logits
                     wavelet_rel_kwarg['_path_lam'] = _lam_eff
