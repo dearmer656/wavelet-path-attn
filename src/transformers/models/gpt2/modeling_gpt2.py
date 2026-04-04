@@ -55,9 +55,11 @@ from einops import rearrange
 try:
     from fla.layers.path_attn import PaTHAttention as _PaTHAttention
     from fla.layers.path_attn import PaTHAttentionWfreq as _PaTHAttentionWfreq
+    from fla.ops.path_attn.parallel import parallel_path_attn as _parallel_path_attn
 except Exception as _e:
     _PaTHAttention = None
     _PaTHAttentionWfreq = None
+    _parallel_path_attn = None
 from fla.layers.freq_analysis_utils import *
 # from fla.layers.path_attn import PaTHAttention as _PaTHAttention
 logger = logging.get_logger(__name__)
@@ -105,7 +107,16 @@ def eager_attention_forward(module, query, key, value, attention_mask, head_mask
     if wavelet_rel_buf is not None:
         q_len = query.size(-2)
         k_len = key.size(-2)
-        W = wavelet_rel_buf[:, :q_len, :k_len]  # [D, q_len, k_len]
+        if hasattr(module, "_get_wavelet_relative_tensor"):
+            W = module._get_wavelet_relative_tensor(
+                q_len=q_len,
+                k_len=k_len,
+                device=query.device,
+                dtype=query.dtype,
+                base_tensor=wavelet_rel_buf,
+            )
+        else:
+            W = wavelet_rel_buf[:, :q_len, :k_len].to(device=query.device, dtype=query.dtype)  # [D, q_len, k_len]
         rel = torch.einsum("bhld,dln->bhln", query, W)
         attn_weights = attn_weights + rel
 
@@ -121,7 +132,14 @@ def eager_attention_forward(module, query, key, value, attention_mask, head_mask
     if not module.is_cross_attention:
         # if only "normal" attention layer implements causal mask
         query_length, key_length = query.size(-2), key.size(-2)
-        causal_mask = module.bias[:, :, key_length - query_length : key_length, :key_length]
+        if module.bias.size(-1) >= key_length:
+            causal_mask = module.bias[:, :, key_length - query_length : key_length, :key_length]
+        else:
+            # Fallback for long-context eval where key_length exceeds the precomputed bias buffer.
+            causal_mask = torch.tril(
+                torch.ones((query_length, key_length), dtype=torch.bool, device=attn_weights.device),
+                diagonal=key_length - query_length,
+            ).view(1, 1, query_length, key_length)
         mask_value = torch.finfo(attn_weights.dtype).min
         # Need to be a tensor, otherwise we get error: `RuntimeError: expected scalar type float but found double`.
         # Need to be on the same device, otherwise `RuntimeError: ..., x and y to be on the same device`
@@ -132,6 +150,23 @@ def eager_attention_forward(module, query, key, value, attention_mask, head_mask
         # Apply the attention mask
         causal_mask = attention_mask[:, :, :, : key.shape[-2]]
         attn_weights = attn_weights + causal_mask
+
+    # PaTH logit blending: combined = (1-λ)*wavelet_logit + λ*path_logit
+    # path_logits is [B,H,T,T] float32 in base-2 scale; convert to natural scale.
+    # -inf positions in path (intra-block diagonal / future): fall back to pure wavelet logit.
+    # nan_to_num(neginf=0) on the path term prevents 0*(-inf)=nan in the True branch of
+    # torch.where, which would propagate nan into gradients even at non-selected positions.
+    _path_logits = kwargs.get('_path_logits', None)
+    _path_lam = kwargs.get('_path_lam', None)
+    if _path_logits is not None and _path_lam is not None:
+        _LOG2 = math.log(2)
+        _path_nat_safe = _path_logits.to(attn_weights.dtype).nan_to_num(neginf=0.0) * _LOG2
+        _path_valid = _path_logits.isfinite()
+        attn_weights = torch.where(
+            _path_valid,
+            (1.0 - _path_lam) * attn_weights + _path_lam * _path_nat_safe,
+            attn_weights,
+        )
 
     attn_weights = nn.functional.softmax(attn_weights, dim=-1)
 
@@ -312,7 +347,7 @@ class GPT2Attention(nn.Module):
         self.resid_dropout = nn.Dropout(config.resid_pdrop)
         self.is_causal = True
         if config.pe_method == 'rotary':
-            self.rotary_emb = RotaryEmbedding(dim = 32)
+            self.rotary_emb = RotaryEmbedding(dim=self.head_dim)
 
         # Wavelet relative PE: precompute (head_dim, block_size, block_size) buffer
         if config.pe_method == 'wavelet' and getattr(config, 'relative_type', None) == '4':
@@ -332,10 +367,58 @@ class GPT2Attention(nn.Module):
                 u = (i_idx - j_idx) / s - t  # [L, L]
                 W[d] = (1.0 - u ** 2) * torch.exp(-0.5 * u ** 2)
             self.register_buffer("wavelet_relative_tensor", W, persistent=False)
+            wavelet_scales = torch.tensor([float(s) for s, _ in pairs], dtype=torch.float32)
+            wavelet_shifts = torch.tensor([float(t) for _, t in pairs], dtype=torch.float32)
+            self.register_buffer("wavelet_scales", wavelet_scales, persistent=False)
+            self.register_buffer("wavelet_shifts", wavelet_shifts, persistent=False)
+            # PaTH logit blending parameters (only when wavelet PE is active, fla is available,
+            # and this layer_idx is listed in config.path_blend_layers)
+            _path_blend_layers = getattr(config, 'path_blend_layers', None)
+            _use_path_blend = (
+                _parallel_path_attn is not None and
+                _path_blend_layers is not None and
+                layer_idx is not None and
+                layer_idx in _path_blend_layers
+            )
+            if _use_path_blend:
+                # w projection: hidden_states → [B,T,H,D] float32 weights for path attention
+                self.path_w_proj = Conv1D(self.embed_dim, self.embed_dim)
+                # beta projection: hidden_states → [B,T,H] gate scalar (sigmoid → ×2 → (0,2))
+                self.path_beta_proj = Conv1D(self.num_heads, self.embed_dim)
+                # λ: learnable blend scalar, init=0 (pure wavelet PE at start), warms up to 1
+                self.path_lam = nn.Parameter(torch.zeros(1))
+                # step counter for linear warmup (not persistent — resets on reload, intentional)
+                self.register_buffer('_path_warmup_step', torch.tensor(0, dtype=torch.long), persistent=False)
         else:
             self.wavelet_relative_tensor = None
+            self.wavelet_scales = None
+            self.wavelet_shifts = None
 
         self.pruned_heads = set()
+
+    def _get_wavelet_relative_tensor(
+        self,
+        q_len: int,
+        k_len: int,
+        device: torch.device,
+        dtype: torch.dtype,
+        base_tensor: Optional[torch.Tensor] = None,
+    ) -> torch.Tensor:
+        rel_buf = self.wavelet_relative_tensor if base_tensor is None else base_tensor
+        if rel_buf is not None and rel_buf.size(1) >= q_len and rel_buf.size(2) >= k_len:
+            return rel_buf[:, :q_len, :k_len].to(device=device, dtype=dtype)
+
+        if self.wavelet_scales is None or self.wavelet_shifts is None:
+            raise RuntimeError("wavelet_scales/wavelet_shifts are required for dynamic wavelet relative tensor.")
+
+        i_idx = torch.arange(q_len, dtype=dtype, device=device).unsqueeze(1)  # [q_len, 1]
+        j_idx = torch.arange(k_len, dtype=dtype, device=device).unsqueeze(0)  # [1, k_len]
+        delta = (i_idx - j_idx).unsqueeze(0)  # [1, q_len, k_len]
+
+        scales = self.wavelet_scales.to(device=device, dtype=dtype).view(-1, 1, 1)  # [D,1,1]
+        shifts = self.wavelet_shifts.to(device=device, dtype=dtype).view(-1, 1, 1)  # [D,1,1]
+        u = delta / scales - shifts
+        return (1.0 - u * u) * torch.exp(-0.5 * u * u)
 
     def prune_heads(self, heads):
         if len(heads) == 0:
@@ -377,7 +460,13 @@ class GPT2Attention(nn.Module):
         if not self.is_cross_attention:
             # if only "normal" attention layer implements causal mask
             query_length, key_length = query.size(-2), key.size(-2)
-            causal_mask = self.bias[:, :, key_length - query_length : key_length, :key_length]
+            if self.bias.size(-1) >= key_length:
+                causal_mask = self.bias[:, :, key_length - query_length : key_length, :key_length]
+            else:
+                causal_mask = torch.tril(
+                    torch.ones((query_length, key_length), dtype=torch.bool, device=attn_weights.device),
+                    diagonal=key_length - query_length,
+                ).view(1, 1, query_length, key_length)
             mask_value = torch.finfo(attn_weights.dtype).min
             # Need to be a tensor, otherwise we get error: `RuntimeError: expected scalar type float but found double`.
             # Need to be on the same device, otherwise `RuntimeError: ..., x and y to be on the same device`
@@ -523,6 +612,22 @@ class GPT2Attention(nn.Module):
             wavelet_rel_kwarg = {}
             if self.wavelet_relative_tensor is not None:
                 wavelet_rel_kwarg["wavelet_relative_tensor"] = self.wavelet_relative_tensor
+            # PaTH logit blending: compute path logits and effective λ
+            if self.wavelet_relative_tensor is not None and hasattr(self, 'path_lam') and _parallel_path_attn is not None:
+                if self.training:
+                    self._path_warmup_step.add_(1)
+                _warmup = min(float(self._path_warmup_step.item()) / 2000.0, 1.0)
+                _lam_eff = self.path_lam.clamp(0.0, 1.0) * _warmup
+                # q/k/v: [B,H,T,D] → [B,T,H,D]; w and beta in float32 as required by path_attn
+                _B, _H, _T, _D = query_states.shape
+                _q = query_states.permute(0, 2, 1, 3).contiguous()
+                _k = key_states.permute(0, 2, 1, 3).contiguous()
+                _v = value_states.permute(0, 2, 1, 3).contiguous()
+                _w = self.path_w_proj(hidden_states).view(_B, _T, _H, _D).to(torch.float32)
+                _beta = torch.sigmoid(self.path_beta_proj(hidden_states)).to(torch.float32) * 2.0
+                _path_logits, _ = _parallel_path_attn(_q, _k, _v, _w, _beta, return_logits=True)
+                wavelet_rel_kwarg['_path_logits'] = _path_logits
+                wavelet_rel_kwarg['_path_lam'] = _lam_eff
             attn_output, attn_weights = attention_interface(
                 self,
                 query_states,
@@ -1640,7 +1745,7 @@ class GPT2Model(GPT2PreTrainedModel):
         all_cross_attentions = () if output_attentions and self.config.add_cross_attention else None
         all_hidden_states = () if output_hidden_states else None
         dis_loss_total = hidden_states.new_zeros([])
-        if self.config.scale_type == 'learnable' and not self._skip_wavelet_decay_table:
+        if getattr(self.config, 'scale_type', 'fixed') == 'learnable' and not self._skip_wavelet_decay_table:
             s_tensor, beta_tensor = self.make_scale_shift_vectors(learnable_switch=True)
             self.d_m = self.make_decay_per_dim_custom(64, self.config.block_size, s_tensor, beta_tensor)
         router1_idx_layers = []
