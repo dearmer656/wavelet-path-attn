@@ -614,20 +614,36 @@ class GPT2Attention(nn.Module):
                 wavelet_rel_kwarg["wavelet_relative_tensor"] = self.wavelet_relative_tensor
             # PaTH logit blending: compute path logits and effective λ
             if self.wavelet_relative_tensor is not None and hasattr(self, 'path_lam') and _parallel_path_attn is not None:
-                if self.training:
-                    self._path_warmup_step.add_(1)
-                _warmup = min(float(self._path_warmup_step.item()) / 2000.0, 1.0)
-                _lam_eff = self.path_lam.clamp(0.0, 1.0) * _warmup
-                # q/k/v: [B,H,T,D] → [B,T,H,D]; w and beta in float32 as required by path_attn
-                _B, _H, _T, _D = query_states.shape
-                _q = query_states.permute(0, 2, 1, 3).contiguous()
-                _k = key_states.permute(0, 2, 1, 3).contiguous()
-                _v = value_states.permute(0, 2, 1, 3).contiguous()
-                _w = self.path_w_proj(hidden_states).view(_B, _T, _H, _D).to(torch.float32)
-                _beta = torch.sigmoid(self.path_beta_proj(hidden_states)).to(torch.float32) * 2.0
-                _path_logits, _ = _parallel_path_attn(_q, _k, _v, _w, _beta, return_logits=True)
-                wavelet_rel_kwarg['_path_logits'] = _path_logits
-                wavelet_rel_kwarg['_path_lam'] = _lam_eff
+                _B, _H, _T_q, _D = query_states.shape
+                _T_k = key_states.shape[-2]
+                # [Fix-1] Skip during KV-cache generation where T_q != T_k (e.g. T_q=1).
+                # parallel_path_attn requires k.shape == w.shape; mismatched lengths
+                # would cause a shape assertion inside the triton kernel.
+                if _T_q == _T_k:
+                    # [Fix-3] Warmup: increment only during training; always use scale=1.0
+                    # during eval so that path_lam is fully active after a checkpoint load.
+                    if self.training:
+                        self._path_warmup_step.add_(1)
+                        _warmup = min(float(self._path_warmup_step.item()) / 2000.0, 1.0)
+                    else:
+                        _warmup = 1.0
+                    _lam_eff = self.path_lam.clamp(0.0, 1.0) * _warmup
+                    # q/k/v: [B,H,T,D] → [B,T,H,D]; w and beta in float32 as required by path_attn
+                    _q = query_states.permute(0, 2, 1, 3).contiguous()
+                    _k = key_states.permute(0, 2, 1, 3).contiguous()
+                    _v = value_states.permute(0, 2, 1, 3).contiguous()
+                    # [Fix-2] path_w_proj / path_beta_proj participate in the autograd graph up
+                    # to the triton kernel boundary.  The triton kernel (parallel_path_fwd_fn)
+                    # has no vjp, so logit_out is a fresh tensor with no grad_fn; gradients for
+                    # w/beta are cut there.  Only path_lam receives gradients through the linear
+                    # blending below.  w/beta stay at their random initialisation throughout
+                    # training — they provide the state-cumulative transformation but are not
+                    # optimised.  detach() is used explicitly to avoid building a wasted graph.
+                    _w = self.path_w_proj(hidden_states).view(_B, _T_q, _H, _D).to(torch.float32).detach()
+                    _beta = torch.sigmoid(self.path_beta_proj(hidden_states)).to(torch.float32).detach() * 2.0
+                    _path_logits, _ = _parallel_path_attn(_q, _k, _v, _w, _beta, return_logits=True)
+                    wavelet_rel_kwarg['_path_logits'] = _path_logits
+                    wavelet_rel_kwarg['_path_lam'] = _lam_eff
             attn_output, attn_weights = attention_interface(
                 self,
                 query_states,
