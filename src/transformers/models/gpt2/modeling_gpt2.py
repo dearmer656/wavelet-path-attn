@@ -161,9 +161,14 @@ def eager_attention_forward(module, query, key, value, attention_mask, head_mask
     if _path_logits is not None and _path_lam is not None and not module.is_cross_attention:
         _T = attn_weights.shape[-1]
         _causal_blend = torch.ones(_T, _T, device=attn_weights.device, dtype=torch.bool).tril()
+        # nan_to_num: path_ut_base_raw with random init can produce NaN (ill-conditioned
+        # triangular solve). Even with _path_lam=0, 0*NaN=NaN in IEEE, which would corrupt
+        # attn_weights. Replace NaN/inf with 0 so the blend degrades gracefully to pure
+        # wavelet PE at positions where path logits are unreliable.
+        _path_safe = _path_logits.to(attn_weights.dtype).nan_to_num(nan=0.0, posinf=0.0, neginf=0.0)
         attn_weights = torch.where(
             _causal_blend,
-            (1.0 - _path_lam) * attn_weights + _path_lam * _path_logits.to(attn_weights.dtype),
+            (1.0 - _path_lam) * attn_weights + _path_lam * _path_safe,
             attn_weights,
         )
 
