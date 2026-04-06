@@ -61,19 +61,38 @@ from transformers import (
     Trainer,
     TrainingArguments,
     default_data_collator,
-    is_torch_xla_available,
     set_seed,
 )
-from transformers.testing_utils import CaptureLogger
+try:
+    from transformers.testing_utils import CaptureLogger
+except Exception:
+    import contextlib
+    class CaptureLogger:
+        def __init__(self, *a, **kw): self.out = ""
+        def __enter__(self): return self
+        def __exit__(self, *a): pass
 from transformers.trainer_utils import get_last_checkpoint
 from transformers.utils import check_min_version, send_example_telemetry
 from transformers.utils.versions import require_version
 
+try:
+    from transformers import is_torch_xla_available
+except ImportError:
+    def is_torch_xla_available(): return False
+
 import json, hashlib
-from pathlib import Path 
+from pathlib import Path
 
 # Global reference for dataset map functions that need tokenizer in worker/main scope
 GLOBAL_TOKENIZER = None
+
+
+def _cli_flag_present(flag: str) -> bool:
+    """Return True when a CLI flag was explicitly provided (supports --foo bar / --foo=bar)."""
+    for arg in sys.argv[1:]:
+        if arg == flag or arg.startswith(flag + "="):
+            return True
+    return False
 
 # Will error if the minimal version of Transformers is not installed. Remove at your own risks.
 check_min_version("4.57.0.dev0")
@@ -136,12 +155,23 @@ class ModelArguments:
             "choices": ["eager", "sdpa", "flash_attention_2", "path_attn", "path_attn_wfreq", "eager_paged"],
         },
     )
+    path_attn_impl: str = field(
+        default="pytorch",
+        metadata={
+            "help": "PaTH attention kernel implementation: pytorch (reference) | triton (parallel_path_attn).",
+            "choices": ["pytorch", "triton"],
+        },
+    )
     pe_method: str = field(
         default="vanilla",
         metadata={
-            "help": "Positional encoding method to use: vanilla | rotary.",
-            "choices": ["vanilla", "rotary", "no_pe"],
+            "help": "Positional encoding method to use: vanilla | rotary | no_pe | wavelet.",
+            "choices": ["vanilla", "rotary", "no_pe", "wavelet"],
         },
+    )
+    relative_type: Optional[str] = field(
+        default=None,
+        metadata={"help": "Relative PE sub-type. '4' = Ricker wavelet (used with pe_method=wavelet)."},
     )
     # ===== PaTHAttention 专用开关（仅在 --_attn_implementation path_attn 时生效） =====
     use_forget_gate: bool = field(
@@ -408,6 +438,23 @@ class DataTrainingArguments:
         },
     )
 
+    hotpot_long_jsonl: Optional[str] = field(
+        default=None,
+        metadata={"help": "Path to HotpotQA-Long augmented JSONL. If set, overrides HF hotpot_qa distractor loading."},
+    )
+    hotpot_long_lengths: Optional[str] = field(
+        default=None,
+        metadata={"help": "Comma-separated target lengths to filter from hotpot_long_jsonl (e.g. '2048,4096')."},
+    )
+    passkey_num_samples: int = field(
+        default=50,
+        metadata={"help": "Number of passkey retrieval examples to generate per evaluation run."},
+    )
+    passkey_num_digits: int = field(
+        default=5,
+        metadata={"help": "Number of digits in the hidden passkey number."},
+    )
+
     overwrite_cache: bool = field(
         default=False, metadata={"help": "Overwrite the cached training and evaluation sets"}
     )
@@ -434,10 +481,10 @@ class DataTrainingArguments:
         else:
             if self.train_file is not None:
                 extension = self.train_file.split(".")[-1]
-                assert extension in ["csv", "json", "txt"], "`train_file` should be a csv, a json or a txt file."
+                assert extension in ["csv", "json", "jsonl", "txt"], "`train_file` should be a csv, a json or a txt file."
             if self.validation_file is not None:
                 extension = self.validation_file.split(".")[-1]
-                assert extension in ["csv", "json", "txt"], "`validation_file` should be a csv, a json or a txt file."
+                assert extension in ["csv", "json", "jsonl", "txt"], "`validation_file` should be a csv, a json, a jsonl or a txt file."
 @dataclass
 class SupplyTrainingArguments(TrainingArguments):
     ablate_switch: bool = field(
@@ -558,6 +605,26 @@ class SupplyTrainingArguments(TrainingArguments):
         metadata={
             "help": ("The scale range as two integers, e.g. --scale_range 0 16"),
         },
+    )
+    path_blend_layers: list[int] = field(
+        default_factory=lambda: [5, 6],
+        metadata={
+            "help": ("Layer indices that use PaTH logit blending (e.g. --path_blend_layers 0 1). "
+                     "Default [5, 6] per PAT-100 spec."),
+        },
+    )
+    path_sparse_gate: bool = field(
+        default=False,
+        metadata={"help": "PAT-100: enable sparse query-conditioned gate on beta. "
+                          "When True, gate_eff * beta is the only beta-scaling mechanism."},
+    )
+    gate_sparse_alpha: float = field(
+        default=0.01,
+        metadata={"help": "PAT-100: L_sparse = gate_sparse_alpha * gate.mean() added to training loss."},
+    )
+    gate_warmup_steps: int = field(
+        default=2000,
+        metadata={"help": "PAT-100: number of steps over which the gate eta ramps from 0 to 1."},
     )
     smooth_use: bool = field(
         default=False,
@@ -3483,6 +3550,15 @@ def add_missing_to_hf_config(config, kv: dict):
             setattr(config, k, v)  # 不存在：新增
             added.append(k)
     return added, skipped
+
+def force_override_hf_config(config, kv: dict, key_prefix: str):
+    """Force-override config keys whose name starts with key_prefix, regardless of whether they exist."""
+    overridden = []
+    for k, v in kv.items():
+        if k.startswith(key_prefix):
+            setattr(config, k, v)
+            overridden.append(k)
+    return overridden
 def compute_pad_ratio_stats(train_dataset, block_size: int, n_samples: int = 5000, seed: int = 0):
     """
     Estimate pad ratio distribution on a HuggingFace-style dataset.
@@ -3714,25 +3790,116 @@ def main():
             streaming=data_args.streaming,
             trust_remote_code=model_args.trust_remote_code,
         )
-        hotpot_qa_raw_datasets = load_dataset(
-            'hotpot_qa',
-            'distractor',
-            cache_dir=model_args.cache_dir,
-            token=model_args.token,
-            streaming=data_args.streaming,
-            trust_remote_code=model_args.trust_remote_code,
-        )     
-    else:
-        if data_args.dataset_name is not None:
-            # Downloading and loading a dataset from the hub.
-            raw_datasets = load_dataset(
-                data_args.dataset_name,
-                data_args.dataset_config_name,
+        _hotpot_long_jsonl = getattr(data_args, "hotpot_long_jsonl", None)
+        if _hotpot_long_jsonl:
+            # Load HotpotQA-Long augmented JSONL instead of HF distractor split.
+            import json as _json
+            from datasets import Dataset as _Dataset, DatasetDict as _DatasetDict
+            _target_lengths = None
+            _hotpot_long_lengths = getattr(data_args, "hotpot_long_lengths", None)
+            if _hotpot_long_lengths:
+                _target_lengths = {int(x) for x in str(_hotpot_long_lengths).split(",")}
+            _records = []
+            with open(_hotpot_long_jsonl) as _f:
+                for _line in _f:
+                    _rec = _json.loads(_line)
+                    if _target_lengths and _rec["meta"]["target_total_tokens"] not in _target_lengths:
+                        continue
+                    _ctx_titles = [c[0] for c in _rec["context"]]
+                    _ctx_sents  = [c[1] for c in _rec["context"]]
+                    _records.append({
+                        "_id": _rec["_id"],
+                        "question": _rec["question"],
+                        "answer": _rec["answer"],
+                        "supporting_facts": {
+                            "title": [sf[0] for sf in _rec["supporting_facts"]],
+                            "sent_id": [sf[1] for sf in _rec["supporting_facts"]],
+                        },
+                        "context": {"title": _ctx_titles, "sentences": _ctx_sents},
+                        "type": "bridge",
+                        "level": "hard",
+                        "placement_pct": float(_rec["meta"].get("placement_actual_pct", -1.0)),
+                    })
+            _hf_ds = _Dataset.from_list(_records)
+            hotpot_qa_raw_datasets = _DatasetDict({"validation": _hf_ds, "test": _hf_ds})
+            logger.info(f"[hotpot_long] loaded {len(_records)} examples from {_hotpot_long_jsonl}")
+        else:
+            hotpot_qa_raw_datasets = load_dataset(
+                'hotpot_qa',
+                'distractor',
                 cache_dir=model_args.cache_dir,
                 token=model_args.token,
                 streaming=data_args.streaming,
                 trust_remote_code=model_args.trust_remote_code,
             )
+    else:
+        if data_args.dataset_name is not None:
+            # If hotpot_long_jsonl is provided for hotpot_qa, load from JSONL instead of HF hub.
+            _hotpot_long_jsonl = getattr(data_args, "hotpot_long_jsonl", None)
+            xsum_eval_sources = None  # default; assigned below only for xsum+validation_file path
+            if data_args.dataset_name == "xsum" and (data_args.validation_file is not None or data_args.train_file is not None):
+                data_files = {}
+                if data_args.train_file is not None:
+                    data_files["train"] = data_args.train_file
+                if data_args.validation_file is not None:
+                    data_files["validation"] = data_args.validation_file
+                raw_datasets = load_dataset("json", data_files=data_files, cache_dir=model_args.cache_dir)
+                xsum_eval_sources = None
+
+                if data_args.dataset_name == "xsum" and "validation" in raw_datasets:
+                    try:
+                        xsum_eval_sources = list(raw_datasets["validation"]["document"])
+                        logger.info(f"[xsum] cached {len(xsum_eval_sources)} validation source documents for source-grounded metrics")
+                    except Exception as e:
+                        logger.warning(f"[xsum] failed to cache source documents: {e}")
+                        xsum_eval_sources = None
+            
+            elif data_args.dataset_name == "hotpot_qa" and _hotpot_long_jsonl:
+                import json as _json
+                from datasets import Dataset as _Dataset, DatasetDict as _DatasetDict
+                _target_lengths = None
+                _hotpot_long_lengths = getattr(data_args, "hotpot_long_lengths", None)
+                if _hotpot_long_lengths:
+                    _target_lengths = {int(x) for x in str(_hotpot_long_lengths).split(",")}
+                _records = []
+                with open(_hotpot_long_jsonl) as _f:
+                    for _line in _f:
+                        _rec = _json.loads(_line)
+                        if _target_lengths and _rec["meta"]["target_total_tokens"] not in _target_lengths:
+                            continue
+                        _ctx_titles = [c[0] for c in _rec["context"]]
+                        _ctx_sents  = [c[1] for c in _rec["context"]]
+                        _records.append({
+                            "_id": _rec["_id"],
+                            "question": _rec["question"],
+                            "answer": _rec["answer"],
+                            "supporting_facts": {
+                                "title": [sf[0] for sf in _rec["supporting_facts"]],
+                                "sent_id": [sf[1] for sf in _rec["supporting_facts"]],
+                            },
+                            "context": {"title": _ctx_titles, "sentences": _ctx_sents},
+                            "type": "bridge",
+                            "level": "hard",
+                            "placement_pct": float(_rec["meta"].get("placement_actual_pct", -1.0)),
+                        })
+                _hf_ds = _Dataset.from_list(_records)
+                raw_datasets = _DatasetDict({"validation": _hf_ds, "test": _hf_ds})
+                logger.info(f"[hotpot_long] loaded {len(_records)} examples from {_hotpot_long_jsonl}")
+            elif data_args.dataset_name == "passkey":
+                # Passkey retrieval: fully synthetic, raw_datasets is just a placeholder.
+                from datasets import Dataset as _Dataset, DatasetDict as _DatasetDict
+                raw_datasets = _DatasetDict({"validation": _Dataset.from_dict({"text": ["passkey_placeholder"]})})
+                logger.info("[passkey] using synthetic passkey retrieval evaluation; raw_datasets is a placeholder.")
+            else:
+            # Downloading and loading a dataset from the hub.
+                raw_datasets = load_dataset(
+                    data_args.dataset_name,
+                    data_args.dataset_config_name,
+                    cache_dir=model_args.cache_dir,
+                    token=model_args.token,
+                    streaming=data_args.streaming,
+                    trust_remote_code=model_args.trust_remote_code,
+                )
             if "validation" not in raw_datasets:
                 if data_args.streaming:
                     dataset_stream = load_dataset(
@@ -3776,6 +3943,19 @@ def main():
                 if data_args.train_file is not None
                 else data_args.validation_file.split(".")[-1]
             )
+            # `datasets` uses the "json" builder for both .json and .jsonl files.
+            if extension == "jsonl":
+                extension = "json"
+            if data_args.train_file is not None and data_args.validation_file is not None:
+                train_ext = data_args.train_file.split(".")[-1]
+                valid_ext = data_args.validation_file.split(".")[-1]
+                train_norm = "json" if train_ext == "jsonl" else train_ext
+                valid_norm = "json" if valid_ext == "jsonl" else valid_ext
+                if train_norm != valid_norm:
+                    raise ValueError(
+                        f"`train_file` and `validation_file` must use the same file type; got "
+                        f"{train_ext!r} and {valid_ext!r}."
+                    )
             if extension == "txt":
                 extension = "text"
                 dataset_args["keep_linebreaks"] = data_args.keep_linebreaks
@@ -3866,6 +4046,16 @@ def main():
         added, skipped = add_missing_to_hf_config(config, cfg)
         print("added:", added)
         print("skipped:", skipped)
+        overridden = []
+        for _prefix in ("eval_attn_heatmap", "wavelet_mode", "wavelet_ctxscale", "wavelet_router_sigmoid", "wavelet_ctx_feat", "rel_use_layer"):
+            overridden += force_override_hf_config(config, cfg, _prefix)
+        # Also force a single explicit key if present
+        for _key in ("wavelet_mode", "rel_use_layer_list"):
+            if _key in cfg and _key not in overridden:
+                setattr(config, _key, cfg[_key])
+                overridden.append(_key)
+        if overridden:
+            print("force_overridden:", overridden)
     except Exception as e:
         pass
     # Fast eval mode during training: disable expensive eval-time statistics/extra analysis by default.
@@ -3910,9 +4100,19 @@ def main():
     if model_args.num_harmonics is not None:
         config.num_harmonics = int(model_args.num_harmonics)
     config.share_freq_across_heads = model_args.share_freq_across_heads
-    config.pe_method = model_args.pe_method
+    if _cli_flag_present("--pe_method"):
+        config.pe_method = model_args.pe_method
+    if model_args.relative_type is not None:
+        config.relative_type = model_args.relative_type
     config.use_beta_modulation = model_args.use_beta_modulation
-    config.wavelet_mode = model_args.wavelet_mode
+    wavelet_mode_cli_provided = _cli_flag_present("--wavelet_mode")
+    if wavelet_mode_cli_provided:
+        config.wavelet_mode = model_args.wavelet_mode
+        wavelet_mode_source = "cli"
+    else:
+        config.wavelet_mode = cfg_str(cfg, "wavelet_mode", model_args.wavelet_mode)
+        wavelet_mode_source = "cfg_or_default"
+    config.path_attn_impl = model_args.path_attn_impl
     config.use_soft_wavelet_fox = model_args.use_soft_wavelet_fox
     config.logging_steps = training_args.logging_steps
     config.wavelet_baseline_use = model_args.wavelet_baseline_use
@@ -3926,6 +4126,10 @@ def main():
     config.smooth_use = training_args.smooth_use
     config.distilling_coe_warmup_use = training_args.distilling_coe_warmup_use
     config.scale_range = training_args.scale_range
+    config.path_blend_layers = training_args.path_blend_layers if training_args.path_blend_layers else None
+    config.path_sparse_gate = training_args.path_sparse_gate
+    config.gate_sparse_alpha = training_args.gate_sparse_alpha
+    config.gate_warmup_steps = training_args.gate_warmup_steps
     config.dataset_name = data_args.dataset_name
     config.wavelet_pe_softmax_use = training_args.wavelet_pe_softmax_use
     config.weight_alpha = training_args.weight_alpha
@@ -4011,6 +4215,16 @@ def main():
     config.wavelet_ctx_feat_rms_eps = cfg_float(
         cfg, "wavelet_ctx_feat_rms_eps", float(getattr(config, "wavelet_ctx_feat_rms_eps", 1e-6))
     )
+    config.wavelet_ctx_feat_detach_delta = cfg_bool(
+        cfg, "wavelet_ctx_feat_detach_delta", bool(getattr(config, "wavelet_ctx_feat_detach_delta", False))
+    )
+    config.router_jitter_flip_ratio = cfg_float(
+        cfg,
+        "router_jitter_flip_ratio",
+        float(getattr(config, "router_jitter_flip_ratio", float(getattr(config, "router_jitter_std", 0.0)))),
+    )
+    # Backward-compat alias: old code/metrics may still read router_jitter_std.
+    config.router_jitter_std = float(config.router_jitter_flip_ratio)
     config.wavelet_ctxscale_film_hidden = cfg_int(
         cfg, "wavelet_ctxscale_film_hidden", int(getattr(config, "wavelet_ctxscale_film_hidden", 64))
     )
@@ -4046,6 +4260,11 @@ def main():
         "wavelet_ctxscale_disable_layer_gate",
         bool(getattr(config, "wavelet_ctxscale_disable_layer_gate", False)),
     )
+    # Causal rho intervention: override rho to a fixed constant for ablation (None = free rho).
+    _rho_ov_raw = cfg.get("wavelet_ctxscale_rho_override", None)
+    config.wavelet_ctxscale_rho_override = (
+        float(_rho_ov_raw) if _rho_ov_raw is not None else getattr(config, "wavelet_ctxscale_rho_override", None)
+    )
     # LW residual HW specialization: CLI + cfg_path configurable, defaults preserve legacy behavior.
     config.lw_residual_hw_enable = cfg_bool(
         cfg,
@@ -4072,6 +4291,13 @@ def main():
         str(getattr(config, "wavelet_ctxscale_disable_layer_gate", False)),
         str("wavelet_ctxscale_disable_layer_gate" in cfg),
         str(model_args.cfg_path),
+    )
+    logger.info(
+        "[WaveletCfg] wavelet_mode=%s (source=%s, cfg_has_key=%s, cli_flag=%s)",
+        str(getattr(config, "wavelet_mode", "")),
+        str(wavelet_mode_source),
+        str("wavelet_mode" in cfg),
+        str(wavelet_mode_cli_provided),
     )
     if "wavelet_ctxscale_disable_layer_gate" in cfg:
         logger.info(
@@ -4336,6 +4562,19 @@ def main():
                     if not bool(p.requires_grad):
                         p.requires_grad_(True)
                         n_reqgrad_fix += 1
+                elif name.endswith(".path_lam"):
+                    # path_lam is always new (not in pretrained ckpt) — always zero-init
+                    data = p.detach().float()
+                    if (not torch.isfinite(data).all()) or (float(data.abs().max().item()) > 1.0):
+                        logger.warning(
+                            "[PathBlendInit] %s has abnormal value %.6g — force reset to 0.0", name, float(data.abs().max().item())
+                        )
+                        p.fill_(0.0)
+                    elif name in missing:
+                        p.fill_(0.0)
+                    if not bool(p.requires_grad):
+                        p.requires_grad_(True)
+                        n_reqgrad_fix += 1
 
         logger.info(
             "[WaveletInitSanity] reset_missing_a=%d reset_missing_mlp_a=%d reset_missing_k1=%d "
@@ -4444,6 +4683,7 @@ def main():
         model.resize_token_embeddings(len(tokenizer))
     bucket_size = getattr(data_args, "xsum_bucket_size", 0)
     hotpot_level_cache = {}
+    hotpot_placement_cache = {}   # maps split → list[float] of placement_actual_pct per example
     mix_eval_task_cache = {}
 
     probe_split = "train" if (training_args.do_train and "train" in raw_datasets) else list(raw_datasets.keys())[0]
@@ -4471,12 +4711,14 @@ def main():
                     "labels": [-100] * block_size,
                     "attention_mask": [0] * block_size,
                     "level": level,
+                    "placement_pct": placement_pct,
                 }
 
             # tokenizer is accessed via GLOBAL_TOKENIZER set below
             q = ex.get("question", "")
             gold = ex.get("answer", "")
             level = ex.get("level", "unknown")
+            placement_pct = float(ex.get("placement_pct", -1.0))
             if not isinstance(level, str):
                 level = str(level)
             if not isinstance(q, str) or not isinstance(gold, str) or len(gold.strip()) == 0:
@@ -4569,6 +4811,7 @@ def main():
                 "labels": labels,
                 "attention_mask": attn,
                 "level": level,
+                "placement_pct": placement_pct,
             }
         # hotpot_qa_stats = stats_from_builder(
         #     raw_datasets["train"],
@@ -4586,6 +4829,8 @@ def main():
                 "bucket_size": bucket_size,
                 "tok": getattr(tokenizer, "name_or_path", None),
                 "question_position": getattr(config, "hotpot_question_position", None),
+                "hotpot_long_jsonl": getattr(data_args, "hotpot_long_jsonl", None),
+                "hotpot_long_lengths": getattr(data_args, "hotpot_long_lengths", None),
             }
             return hashlib.md5(json.dumps(key, sort_keys=True).encode("utf-8")).hexdigest()
         if training_args.do_train and not training_args.do_eval:
@@ -4652,6 +4897,11 @@ def main():
                 if hotpot_level_cache[out_split] is not None:
                     lvl_stats = Counter([str(x).lower() for x in hotpot_level_cache[out_split]])
                     logger.info(f"[hotpot_qa] split={out_split} level distribution: {dict(lvl_stats)} (n={len(hotpot_level_cache[out_split])})")
+                if "placement_pct" in filtered.column_names:
+                    hotpot_placement_cache[out_split] = [float(v) for v in filtered["placement_pct"]]
+                    filtered = filtered.remove_columns(["placement_pct"])
+                else:
+                    hotpot_placement_cache[out_split] = None
                 filtered.set_format(type="python", columns=["input_ids", "attention_mask", "labels"])
                 target_ds[out_split] = filtered
 
@@ -4663,6 +4913,82 @@ def main():
             hotpot_qa_lm_datasets = target_ds
         else:
             lm_datasets = target_ds
+    elif data_args.dataset_name == "passkey":
+        # =====================================================================
+        # Passkey retrieval: generate synthetic fixed-length examples in which
+        # a random N-digit number is hidden at a random position in filler text.
+        # The model is asked to recall the key at the END of the sequence.
+        # Metric: Exact Match on the answer key tokens at the final position.
+        # block_size determines the context length tested in this run.
+        #
+        # Sequence structure:
+        #   [intro][filler_before][key_prefix][key][filler_after][question][answer_key]
+        # Labels: -100 everywhere except the answer_key tokens at the very end.
+        # =====================================================================
+        from datasets import Dataset as _PkDataset, DatasetDict as _PkDatasetDict
+        _pk_block_size = data_args.block_size
+        _pk_num_samples = int(getattr(data_args, "passkey_num_samples", 50))
+        _pk_num_digits  = int(getattr(data_args, "passkey_num_digits",  5))
+        _pk_rng = random.Random(42)
+        _pk_filler = "The grass is green. The sky is blue. The sun is yellow. Here we go. There and back again. "
+        _pk_intro       = "There is an important info hidden inside a lot of irrelevant text. Find it and memorize them. I will quiz you about the important information there.\n\n"
+        _pk_key_prefix  = "The special magic number is: "
+        _pk_question    = "\n\nWhat is the special magic number?\n\nThe special magic number is:"
+        passkey_length_cache = []
+        tokenizer.pad_token = tokenizer.eos_token
+        _pk_records = {"input_ids": [], "labels": [], "attention_mask": []}
+        # Pre-tokenize fixed non-key parts (shared across samples)
+        _intro_ids    = tokenizer(_pk_intro,       add_special_tokens=True,  truncation=False)["input_ids"]
+        _prefix_ids   = tokenizer(_pk_key_prefix,  add_special_tokens=False, truncation=False)["input_ids"]
+        _question_ids = tokenizer(_pk_question,    add_special_tokens=False, truncation=False)["input_ids"]
+        _filler_one   = tokenizer(_pk_filler,      add_special_tokens=False, truncation=False)["input_ids"]
+        for _pk_i in range(_pk_num_samples):
+            _pk_key     = "".join([str(_pk_rng.randint(0, 9)) for _ in range(_pk_num_digits)])
+            _pk_key_str = " " + _pk_key  # leading space for GPT-2 tokenisation
+            _key_ids    = tokenizer(_pk_key_str, add_special_tokens=False, truncation=False)["input_ids"]
+            # Total fixed token budget:
+            #   intro + key_prefix(in doc) + key(in doc) + question + answer_key
+            # answer_key is identical to _key_ids and sits at the very end.
+            _fixed_tokens = (len(_intro_ids) + len(_prefix_ids) + len(_key_ids)
+                             + len(_question_ids) + len(_key_ids))
+            _filler_budget = max(0, _pk_block_size - _fixed_tokens)
+            # Build full filler token sequence
+            _filler_full = []
+            while len(_filler_full) < _filler_budget:
+                _filler_full += _filler_one
+            _filler_full = _filler_full[:_filler_budget]
+            # Randomly split filler into before/after the in-document key
+            _split = _pk_rng.randint(0, max(0, len(_filler_full)))
+            _filler_before = _filler_full[:_split]
+            _filler_after  = _filler_full[_split:]
+            # Assemble: intro | filler_before | key_prefix | key | filler_after | question | answer_key
+            _input_ids = (_intro_ids + _filler_before + _prefix_ids + _key_ids
+                          + _filler_after + _question_ids + _key_ids)
+            # Truncate / pad to block_size
+            if len(_input_ids) > _pk_block_size:
+                _input_ids = _input_ids[:_pk_block_size]
+            _attn_mask = [1] * len(_input_ids)
+            while len(_input_ids) < _pk_block_size:
+                _input_ids.append(tokenizer.pad_token_id)
+                _attn_mask.append(0)
+            # Labels: -100 everywhere; non-(-100) only on the answer_key at the end.
+            _labels = [-100] * _pk_block_size
+            _ans_start = (len(_intro_ids) + len(_filler_before) + len(_prefix_ids)
+                          + len(_key_ids) + len(_filler_after) + len(_question_ids))
+            for _ki, _tok in enumerate(_key_ids):
+                _pos = _ans_start + _ki
+                if _pos < _pk_block_size:
+                    _labels[_pos] = _tok
+            _pk_records["input_ids"].append(_input_ids)
+            _pk_records["labels"].append(_labels)
+            _pk_records["attention_mask"].append(_attn_mask)
+            passkey_length_cache.append(_pk_block_size)
+        _pk_ds = _PkDataset.from_dict(_pk_records)
+        lm_datasets = _PkDatasetDict({"validation": _pk_ds})
+        logger.info(
+            "[passkey] generated %d examples at block_size=%d with %d-digit passkeys",
+            _pk_num_samples, _pk_block_size, _pk_num_digits,
+        )
     elif data_args.dataset_name == 'wikitext':
         with training_args.main_process_first(desc="dataset map tokenization"):
             if not data_args.streaming:
@@ -4753,7 +5079,7 @@ def main():
             if sp in lm_datasets:
                 keep_cols = [c for c in ["input_ids", "labels"] if c in lm_datasets[sp].column_names]
                 lm_datasets[sp].set_format(type="torch", columns=keep_cols)
-    if data_args.dataset_name == 'xsum' or (data_args.dataset_name == 'mix'):
+    if data_args.dataset_name in ('xsum', 'mix', 'govreport', 'ccdv/govreport-summarization'):
         if data_args.dataset_name == 'mix':
             raw_datasets = xsum_raw_datasets
             column_names = raw_datasets["train"].column_names 
@@ -4766,7 +5092,7 @@ def main():
         def _lm_cache_fingerprint():
             mode = "fulltrain" if getattr(data_args, "full_fine_tune", False) else "masktrain"
             key = {
-                "dataset": "xsum_prefixlm_v4_bucket_select",  # 改个名字，避免和旧 cache 混淆
+                "dataset": f"xsum_prefixlm_v4_bucket_select_{data_args.dataset_name}",  # 改个名字，避免和旧 cache 混淆
                 "mode": mode,
                 "tok_name": getattr(tokenizer, "name_or_path", None),
                 "block_size": data_args.block_size,
@@ -4774,6 +5100,7 @@ def main():
                 "xsum_bucket_apply_to": getattr(data_args, "xsum_bucket_apply_to", "eval_test"),
                 "xsum_min_total_len": getattr(data_args, "xsum_min_total_len", 0),
                 "eos_id": tokenizer.eos_token_id,
+                "train_file": str(getattr(data_args, "train_file", None) or ""),
             }
             return hashlib.md5(json.dumps(key, sort_keys=True).encode("utf-8")).hexdigest()
 
@@ -4826,7 +5153,11 @@ def main():
 
 
             return True
-        use_cache = LM_CACHE_DIR.exists()
+        # Arrow cache fingerprint is based on input data content, so different validation_files
+        # produce different cache paths — no stale-cache risk. Always allow cache to prevent
+        # SIGBUS from multiple DDP ranks writing the same arrow file simultaneously.
+        disable_xsum_cache_for_validation_file = False
+        use_cache = LM_CACHE_DIR.exists() and (not disable_xsum_cache_for_validation_file)
         lm_datasets = None
         if use_cache:
             lm_datasets = load_from_disk(str(LM_CACHE_DIR))
@@ -4880,6 +5211,7 @@ def main():
                     f"[XSUM] Cached dataset at {LM_CACHE_DIR} has no 'test' split, will rebuild."
                 )
                 use_cache = False
+
         def build_and_index_factory(split_name):
             def build_and_index(ex, idx):
                 def make_discard(total_len: int):
@@ -4954,11 +5286,9 @@ def main():
                 tokenizer.pad_token_id = tokenizer.eos_token_id
 
             assert not data_args.streaming, "XSUM prefix-LM 分支暂不支持 streaming=True"
-
             def build_and_index_factory(split_name):
                 def build_and_index(ex, idx):
                     def make_discard(total_len: int):
-                        # 给丢弃样本也返回同样的列（占位），避免 datasets.map schema 不一致
                         return {
                             "discard": True,
                             "input_ids": [tokenizer.pad_token_id] * block_size,
@@ -4967,19 +5297,33 @@ def main():
                             "total_token_len": total_len,
                         }
 
+                    # document / summary 字段兼容
+                    doc = ex.get("document", ex.get("article", ex.get("source", ex.get("report", ""))))
+                    summ = ex.get("summary", ex.get("summary_filtered", ex.get("summary_original", ex.get("target", ex.get("abstract", ex.get("highlights", ""))))))
+
+                    if not isinstance(doc, str):
+                        doc = str(doc) if doc is not None else ""
+                    if not isinstance(summ, str):
+                        summ = str(summ) if summ is not None else ""
+
+                    doc = doc.strip()
+                    summ = summ.strip()
+                    if len(doc) == 0 or len(summ) == 0:
+                        return make_discard(0)
+
                     enc_prompt = tokenizer(
-                        PROMPT_TPL.format(doc=ex["document"]),
+                        PROMPT_TPL.format(doc=doc),
                         add_special_tokens=True,
                         truncation=False,
                     )
                     enc_summ = tokenizer(
-                        ex["summary"],
+                        summ,
                         add_special_tokens=False,
                         truncation=False,
                     )
 
                     prompt_ids = enc_prompt["input_ids"]
-                    summ_ids   = enc_summ["input_ids"]
+                    summ_ids = enc_summ["input_ids"]
 
                     if len(summ_ids) == 0:
                         return make_discard(0)
@@ -4994,23 +5338,78 @@ def main():
                     L = len(ids)
                     if L <= 1:
                         return make_discard(L)
-
                     if L > block_size:
                         return make_discard(L)
 
                     pad_len = block_size - L
-                    ids    = ids    + [tokenizer.pad_token_id] * pad_len
+                    ids = ids + [tokenizer.pad_token_id] * pad_len
                     labels = labels + [-100] * pad_len
-                    attn   = [1] * L + [0] * pad_len
+                    attn = [1] * L + [0] * pad_len
 
                     return {
-                        "discard": False,            # ✅ 关键：正常样本也要有 discard 字段
+                        "discard": False,
                         "input_ids": ids,
                         "labels": labels,
                         "attention_mask": attn,
                         "total_token_len": L,
                     }
-                return build_and_index
+                return build_and_index    
+            # def build_and_index_factory(split_name):
+            #     def build_and_index(ex, idx):
+            #         def make_discard(total_len: int):
+            #             # 给丢弃样本也返回同样的列（占位），避免 datasets.map schema 不一致
+            #             return {
+            #                 "discard": True,
+            #                 "input_ids": [tokenizer.pad_token_id] * block_size,
+            #                 "labels": [-100] * block_size,
+            #                 "attention_mask": [0] * block_size,
+            #                 "total_token_len": total_len,
+            #             }
+
+            #         enc_prompt = tokenizer(
+            #             PROMPT_TPL.format(doc=ex["document"]),
+            #             add_special_tokens=True,
+            #             truncation=False,
+            #         )
+            #         enc_summ = tokenizer(
+            #             ex["summary"],
+            #             add_special_tokens=False,
+            #             truncation=False,
+            #         )
+
+            #         prompt_ids = enc_prompt["input_ids"]
+            #         summ_ids   = enc_summ["input_ids"]
+
+            #         if len(summ_ids) == 0:
+            #             return make_discard(0)
+
+            #         ids = prompt_ids + summ_ids + [tokenizer.eos_token_id]
+
+            #         if split_name == "train" and getattr(data_args, "full_fine_tune", False):
+            #             labels = ids.copy()
+            #         else:
+            #             labels = ([-100] * len(prompt_ids)) + summ_ids + [tokenizer.eos_token_id]
+
+            #         L = len(ids)
+            #         if L <= 1:
+            #             return make_discard(L)
+
+            #         if L > block_size:
+            #             return make_discard(L)
+
+            #         pad_len = block_size - L
+            #         ids    = ids    + [tokenizer.pad_token_id] * pad_len
+            #         labels = labels + [-100] * pad_len
+            #         attn   = [1] * L + [0] * pad_len
+
+            #         return {
+            #             "discard": False,            # ✅ 关键：正常样本也要有 discard 字段
+            #             "input_ids": ids,
+            #             "labels": labels,
+            #             "attention_mask": attn,
+            #             "total_token_len": L,
+            #         }
+            #     return build_and_index
 
             # —— 一次 map：构造 & 固定长度 —— #
 
@@ -5025,7 +5424,7 @@ def main():
                         remove_columns=column_names,
                         num_proc=1,
                         desc=f"Tokenize & pad (split={split})",
-                        load_from_cache_file=True,
+                        load_from_cache_file=(not data_args.overwrite_cache) and (not disable_xsum_cache_for_validation_file),
                     )
 
             lm_datasets = DatasetDict()
@@ -5128,6 +5527,7 @@ def main():
         #     raise ValueError("--do_eval requires a validation dataset")
         IS_HOTPOTQA = (data_args.dataset_name == "hotpot_qa")
         IS_MIX = (data_args.dataset_name == "mix")
+        IS_PASSKEY = (data_args.dataset_name == "passkey")
         eval_dataset = lm_datasets["validation"]
         if data_args.max_eval_samples is not None:
             if data_args.streaming:
@@ -5149,6 +5549,7 @@ def main():
 
         #### hotpot_qa setting ########
         hotpot_eval_levels = hotpot_level_cache.get("validation") if IS_HOTPOTQA else None
+        hotpot_eval_placements = hotpot_placement_cache.get("validation") if IS_HOTPOTQA else None
         mix_eval_tasks = mix_eval_task_cache.get("validation") if IS_MIX else None
 
         # Dump eval dataset (text + token ids) for downstream attention analysis
@@ -5193,7 +5594,13 @@ def main():
         metric = evaluate.load("accuracy", cache_dir=model_args.cache_dir)
         IS_XSUM = (data_args.dataset_name == "xsum")
         rouge_metric = evaluate.load("rouge") if (IS_XSUM or IS_MIX) else None
-        bertscore_metric  = evaluate.load("bertscore")  if IS_XSUM else None
+        bertscore_metric = evaluate.load("bertscore") if IS_XSUM else None
+
+        # extra reference-based metrics
+        bleu_metric = evaluate.load("bleu") if IS_XSUM else None
+        sacrebleu_metric = evaluate.load("sacrebleu") if IS_XSUM else None
+        meteor_metric = evaluate.load("meteor") if IS_XSUM else None
+        chrf_metric = evaluate.load("chrf") if IS_XSUM else None
         paired_setting_raw = str(getattr(training_args, "paired_eval_setting", "auto")).strip().lower()
         if paired_setting_raw not in {"auto", "baseline", "rel0"}:
             raise ValueError(f"paired_eval_setting must be one of: auto|baseline|rel0, got {paired_setting_raw}")
@@ -5877,7 +6284,108 @@ def main():
                 "xsum_count":  len(pred_texts),
             }
             return out
+        def _safe_mean(xs):
+            return float(np.mean(xs)) if len(xs) else 0.0
 
+        def _safe_std(xs):
+            return float(np.std(xs, ddof=1)) if len(xs) > 1 else 0.0
+        xsum_alignscore_scorer = None
+        xsum_fenice_scorer = None
+
+        def _get_alignscore_scorer():
+            nonlocal xsum_alignscore_scorer
+            if xsum_alignscore_scorer is not None:
+                return xsum_alignscore_scorer
+            try:
+                from alignscore import AlignScore
+                ckpt_path = os.environ.get("ALIGNSCORE_CKPT", "").strip()
+                if not ckpt_path:
+                    logger.warning("[AlignScore] ALIGNSCORE_CKPT is empty, skip AlignScore.")
+                    return None
+                device = os.environ.get("ALIGNSCORE_DEVICE", "cuda:0")
+                batch_size = int(os.environ.get("ALIGNSCORE_BATCH_SIZE", "8"))
+                model_name = os.environ.get("ALIGNSCORE_MODEL", "roberta-base")
+                eval_mode = os.environ.get("ALIGNSCORE_EVAL_MODE", "nli_sp")
+                xsum_alignscore_scorer = AlignScore(
+                    model=model_name,
+                    batch_size=batch_size,
+                    device=device,
+                    ckpt_path=ckpt_path,
+                    evaluation_mode=eval_mode,
+                )
+                logger.info(f"[AlignScore] initialized with ckpt={ckpt_path}")
+                return xsum_alignscore_scorer
+            except Exception as e:
+                logger.warning(f"[AlignScore] init failed: {e}")
+                return None
+
+        def _get_fenice_scorer():
+            nonlocal xsum_fenice_scorer
+            if xsum_fenice_scorer is not None:
+                return xsum_fenice_scorer
+            try:
+                from metric.FENICE import FENICE
+                xsum_fenice_scorer = FENICE()
+                logger.info("[FENICE] initialized")
+                return xsum_fenice_scorer
+            except Exception as e:
+                logger.warning(f"[FENICE] init failed: {e}")
+                return None    
+        _SUMMAC_SCORER = None
+
+        def _get_summac_scorer():
+            nonlocal _SUMMAC_SCORER
+            if _SUMMAC_SCORER is not None:
+                return _SUMMAC_SCORER
+            try:
+                # Patch tokenizers.pre_tokenizers.Metaspace / decoders.Metaspace to drop
+                # the 'prepend_scheme' kwarg that older tokenizers versions don't support.
+                # convert_slow_tokenizer.py accesses these via module ref, so patching works.
+                try:
+                    from tokenizers import pre_tokenizers as _pt, decoders as _dec
+                    _real_pt_ms = _pt.Metaspace
+                    _real_dec_ms = _dec.Metaspace
+                    def _safe_pt_ms(*a, prepend_scheme=None, **kw): return _real_pt_ms(*a, **kw)
+                    def _safe_dec_ms(*a, prepend_scheme=None, **kw): return _real_dec_ms(*a, **kw)
+                    _pt.Metaspace = _safe_pt_ms
+                    _dec.Metaspace = _safe_dec_ms
+                except Exception:
+                    _real_pt_ms = _real_dec_ms = None
+
+                from summac.model_summac import SummaCConv
+                _SUMMAC_SCORER = SummaCConv(
+                    models=["vitc"],
+                    bins="percentile",
+                    granularity="sentence",
+                    nli_labels="e",
+                    device="cuda" if torch.cuda.is_available() else "cpu"
+                )
+                logger.info("[SummaC] scorer initialized successfully")
+
+                # tokenizer is loaded lazily in SummaCImager.load_nli().
+                # Patch load_nli so that after tokenizer is created, batch_encode_plus
+                # drops truncation_strategy (newer transformers already handles it via
+                # truncation=True; passing both causes "multiple values" error).
+                try:
+                    from summac.model_summac import SummaCImager as _SummaCImager
+                    _orig_load_nli = _SummaCImager.load_nli
+                    def _patched_load_nli(_self):
+                        _orig_load_nli(_self)
+                        if hasattr(_self, 'tokenizer'):
+                            _tok = _self.tokenizer
+                            _orig_bep = _tok.batch_encode_plus  # bound method
+                            def _safe_bep(*_a, truncation_strategy=None, _ob=_orig_bep, **_kw):
+                                return _ob(*_a, **_kw)
+                            _tok.batch_encode_plus = _safe_bep
+                    _SummaCImager.load_nli = _patched_load_nli
+                except Exception as _pe:
+                    logger.warning(f"[SummaC] tokenizer patch failed: {_pe}")
+
+                # Keep Metaspace patch applied permanently (just drops unknown kwarg)
+            except Exception as e:
+                logger.warning(f"[SummaC] init failed: {e}")
+                _SUMMAC_SCORER = None
+            return _SUMMAC_SCORER                        
         def compute_metrics(eval_preds):
             preds, labels = eval_preds
             if IS_MIX and mix_eval_tasks is not None:
@@ -5899,6 +6407,9 @@ def main():
                 labels_shift = labels_np[:, 1:]
                 preds_shift  = preds_np[:, :-1]
                 by_level = {"easy": [], "medium": [], "hard": []}
+                # 5 placement buckets: [0,20%), [20,40%), [40,60%), [60,80%), [80,100%]
+                _PLACEMENT_BUCKET_NAMES = ["p0_20", "p20_40", "p40_60", "p60_80", "p80_100"]
+                by_placement: dict[str, list] = {k: [] for k in _PLACEMENT_BUCKET_NAMES}
                 def _std(vals):
                     return float(np.std(vals, ddof=1)) if len(vals) > 1 else 0.0
                 for i in range(labels_shift.shape[0]):
@@ -5914,6 +6425,11 @@ def main():
                         lvl = str(hotpot_eval_levels[i]).lower()
                         if lvl in by_level:
                             by_level[lvl].append(f1_val)
+                    if hotpot_eval_placements is not None and i < len(hotpot_eval_placements):
+                        pct = float(hotpot_eval_placements[i])
+                        if pct >= 0.0:  # -1.0 means unknown (non-JSONL example)
+                            bucket_idx = min(4, int(pct * 5))
+                            by_placement[_PLACEMENT_BUCKET_NAMES[bucket_idx]].append(f1_val)
 
                 out = {
                     "f1": float(np.mean(f1s)) if len(f1s) else 0.0,
@@ -5925,8 +6441,35 @@ def main():
                     out[f"f1_{lvl_name}"] = float(np.mean(scores)) if scores else 0.0
                     out[f"f1_{lvl_name}_std"] = _std(scores)
                     out[f"count_{lvl_name}"] = len(scores)
+                if hotpot_eval_placements is not None:
+                    for bname, scores in by_placement.items():
+                        out[f"f1_{bname}"] = float(np.mean(scores)) if scores else 0.0
+                        out[f"count_{bname}"] = len(scores)
                 _write_eval_records(records)
                 return out
+            if IS_PASSKEY:
+                # -------------------------------------------------------
+                # Passkey retrieval evaluation: Exact Match per sample.
+                # Labels contain the passkey token ids at the key position;
+                # everything else is -100. We compare causal-shifted preds.
+                # -------------------------------------------------------
+                preds_np  = _to_numpy(preds)
+                labels_np = _to_numpy(labels)
+                labels_shift = labels_np[:, 1:]
+                preds_shift  = preds_np[:, :-1]
+                em_list = []
+                for _pki in range(labels_shift.shape[0]):
+                    _m = labels_shift[_pki] != -100
+                    if _m.sum() == 0:
+                        continue
+                    _ref_ids  = labels_shift[_pki][_m].tolist()
+                    _pred_ids = preds_shift[_pki][_m].tolist()
+                    _ref_text  = tokenizer.decode(_ref_ids,  skip_special_tokens=True).strip()
+                    _pred_text = tokenizer.decode(_pred_ids, skip_special_tokens=True).strip()
+                    em_list.append(float(_ref_text == _pred_text))
+                _pk_em = float(np.mean(em_list)) if em_list else 0.0
+                logger.info("[passkey] block_size=%d  EM=%.4f  N=%d", data_args.block_size, _pk_em, len(em_list))
+                return {"passkey_em": _pk_em, "passkey_count": len(em_list)}
             if not IS_XSUM:
                 if is_synth:
                     # to numpy
@@ -5964,7 +6507,7 @@ def main():
                 # 先做 causal 的对齐（和你原来一致）
             labels_shift = labels[:, 1:]
             preds_shift  = preds[:, :-1]
-            pred_texts, ref_texts = [], []
+            pred_texts, ref_texts, source_texts = [], [], []
             for i in range(labels_shift.shape[0]):
                 mask = labels_shift[i] != -100
                 if mask.sum() == 0:
@@ -5973,13 +6516,19 @@ def main():
                 pred_ids = preds_shift[i][mask].tolist()
                 ref_texts.append(tokenizer.decode(ref_ids,  skip_special_tokens=True))
                 pred_texts.append(tokenizer.decode(pred_ids, skip_special_tokens=True))
-                # print(ref_texts)
-                # print('!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!boundary,boundary,boundary,boundary!!!!!!!!!!!!!!!!!!!!!!')
-                # print(pred_texts)
-                # pdb.set_trace()
+                if xsum_eval_sources is not None and i < len(xsum_eval_sources):
+                    source_texts.append(xsum_eval_sources[i])
             # 仅计算 ROUGE（rouge1/2/L）
             rouge = rouge_metric.compute(predictions=pred_texts, references=ref_texts, use_stemmer=True)
-            if not training_args.do_train:
+            if training_args.do_train:
+                if len(pred_texts) == 0:
+                    return {
+                        "rouge1": 0.0,
+                        "rouge2": 0.0,
+                        "rougeL": 0.0,
+                        "bertscore": 0.0,
+                        "count": 0,
+                    }
                 bertscore = bertscore_metric.compute(predictions=pred_texts, references=ref_texts, lang="en")
                 out = {
                     "rouge1": float(rouge.get("rouge1", 0.0)),
@@ -5989,33 +6538,217 @@ def main():
                     "count":  len(pred_texts),
                 }
             else:
+                if len(pred_texts) == 0:
+                    return {
+                        "rouge1": 0.0,
+                        "rouge2": 0.0,
+                        "rougeL": 0.0,
+                        "bertscore": 0.0,
+                        "bleu": 0.0,
+                        "sacrebleu": 0.0,
+                        "meteor": 0.0,
+                        "chrf": 0.0,
+                        "gen_len": 0.0,
+                        "ref_len": 0.0,
+                        "compression_ratio": 0.0,
+                        "empty_pred_ratio": 0.0,
+                        "count": 0,
+                    }
+
+                # ---------------------------
+                # reference-based metrics
+                # ---------------------------
+                rouge = rouge_metric.compute(
+                    predictions=pred_texts,
+                    references=ref_texts,
+                    use_stemmer=True
+                )
+
+                bertscore = bertscore_metric.compute(
+                    predictions=pred_texts,
+                    references=ref_texts,
+                    lang="en"
+                )
+                bert_f1 = np.asarray(bertscore["f1"], dtype=np.float32)
+
+                bleu = bleu_metric.compute(
+                    predictions=pred_texts,
+                    references=[[r] for r in ref_texts],
+                )
+
+                sacrebleu = sacrebleu_metric.compute(
+                    predictions=pred_texts,
+                    references=[[r] for r in ref_texts],
+                )
+
+                meteor = meteor_metric.compute(
+                    predictions=pred_texts,
+                    references=ref_texts,
+                )
+
+                chrf = chrf_metric.compute(
+                    predictions=pred_texts,
+                    references=ref_texts,
+                )
+
+                # ---------------------------
+                # length / sanity metrics
+                # ---------------------------
+                gen_lens = [
+                    len(tokenizer.encode(t, add_special_tokens=False))
+                    for t in pred_texts
+                ]
+                ref_lens = [
+                    len(tokenizer.encode(t, add_special_tokens=False))
+                    for t in ref_texts
+                ]
+                empty_pred_ratio = float(sum([1 for t in pred_texts if len(t.strip()) == 0])) / max(len(pred_texts), 1)
+
                 out = {
                     "rouge1": float(rouge.get("rouge1", 0.0)),
                     "rouge2": float(rouge.get("rouge2", 0.0)),
                     "rougeL": float(rouge.get("rougeL", 0.0)),
-                    "count":  len(pred_texts),
+                    "bertscore": float(bert_f1.mean()),
+                    "bertscore_std": _safe_std(bert_f1.tolist()),
+
+                    "bleu": float(bleu.get("bleu", 0.0)),
+                    "sacrebleu": float(sacrebleu.get("score", 0.0)),
+                    "meteor": float(meteor.get("meteor", 0.0)),
+                    "chrf": float(chrf.get("score", 0.0)),
+
+                    "gen_len": _safe_mean(gen_lens),
+                    "ref_len": _safe_mean(ref_lens),
+                    "compression_ratio": (
+                        float(np.mean([g / max(r, 1) for g, r in zip(gen_lens, ref_lens)]))
+                        if len(gen_lens) else 0.0
+                    ),
+                    "empty_pred_ratio": empty_pred_ratio,
+                    "count": len(pred_texts),
                 }
-            # pdb.set_trace()
-            # if not training_args.do_train:
-            #     p_ents = [ents(p) for p in pred_texts]
-            #     r_ents = [ents(r) for r in ref_texts]
 
-            #     tp = sum(len(pe & re) for pe, re in zip(p_ents, r_ents))
-            #     fp = sum(len(pe - re) for pe, re in zip(p_ents, r_ents))
-            #     fn = sum(len(re - pe) for pe, re in zip(p_ents, r_ents))
+                # ---------------------------
+                # source-grounded metrics
+                # ---------------------------
+                _local_rank = int(os.environ.get("LOCAL_RANK", training_args.local_rank if hasattr(training_args, "local_rank") else -1))
+                _is_main = (_local_rank <= 0)
+                if len(source_texts) == len(pred_texts) and len(source_texts) > 0 and _is_main:
+                    # ---------------------------
+                    # SummaC (recommended primary faithful metric)
+                    # ---------------------------
+                    try:
+                        summac_scorer = None if os.environ.get("SKIP_SUMMAC", "0") == "1" else _get_summac_scorer()
+                        if summac_scorer is not None:
+                            # 常见接口：score(list_of_docs, list_of_summaries)
+                            # 有些版本返回 dict，有些返回 list，下面做兼容
+                            summac_results = summac_scorer.score(source_texts, pred_texts)
 
-            #     precision = tp / (tp + fp + 1e-9)
-            #     recall    = tp / (tp + fn + 1e-9)
-            #     f1        = 2 * precision * recall / (precision + recall + 1e-9)
+                            summac_scores = []
+                            if isinstance(summac_results, dict):
+                                # 常见字段可能是 "scores"
+                                if "scores" in summac_results:
+                                    summac_scores = [float(x) for x in summac_results["scores"]]
+                            elif isinstance(summac_results, list):
+                                summac_scores = [float(x) for x in summac_results]
 
-            #     out.update({
-            #         "entity_precision": float(precision),
-            #         "entity_recall":    float(recall),
-            #         "entity_f1":        float(f1),
-            #         "entity_tp":        int(tp),
-            #         "entity_fp":        int(fp),
-            #         "entity_fn":        int(fn),
-            #     })
+                            if len(summac_scores):
+                                out["summac"] = float(np.mean(summac_scores))
+                                out["summac_std"] = _safe_std(summac_scores)
+                                out["_summac_per_example"] = summac_scores
+
+                            # ref_summac: reference summaries vs source (sanity baseline)
+                            try:
+                                ref_summac_results = summac_scorer.score(source_texts, ref_texts)
+                                ref_summac_scores = []
+                                if isinstance(ref_summac_results, dict) and "scores" in ref_summac_results:
+                                    ref_summac_scores = [float(x) for x in ref_summac_results["scores"]]
+                                elif isinstance(ref_summac_results, list):
+                                    ref_summac_scores = [float(x) for x in ref_summac_results]
+                                if ref_summac_scores:
+                                    out["ref_summac"] = float(np.mean(ref_summac_scores))
+                                    out["ref_summac_std"] = _safe_std(ref_summac_scores)
+                                    out["_ref_summac_per_example_tmp"] = ref_summac_scores
+                            except Exception as _re:
+                                logger.warning(f"[SummaC] ref_summac failed: {_re}")
+                    except Exception as e:
+                        logger.warning(f"[SummaC] compute failed: {e}")
+
+                    # ---------------------------
+                    # AlignScore
+                    # ---------------------------
+                    try:
+                        alignscore_scorer = _get_alignscore_scorer()
+                        if alignscore_scorer is not None:
+                            align_scores = alignscore_scorer.score(
+                                contexts=source_texts,
+                                claims=pred_texts
+                            )
+                            align_scores = np.asarray(align_scores, dtype=np.float32)
+                            out["alignscore"] = float(align_scores.mean())
+                            out["alignscore_std"] = _safe_std(align_scores.tolist())
+                    except Exception as e:
+                        logger.warning(f"[AlignScore] compute failed: {e}")
+
+                    # ---------------------------
+                    # FENICE
+                    # ---------------------------
+                    try:
+                        fenice_scorer = None if os.environ.get("SKIP_FENICE", "0") == "1" else _get_fenice_scorer()
+                        if fenice_scorer is not None:
+                            batch = [
+                                {"document": src, "summary": pred}
+                                for src, pred in zip(source_texts, pred_texts)
+                            ]
+                            fenice_results = fenice_scorer.score_batch(batch)
+                            fenice_scores = []
+                            for item in fenice_results:
+                                if isinstance(item, dict) and ("score" in item):
+                                    fenice_scores.append(float(item["score"]))
+                            if len(fenice_scores):
+                                out["fenice"] = float(np.mean(fenice_scores))
+                                out["fenice_std"] = _safe_std(fenice_scores)
+                                out["_fenice_per_example"] = fenice_scores
+                    except Exception as e:
+                        logger.warning(f"[FENICE] compute failed: {e}")
+
+                    # --- write per-example faithfulness scores to disk ---
+                    _pe_summac = out.pop("_summac_per_example", None)
+                    _pe_fenice = out.pop("_fenice_per_example", None)
+                    _pe_ref_summac = out.pop("_ref_summac_per_example_tmp", None)
+                    if _pe_summac is not None or _pe_fenice is not None or _pe_ref_summac is not None:
+                        try:
+                            import os as _os
+                            _pe_path = _os.path.join(training_args.output_dir, "faithfulness_per_example.json")
+                            _pe_data = {}
+                            if _pe_summac is not None:
+                                _pe_data["summac"] = _pe_summac
+                            if _pe_fenice is not None:
+                                _pe_data["fenice"] = _pe_fenice
+                            if _pe_ref_summac is not None:
+                                _pe_data["ref_summac"] = _pe_ref_summac
+                            with open(_pe_path, "w") as _f:
+                                import json as _json
+                                _json.dump(_pe_data, _f)
+                            logger.info(f"[faithfulness] per-example scores saved to {_pe_path}")
+                        except Exception as _e:
+                            logger.warning(f"[faithfulness] failed to save per-example scores: {_e}")
+                else:
+                    logger.info("[XSUM] source_texts unavailable or length mismatch, skip source-grounded metrics")
+
+                logger.info(
+                    "[XSUM_METRICS] "
+                    f"count={out['count']} "
+                    f"rouge1={out['rouge1']:.4f} rouge2={out['rouge2']:.4f} rougeL={out['rougeL']:.4f} "
+                    f"bertscore={out['bertscore']:.4f} "
+                    f"bleu={out['bleu']:.4f} sacrebleu={out['sacrebleu']:.4f} "
+                    f"meteor={out['meteor']:.4f} chrf={out['chrf']:.4f} "
+                    f"gen_len={out['gen_len']:.2f} ref_len={out['ref_len']:.2f} "
+                    f"compression_ratio={out['compression_ratio']:.4f} "
+                    f"empty_pred_ratio={out['empty_pred_ratio']:.4f} "
+                    f"summac={out.get('summac', float('nan')):.4f} "
+                    f"ref_summac={out.get('ref_summac', float('nan')):.4f} "
+                    f"alignscore={out.get('alignscore', float('nan')):.4f} "
+                    f"fenice={out.get('fenice', float('nan')):.4f}"
+                )
             return out
     # Initialize our Trainer
 
@@ -6123,6 +6856,33 @@ def main():
     use_eval_compute_metrics = bool(training_args.do_eval and (not is_torch_xla_available()) and (not train_eval_disable_expensive_stats))
     if train_eval_disable_expensive_stats:
         logger.info("[EvalFast] compute_metrics disabled; eval will report eval_loss/perplexity only.")
+
+    # CanonicalConfigCallback: rewrite config.json in every checkpoint dir with the
+    # fully-resolved runtime config (cfg_path overrides applied).  Prevents the
+    # persistent bug where config.json keeps the base-checkpoint value (e.g.
+    # wavelet_mode='off') while the actual training used a different value from
+    # supply_model.cfg.  Without this, all intervention / ablation scripts that
+    # read wavelet_mode from config.json get the wrong value and must patch it
+    # manually.
+    class CanonicalConfigCallback(TrainerCallback):
+        def __init__(self, resolved_config):
+            self._config = resolved_config
+
+        def on_save(self, args, state, control, **kwargs):
+            if not state.is_world_process_zero:
+                return
+            ckpt_dir = os.path.join(args.output_dir, f"checkpoint-{state.global_step}")
+            if os.path.isdir(ckpt_dir):
+                self._config.save_pretrained(ckpt_dir)
+                logger.info("[CanonicalConfig] Rewrote config.json in %s", ckpt_dir)
+
+    callbacks.append(CanonicalConfigCallback(config))
+    # Also write canonical config to output_dir immediately (covers eval-only runs
+    # and the case where training fails before the first checkpoint).
+    if training_args.process_index == 0:
+        os.makedirs(training_args.output_dir, exist_ok=True)
+        config.save_pretrained(training_args.output_dir)
+        logger.info("[CanonicalConfig] Wrote canonical config.json to %s", training_args.output_dir)
 
     callbacks_for_trainer = callbacks if len(callbacks) > 0 else None
 

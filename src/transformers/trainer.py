@@ -36,6 +36,7 @@ from functools import partial
 from pathlib import Path
 from typing import TYPE_CHECKING, Any, Callable, Optional, Union
 import pdb
+# from utils.function_patch import geom_p_schedule
 
 # Integrations must be imported before ML frameworks:
 # ruff: isort: off
@@ -250,6 +251,43 @@ if is_accelerate_available():
 
 if is_accelerate_available("0.28.0"):
     from accelerate.utils import DataLoaderConfiguration
+import math
+
+def geom_p_schedule(step: int,
+                    total_steps: int,
+                    warm_up_steps: int = 5000) -> float:
+    """
+    先从 0 线性 warmup 到 p_max (=1e-1)，
+    然后在 [warm_up_steps, total_steps] 区间内
+    用几何(指数)方式从 p_max 衰减到 p_min。
+    """
+    # 边界保护
+    if total_steps <= 0:
+        return 0.0
+    if step < 0:
+        step = 0
+    if step >= total_steps:
+        step = total_steps - 1
+
+    p_max = 1.0          # warmup 目标值
+    p_min = 1e-6          # 最终衰减到的最小值（近似 0）
+
+    # 如果总步数比 warmup 还短，就只做线性上升
+    if total_steps <= warm_up_steps:
+        return p_max * (step + 1) / total_steps
+
+    # 1) 线性 warmup: 0 -> p_max
+    if step < warm_up_steps:
+        return p_max * (step + 1) / warm_up_steps
+
+    # 2) 几何衰减: p_max -> p_min
+    # decay_steps = total_steps - warm_up_steps
+    # t = (step - warm_up_steps) / decay_steps  # 归一化到 [0,1]
+
+    # # 几何插值公式：
+    # # p(step) = p_max * (p_min / p_max) ** t
+    # p = p_max * (p_min / p_max) ** t
+    return float(p_max)
 
 
 def _is_peft_model(model):
@@ -1312,12 +1350,18 @@ class Trainer:
             def is_B_param(name: str) -> bool:
                 return (".wB_proj" in name) or (".wB_conv1d" in name)
 
+            def is_coe_for_rel_param(name: str) -> bool:
+                return "coe_for_rel" in name
+
             # 不再用 requires_grad 过滤；即便冻结了也先注册进 optimizer，便于后续解冻与监控
             params_decay_main, params_nodecay_main = [], []
             params_decay_B,    params_nodecay_B    = [], []
+            params_decay_coe,  params_nodecay_coe  = [], []
 
             for n, p in opt_model.named_parameters():
-                if is_B_param(n):
+                if is_coe_for_rel_param(n):
+                    (params_decay_coe if n in decay_parameters else params_nodecay_coe).append(p)
+                elif is_B_param(n):
                     (params_decay_B if n in decay_parameters else params_nodecay_B).append(p)
                 else:
                     (params_decay_main if n in decay_parameters else params_nodecay_main).append(p)
@@ -1326,6 +1370,20 @@ class Trainer:
                 {"params": params_decay_main,   "weight_decay": self.args.weight_decay, "name": "main_decay"},
                 {"params": params_nodecay_main, "weight_decay": 0.0,                    "name": "main_nodecay"},
             ]
+
+            # coe_for_rel 分组（如果可学习，使用单独的 lr 峰值）
+            if len(params_decay_coe) + len(params_nodecay_coe) > 0:
+                coe_lr = getattr(self.args, "coe_for_rel_lr", None)
+                gcoe_decay = {
+                    "params": params_decay_coe,
+                    "weight_decay": self.args.weight_decay,
+                    "name": "coe_for_rel_decay",
+                }
+                gcoe_nodecay = {"params": params_nodecay_coe, "weight_decay": 0.0, "name": "coe_for_rel_nodecay"}
+                if coe_lr is not None:
+                    gcoe_decay["lr"] = float(coe_lr)
+                    gcoe_nodecay["lr"] = float(coe_lr)
+                optimizer_grouped_parameters.extend([gcoe_decay, gcoe_nodecay])
 
             # B 分支两个组（可选单独学习率 b_lr；不设则用默认 lr）
             if len(params_decay_B) + len(params_nodecay_B) > 0:
@@ -1351,6 +1409,16 @@ class Trainer:
                 optimizer_grouped_parameters = optimizer_kwargs.pop("optimizer_dict")
 
             self.optimizer = optimizer_cls(optimizer_grouped_parameters, **optimizer_kwargs)
+
+            # coe_lr = getattr(self.args, "coe_for_rel_lr", None)
+            # coe_groups = [
+            #     (i, g.get("name"), g.get("lr"))
+            #     for i, g in enumerate(self.optimizer.param_groups)
+            #     if "coe_for_rel" in str(g.get("name", ""))
+            # ]
+            # logger.info("[coe_for_rel_lr] args.coe_for_rel_lr=%s", coe_lr)
+            # logger.info("[coe_for_rel_lr] matched_groups=%s", coe_groups)
+            # raise SystemExit(0)
 
             # bitsandbytes 兼容段：保持不变
             if "bitsandbytes" in str(optimizer_cls) and optimizer_kwargs.get("optim_bits", None) == 8:
@@ -2755,6 +2823,7 @@ class Trainer:
 
         # tr_loss is a tensor to avoid synchronization of TPUs through .item()
         tr_loss = torch.tensor(0.0, device=args.device)
+        tr_dis_loss = torch.tensor(0.0, device=args.device)
         # _total_loss_scalar is updated everytime .item() has to be called on tr_loss and stores the sum of all losses
         self._total_loss_scalar = 0.0
         self._globalstep_last_logged = self.state.global_step
@@ -2861,8 +2930,13 @@ class Trainer:
                         and self.accelerator.distributed_type != DistributedType.DEEPSPEED
                         else contextlib.nullcontext
                     )
+                    if self.args.distilling_coe_warmup_use:
+                        self.state.geom_p = geom_p_schedule(self.state.global_step, 100000)
+                    else:
+                        self.state.geom_p = 1.0
+                    inputs['geom_p'] = self.state.geom_p
                     with context():
-                        tr_loss_step = self.training_step(model, inputs, num_items_in_batch)
+                        tr_loss_step, tr_dis_loss_step = self.training_step(model, inputs, num_items_in_batch)
 
                     if (
                         args.logging_nan_inf_filter
@@ -2871,15 +2945,16 @@ class Trainer:
                     ):
                         # if loss is nan or inf simply add the average of previous logged losses
                         tr_loss = tr_loss + tr_loss / (1 + self.state.global_step - self._globalstep_last_logged)
+                        tr_dis_loss = tr_dis_loss + tr_dis_loss / (1 + self.state.global_step - self._globalstep_last_logged)
                     else:
                         if tr_loss.device != tr_loss_step.device:
                             raise ValueError(
                                 f"Calculated loss must be on the original device: {tr_loss.device} but device in use is {tr_loss_step.device}"
                             )
                         tr_loss = tr_loss + tr_loss_step
+                        tr_dis_loss = tr_dis_loss + tr_dis_loss_step
 
                     self.current_flos += float(self.floating_point_ops(inputs))
-
                     if do_sync_step:
                         # Since we perform prefetching, we need to manually set sync_gradients to True
                         self.accelerator.gradient_state._set_sync_gradients(True)
@@ -2953,6 +3028,7 @@ class Trainer:
                             ignore_keys_for_eval,
                             start_time,
                             learning_rate=learning_rate,
+                            tr_dis_loss=tr_dis_loss,
                         )
                     else:
                         self.control = self.callback_handler.on_substep_end(args, self.state, self.control)
@@ -2979,7 +3055,7 @@ class Trainer:
 
             self.control = self.callback_handler.on_epoch_end(args, self.state, self.control)
             self._maybe_log_save_evaluate(
-                tr_loss, grad_norm, model, trial, epoch, ignore_keys_for_eval, start_time, learning_rate=learning_rate
+                tr_loss, grad_norm, model, trial, epoch, ignore_keys_for_eval, start_time, learning_rate=learning_rate, tr_dis_loss=tr_dis_loss
             )
 
             if DebugOption.TPU_METRICS_DEBUG in self.args.debug:
@@ -3387,7 +3463,7 @@ class Trainer:
         return metrics
 
     def _maybe_log_save_evaluate(
-        self, tr_loss, grad_norm, model, trial, epoch, ignore_keys_for_eval, start_time, learning_rate=None
+        self, tr_loss, grad_norm, model, trial, epoch, ignore_keys_for_eval, start_time, learning_rate=None, tr_dis_loss=None,
     ):
         if self.control.should_log and self.state.global_step > self._globalstep_last_logged:
             if is_torch_xla_available():
@@ -3395,19 +3471,28 @@ class Trainer:
 
             logs: dict[str, float] = {}
 
-            # all_gather + mean() to get average loss over all processes
+            num_steps = self.state.global_step - self._globalstep_last_logged
+
+            # 主 loss
             tr_loss_scalar = self._nested_gather(tr_loss).mean().item()
-
-            # reset tr_loss to zero
             tr_loss -= tr_loss
+            logs["loss"] = round(tr_loss_scalar / num_steps, 4)
 
-            logs["loss"] = round(tr_loss_scalar / (self.state.global_step - self._globalstep_last_logged), 4)
+            # distillation loss（只有提供时才 gather + 记录）
+            if tr_dis_loss is not None:
+                tr_dis_loss_scalar = self._nested_gather(tr_dis_loss).mean().item()
+                tr_dis_loss -= tr_dis_loss
+                logs["dis_loss"] = round(tr_dis_loss_scalar / num_steps, 4)
+
             if grad_norm is not None:
                 logs["grad_norm"] = grad_norm.item() if isinstance(grad_norm, torch.Tensor) else grad_norm
-            if learning_rate is not None:
-                logs["learning_rate"] = learning_rate
-            else:
-                logs["learning_rate"] = self._get_learning_rate()
+            logs["learning_rate"] = learning_rate if learning_rate is not None else self._get_learning_rate()
+            if self.optimizer is not None:
+                for group in self.optimizer.param_groups:
+                    if "coe_for_rel" in str(group.get("name", "")):
+                        logs["coe_for_rel_lr"] = float(group.get("lr", 0.0))
+                        break
+            logs["geom_p"] = self.state.geom_p
 
             self._total_loss_scalar += tr_loss_scalar
             self._globalstep_last_logged = self.state.global_step
@@ -4207,7 +4292,7 @@ class Trainer:
                 return loss_mb.reduce_mean().detach().to(self.args.device)
 
             with self.compute_loss_context_manager():
-                loss = self.compute_loss(model, inputs, num_items_in_batch=num_items_in_batch)
+                loss, dis_loss = self.compute_loss(model, inputs, num_items_in_batch=num_items_in_batch)
 
             del inputs
             if (
@@ -4239,7 +4324,7 @@ class Trainer:
 
             if self.args.n_gpu > 1:
                 loss = loss.mean()  # mean() to average on multi-gpu parallel training
-
+                dis_loss = dis_loss.mean()
             if self.use_apex:
                 from apex import amp
 
@@ -4252,7 +4337,7 @@ class Trainer:
                 ) and self.compute_loss_func is None:
                     # If the model does not accept loss kwargs, we need to normalize the loss by the number of gradient accumulation steps
                     loss = loss / self.current_gradient_accumulation_steps
-
+                    dis_loss = dis_loss / self.current_gradient_accumulation_steps
                 # Turning off loss scaling w.r.t. gradient accumulation when DeepSpeed is enabled
                 # https://github.com/huggingface/transformers/pull/35808
                 if self.accelerator.distributed_type == DistributedType.DEEPSPEED:
@@ -4260,7 +4345,7 @@ class Trainer:
 
                 self.accelerator.backward(loss, **kwargs)
 
-            return loss.detach()
+            return loss.detach(), dis_loss.detach()
 
     def compute_loss(
         self,
@@ -4297,6 +4382,8 @@ class Trainer:
             if num_items_in_batch is not None:
                 kwargs["num_items_in_batch"] = num_items_in_batch
             inputs = {**inputs, **kwargs}
+        inputs["global_step"] = self.state.global_step
+        inputs["max_steps"] = getattr(self.args, "max_steps", None)
         outputs = model(**inputs)
         # Save past state if it exists
         # TODO: this needs to be fixed and made cleaner later.
@@ -4335,16 +4422,18 @@ class Trainer:
                 )
             # We don't use .loss here since the model may return tuples instead of ModelOutput.
             loss = outputs["loss"] if isinstance(outputs, dict) else outputs[0]
-
+            dis_loss = outputs["auxiliary_loss"] if isinstance(outputs, dict) else torch.tensor(0.0)
         if (
             self.args.average_tokens_across_devices
             and (self.model_accepts_loss_kwargs or self.compute_loss_func)
             and num_items_in_batch is not None
         ):
             loss *= self.accelerator.num_processes if self.args.n_gpu <= 1 else self.args.n_gpu
-
-        return (loss, outputs) if return_outputs else loss
-
+            dis_loss *= self.accelerator.num_processes if self.args.n_gpu <= 1 else self.args.n_gpu
+        if return_outputs:
+            return (loss, outputs)
+        else:
+            return loss, dis_loss
     def is_local_process_zero(self) -> bool:
         """
         Whether or not this process is the local (e.g., on one machine if training in a distributed fashion on several
@@ -5113,7 +5202,8 @@ class Trainer:
         logits = nested_detach(logits)
         if len(logits) == 1:
             logits = logits[0]
-
+        elif len(logits) == 2:
+            logits = logits[1]
         return (loss, logits, labels)
 
     def floating_point_ops(self, inputs: dict[str, Union[torch.Tensor, Any]]):

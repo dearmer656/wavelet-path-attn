@@ -284,6 +284,8 @@ class TrainingArguments:
 
         learning_rate (`float`, *optional*, defaults to 5e-5):
             The initial learning rate for [`AdamW`] optimizer.
+        coe_for_rel_lr (`float`, *optional*):
+            The peak learning rate for parameters whose name contains `coe_for_rel`.
         weight_decay (`float`, *optional*, defaults to 0):
             The weight decay to apply (if not zero) to all layers except all bias and LayerNorm weights in [`AdamW`]
             optimizer.
@@ -906,6 +908,10 @@ class TrainingArguments:
     )
 
     learning_rate: float = field(default=5e-5, metadata={"help": "The initial learning rate for AdamW."})
+    coe_for_rel_lr: Optional[float] = field(
+        default=None,
+        metadata={"help": "Peak learning rate for parameters whose name contains 'coe_for_rel'."},
+    )
     weight_decay: float = field(default=0.0, metadata={"help": "Weight decay for AdamW if we apply some."})
     adam_beta1: float = field(default=0.9, metadata={"help": "Beta1 for AdamW optimizer"})
     adam_beta2: float = field(default=0.999, metadata={"help": "Beta2 for AdamW optimizer"})

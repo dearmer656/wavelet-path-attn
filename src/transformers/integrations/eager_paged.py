@@ -23,6 +23,8 @@ def eager_paged_attention_forward(
     value: torch.Tensor,
     attention_mask: Optional[torch.Tensor],  # shape [seqlen_q, seqlen_k]
     scaling: float,
+    wavelet_decay_table=None,
+    router=None,
     **kwargs,
 ):
     # Add KV cache to the key and value tensors
@@ -37,7 +39,14 @@ def eager_paged_attention_forward(
     if hasattr(module, "num_key_value_groups"):
         key = repeat_kv(key, module.num_key_value_groups)
         value = repeat_kv(value, module.num_key_value_groups)
-
+    pdb.set_trace()
+    if router is not None:
+        B,H,T,D = query.shape
+        S = D // 8
+        D_S = wavelet_decay_table.view(S, 8, T, T)
+        q_s = query.permute(0,2,1,3).view(B, T, H, S, 8)
+        router_c = router.view(B,T,H,S).unsqueeze(-1)
+        rel = torch.einsum("b t h s c, s c t n -> b h t n", router_c * q_s, D_S)
     # Get the right causal mask for the current layer
     if isinstance(attention_mask, dict):
         sliding_window = getattr(module, "sliding_window", 1)
@@ -45,8 +54,10 @@ def eager_paged_attention_forward(
         causal_mask = attention_mask[layer_type]
     else:
         causal_mask = attention_mask
-
-    attn_weights = torch.matmul(query, key.transpose(2, 3)) * scaling
+    if router is not None:
+        attn_weights = (torch.matmul(query, key.transpose(2, 3)) + rel) * scaling
+    else:
+        attn_weights = torch.matmul(query, key.transpose(2, 3)) * scaling
     if causal_mask is not None:
         attn_weights = attn_weights + causal_mask
 

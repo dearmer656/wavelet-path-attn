@@ -2975,6 +2975,15 @@ class PreTrainedModel(nn.Module, EmbeddingAccessMixin, ModuleUtilsMixin, PushToH
             if hasattr(module, "bias") and module.bias is not None:
                 module.bias.data.zero_()
 
+        if hasattr(module, "_coe_for_rel_init") and hasattr(module, "coe_for_rel"):
+            init_value = float(module._coe_for_rel_init)
+            if init_value != -1:
+                coe_for_rel = module.coe_for_rel
+                if isinstance(coe_for_rel, torch.Tensor):
+                    coe_for_rel.data.fill_(init_value)
+                else:
+                    module.coe_for_rel = init_value
+
     def _initialize_weights(self, module):
         """
         Initialize the weights if they are not already initialized.

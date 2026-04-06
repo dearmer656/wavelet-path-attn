@@ -45,6 +45,12 @@ for pkg in pkgs_to_check_at_runtime:
 
             if not is_tokenizers_available():
                 continue  # not required, check version only if installed
+            try:
+                require_version_core(deps[pkg])
+            except ImportError as _tok_ver_err:
+                import warnings
+                warnings.warn(f"[transformers] tokenizers version mismatch (ignored): {_tok_ver_err}", UserWarning)
+            continue
         elif pkg == "accelerate":
             # must be loaded here, or else tqdm check may fail
             from .utils import is_accelerate_available
