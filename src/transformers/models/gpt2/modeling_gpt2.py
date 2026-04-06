@@ -684,11 +684,14 @@ class GPT2Attention(nn.Module):
                     _beta = torch.sigmoid(self.path_beta_proj(_hs)).to(torch.float32) * 2.0
 
                     # Single call — M_base also used for gate conditioning when sparse gate is on.
-                    _E_base, _M_base, _, _ = _path_ut_base_raw(_q, _k, _w, _beta)
-                    # Block NaN from propagating in the backward pass: solve_triangular backward
-                    # can produce NaN/Inf gradients even when incoming gradient is finite/zero,
-                    # corrupting q/k/w/beta gradients and making grad_norm=nan.
-                    # nan_to_num here zeros NaN positions in both forward and backward.
+                    # torch.no_grad(): solve_triangular backward is ill-conditioned when A is
+                    # large (A off-diagonals grow as path_w_proj learns), producing NaN/Inf
+                    # gradients for path_w_proj/beta_proj. These NaN grads are all-reduced
+                    # across DDP GPUs BEFORE safe_grad_hook fires, making grad_norm=nan and
+                    # corrupting optimizer state. no_grad eliminates the backward entirely;
+                    # path_w_proj still gets finite gradient through q_corr=einsum(M_base_fixed,w).
+                    with torch.no_grad():
+                        _E_base, _M_base, _, _ = _path_ut_base_raw(_q, _k, _w, _beta)
                     _E_base = _E_base.nan_to_num(nan=0.0, posinf=0.0, neginf=0.0)
                     _M_base = _M_base.nan_to_num(nan=0.0, posinf=0.0, neginf=0.0)
 
