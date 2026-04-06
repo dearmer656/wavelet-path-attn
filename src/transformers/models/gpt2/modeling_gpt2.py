@@ -685,6 +685,12 @@ class GPT2Attention(nn.Module):
 
                     # Single call — M_base also used for gate conditioning when sparse gate is on.
                     _E_base, _M_base, _, _ = _path_ut_base_raw(_q, _k, _w, _beta)
+                    # Block NaN from propagating in the backward pass: solve_triangular backward
+                    # can produce NaN/Inf gradients even when incoming gradient is finite/zero,
+                    # corrupting q/k/w/beta gradients and making grad_norm=nan.
+                    # nan_to_num here zeros NaN positions in both forward and backward.
+                    _E_base = _E_base.nan_to_num(nan=0.0, posinf=0.0, neginf=0.0)
+                    _M_base = _M_base.nan_to_num(nan=0.0, posinf=0.0, neginf=0.0)
 
                     if getattr(self.config, 'path_sparse_gate', False) and hasattr(self, 'path_gate_proj'):
                         # q_corr[b,t,h,d] = sum_j M_base[b,h,t,j] * w[b,j,h,d]
