@@ -428,7 +428,7 @@ class GPT2Attention(nn.Module):
                 self.path_beta_proj.weight.register_hook(_safe_grad_hook)
                 self.path_beta_proj.bias.register_hook(_safe_grad_hook)
                 self.path_lam.register_hook(_safe_grad_hook)
-                # PAT-100: sparse query-conditioned gate on beta
+                # PAT-100: sparse query-conditioned gate on path logits (query-token-wise output control)
                 if getattr(config, 'path_sparse_gate', False):
                     self.path_gate_ln = nn.LayerNorm(self.head_dim)
                     self.path_gate_proj = nn.Linear(self.head_dim, 1, bias=True)
@@ -719,8 +719,13 @@ class GPT2Attention(nn.Module):
                         if self.training:
                             _alpha = float(getattr(self.config, 'gate_sparse_alpha', 0.01))
                             _gate_sparse_loss = _alpha * _gate.mean()
-                        # scale path logits by gate: gate_eff[B,T,H,1] -> [B,H,T,1] for broadcast
-                        _E_base = _gate_eff.permute(0, 2, 1, 3) * _E_base.nan_to_num(nan=0.0, posinf=0.0, neginf=0.0)  # [B,H,T,T]
+                        # Fold gate into λ to get per-query blend coefficient [B,H,T,1].
+                        # Semantics: ã[i,j] = (1 - λ·g_i)·a_wav[i,j] + λ·g_i·E[i,j]
+                        # When g_i=0 → pure wavelet (no dilution from λ).
+                        # When g_i=1 → same as scalar-λ blend.
+                        # Contrast with old design (1-λ)·a_wav + λ·g_i·E: when g_i=0 wavelet
+                        # was still diluted by (1-λ), which is undesired.
+                        _lam_eff = _lam_eff * _gate_eff.permute(0, 2, 1, 3)      # [B,H,T,1]
 
                     _path_logits = (_E_base * (_D ** -0.5)).to(torch.float32)
                     wavelet_rel_kwarg['_path_logits'] = _path_logits
