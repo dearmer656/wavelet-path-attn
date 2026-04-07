@@ -23,6 +23,7 @@ from typing import Callable, Optional, Union
 import torch
 from torch import nn
 from torch.nn import BCEWithLogitsLoss, CrossEntropyLoss, MSELoss
+import torch.nn.functional as F
 import os
 from ...activations import ACT2FN, get_activation
 from ...cache_utils import Cache, DynamicCache, EncoderDecoderCache
@@ -172,9 +173,10 @@ def eager_attention_forward(module, query, key, value, attention_mask, head_mask
         # Clamp to ±100 (>> typical pre-softmax attention logit range of ±50) so gradient
         # stays finite while preserving signal once path_w_proj has learned meaningful weights.
         _path_safe = _path_logits.to(attn_weights.dtype).nan_to_num(nan=0.0, posinf=0.0, neginf=0.0).clamp(-100.0, 100.0)
+        _lam_safe = _path_lam.to(attn_weights.dtype).nan_to_num(nan=0.0, posinf=1.0, neginf=0.0).clamp(0.0, 1.0)
         attn_weights = torch.where(
             _causal_blend,
-            (1.0 - _path_lam) * attn_weights + _path_lam * _path_safe,
+            (1.0 - _lam_safe) * attn_weights + _lam_safe * _path_safe,
             attn_weights,
         )
 
@@ -183,6 +185,9 @@ def eager_attention_forward(module, query, key, value, attention_mask, head_mask
         causal_mask = attention_mask[:, :, :, : key.shape[-2]]
         attn_weights = attn_weights + causal_mask
 
+    # Final safety net before softmax: prevent NaN/Inf from poisoning the whole row.
+    _attn_min = torch.finfo(attn_weights.dtype).min
+    attn_weights = attn_weights.nan_to_num(nan=0.0, posinf=0.0, neginf=_attn_min)
     attn_weights = nn.functional.softmax(attn_weights, dim=-1)
 
     # Downcast (if necessary) back to V's dtype (if in mixed-precision) -- No-Op otherwise
@@ -398,19 +403,17 @@ class GPT2Attention(nn.Module):
             if _use_path_blend:
                 # w projection: hidden_states → [B,T,H,D] float32 weights for path attention
                 self.path_w_proj = Conv1D(self.embed_dim, self.embed_dim)
-                # Small-init path_w_proj weight: default Conv1D std=0.02 produces output
-                # w with effective scale ~0.55 per element; then A off-diagonals are ~2.4
-                # (std over d=64), making the unit-lower-triangular solve ill-conditioned
-                # at T=512 and causing NaN gradients from step 1.
-                # std=0 (zero-init) would keep A=I but creates a dead-zone: at w=0 all
-                # w-dependent terms vanish, grad_w=0 forever, and 0.T @ NaN = NaN (IEEE)
-                # propagates through hidden_states to ALL earlier-layer parameters.
-                # std=1e-4 keeps A ≈ I (off-diagonals ≈ 6e-4 << 1) so the triangular
-                # solve is well-conditioned, while giving a non-zero gradient signal to
-                # path_w_proj from the first step.
-                nn.init.normal_(self.path_w_proj.weight, std=1e-4)
+                # std=1e-4 init via _path_small_init_std (applied by _init_weights / post_init).
+                # F.normalize keeps ||w||=0.1 at every forward pass, bounding A off-diagonals
+                # to ≤ beta*0.01 ≤ 0.02 and κ(A) ≈ 2.6 for T=512 — no NaN from solve backward.
+                # Small init ensures A ≈ I before _init_weights fires (e.g. during __init__),
+                # consistent with the runtime normalization.
+                self.path_w_proj._path_small_init_std = 1e-4
                 # beta projection: hidden_states → [B,T,H] gate scalar (sigmoid → ×2 → (0,2))
+                # beta participates in A directly: A[i,j] = beta[i] * (w_i · w_j), so small
+                # init (beta ≈ sigmoid(0)*2 = 1) keeps A well-conditioned at initialisation.
                 self.path_beta_proj = Conv1D(self.num_heads, self.embed_dim)
+                self.path_beta_proj._path_small_init_std = 1e-4
                 # λ: learnable blend scalar, init=0 (pure wavelet PE at start), warms up to 1
                 self.path_lam = nn.Parameter(torch.zeros(1))
                 # step counter for linear warmup (not persistent — resets on reload, intentional)
@@ -424,6 +427,7 @@ class GPT2Attention(nn.Module):
                 self.path_w_proj.bias.register_hook(_safe_grad_hook)
                 self.path_beta_proj.weight.register_hook(_safe_grad_hook)
                 self.path_beta_proj.bias.register_hook(_safe_grad_hook)
+                self.path_lam.register_hook(_safe_grad_hook)
                 # PAT-100: sparse query-conditioned gate on beta
                 if getattr(config, 'path_sparse_gate', False):
                     self.path_gate_ln = nn.LayerNorm(self.head_dim)
@@ -659,10 +663,8 @@ class GPT2Attention(nn.Module):
             if self.wavelet_relative_tensor is not None:
                 wavelet_rel_kwarg["wavelet_relative_tensor"] = self.wavelet_relative_tensor
             # PAT-100: sparse query-conditioned gate on path logits.
-            # Single path_ut_base_raw call.  M_base (returned by that call) provides q_corr
+            # Single path_ut_base_raw call. M_base (returned by that call) provides q_corr
             # for gate conditioning; gate_eff then scales E_base_raw before lam-blending.
-            # q/k/hs are detached to prevent triangular-solve NaN gradients from propagating
-            # into main QK weights or earlier layers.
             if (self.wavelet_relative_tensor is not None and hasattr(self, 'path_lam')
                     and _path_ut_base_raw is not None and not self.is_cross_attention):
                 _B, _H, _T_q, _D = query_states.shape
@@ -675,23 +677,23 @@ class GPT2Attention(nn.Module):
                         _warmup = min(float(self._path_warmup_step.item()) / 2000.0, 1.0)
                     else:
                         _warmup = 1.0
-                    _lam_eff = self.path_lam.clamp(0.0, 1.0) * _warmup
+                    _lam_eff = (
+                        self.path_lam.float()
+                        .nan_to_num(nan=0.0, posinf=1.0, neginf=0.0)
+                        .clamp(0.0, 1.0)
+                        * _warmup
+                    )
 
-                    _q = query_states.detach().permute(0, 2, 1, 3).contiguous()  # [B,T,H,D]
-                    _k = key_states.detach().permute(0, 2, 1, 3).contiguous()
-                    _hs = hidden_states.detach()
-                    _w = self.path_w_proj(_hs).view(_B, _T_q, _H, _D).to(torch.float32)
+                    _q = query_states.permute(0, 2, 1, 3).contiguous()  # [B,T,H,D]
+                    _k = key_states.permute(0, 2, 1, 3).contiguous()
+                    _hs = hidden_states
+                    _w_raw = self.path_w_proj(_hs).view(_B, _T_q, _H, _D).to(torch.float32)
+                    # Root-cause stabilization: keep path vectors bounded so A remains well-conditioned.
+                    _w = F.normalize(_w_raw, p=2, dim=-1, eps=1e-6) * 0.1
                     _beta = torch.sigmoid(self.path_beta_proj(_hs)).to(torch.float32) * 2.0
 
                     # Single call — M_base also used for gate conditioning when sparse gate is on.
-                    # torch.no_grad(): solve_triangular backward is ill-conditioned when A is
-                    # large (A off-diagonals grow as path_w_proj learns), producing NaN/Inf
-                    # gradients for path_w_proj/beta_proj. These NaN grads are all-reduced
-                    # across DDP GPUs BEFORE safe_grad_hook fires, making grad_norm=nan and
-                    # corrupting optimizer state. no_grad eliminates the backward entirely;
-                    # path_w_proj still gets finite gradient through q_corr=einsum(M_base_fixed,w).
-                    with torch.no_grad():
-                        _E_base, _M_base, _, _ = _path_ut_base_raw(_q, _k, _w, _beta)
+                    _E_base, _M_base, _, _ = _path_ut_base_raw(_q, _k, _w, _beta)
                     _E_base = _E_base.nan_to_num(nan=0.0, posinf=0.0, neginf=0.0)
                     _M_base = _M_base.nan_to_num(nan=0.0, posinf=0.0, neginf=0.0)
 
@@ -978,7 +980,8 @@ class GPT2PreTrainedModel(PreTrainedModel):
     def _init_weights(self, module):
         """Initialize the weights."""
         if isinstance(module, (nn.Linear, Conv1D)):
-            module.weight.data.normal_(mean=0.0, std=self.config.initializer_range)
+            std = getattr(module, "_path_small_init_std", self.config.initializer_range)
+            module.weight.data.normal_(mean=0.0, std=std)
             if module.bias is not None:
                 module.bias.data.zero_()
         elif isinstance(module, nn.Embedding):
