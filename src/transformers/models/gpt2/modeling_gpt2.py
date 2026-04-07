@@ -688,8 +688,9 @@ class GPT2Attention(nn.Module):
                     _k = key_states.permute(0, 2, 1, 3).contiguous()
                     _hs = hidden_states
                     _w_raw = self.path_w_proj(_hs).view(_B, _T_q, _H, _D).to(torch.float32)
-                    # Root-cause stabilization: keep path vectors bounded so A remains well-conditioned.
-                    _w = F.normalize(_w_raw, p=2, dim=-1, eps=1e-6) * 0.1
+                    # l2-normalise w to unit vectors — matches original PaTHAttention design
+                    # (path_attn.py uses l2_norm(w) giving ||w||=1 before the path kernel).
+                    _w = F.normalize(_w_raw, p=2, dim=-1, eps=1e-6)
                     _beta = torch.sigmoid(self.path_beta_proj(_hs)).to(torch.float32) * 2.0
 
                     # Single call — M_base also used for gate conditioning when sparse gate is on.
