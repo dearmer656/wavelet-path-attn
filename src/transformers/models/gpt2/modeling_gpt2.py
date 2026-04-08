@@ -699,13 +699,7 @@ class GPT2Attention(nn.Module):
                     _M_base = _M_base.nan_to_num(nan=0.0, posinf=0.0, neginf=0.0)
 
                     if getattr(self.config, 'path_sparse_gate', False) and hasattr(self, 'path_gate_proj'):
-                        # q_corr[b,t,h,d] = sum_j M_base[b,h,t,j] * w[b,j,h,d]
-                        # nan_to_num guards: M_base can be NaN from ill-conditioned triangular solve
-                        _q_corr = torch.einsum("bhij,bjhd->bihd", _M_base, _w).nan_to_num(nan=0.0, posinf=0.0, neginf=0.0)  # [B,T,H,D]
-                        _delta = _q.to(torch.float32) - _q_corr                  # [B,T,H,D]
-                        _gate_feat = self.path_gate_ln(_delta)                    # [B,T,H,D]
-                        _gate = torch.sigmoid(self.path_gate_proj(_gate_feat)).nan_to_num(nan=0.0)  # [B,T,H,1]
-                        # gate warmup: eta=1.0 unconditionally during eval
+                        # Gate warmup coefficient (shared for both learned and forced-open gate)
                         if self.training:
                             self._gate_warmup_step.add_(1)
                             _eta = min(
@@ -714,17 +708,27 @@ class GPT2Attention(nn.Module):
                                 1.0)
                         else:
                             _eta = 1.0
-                        _gate_eff = _gate * _eta                                  # [B,T,H,1]
-                        # sparse regularisation loss (training only)
-                        if self.training:
-                            _alpha = float(getattr(self.config, 'gate_sparse_alpha', 0.01))
-                            _gate_sparse_loss = _alpha * _gate.mean()
+                        if getattr(self.config, 'path_gate_force_open', False):
+                            # Forced-open control: g_i≡1, gate_eff = eta (full Route-A gradient)
+                            # Bypasses LN/proj/sigmoid; path_gate_ln/proj params receive no gradient.
+                            _gate_eff = torch.ones(
+                                _B, _T_q, _H, 1, dtype=torch.float32, device=query_states.device) * _eta
+                            # No sparse loss: constant penalty alpha*1 has no gradient signal
+                        else:
+                            # Learned gate conditioned on delta = q - q_corr
+                            # nan_to_num guards: M_base can be NaN from ill-conditioned triangular solve
+                            _q_corr = torch.einsum("bhij,bjhd->bihd", _M_base, _w).nan_to_num(nan=0.0, posinf=0.0, neginf=0.0)  # [B,T,H,D]
+                            _delta = _q.to(torch.float32) - _q_corr              # [B,T,H,D]
+                            _gate_feat = self.path_gate_ln(_delta)                # [B,T,H,D]
+                            _gate = torch.sigmoid(self.path_gate_proj(_gate_feat)).nan_to_num(nan=0.0)  # [B,T,H,1]
+                            _gate_eff = _gate * _eta                              # [B,T,H,1]
+                            if self.training:
+                                _alpha = float(getattr(self.config, 'gate_sparse_alpha', 0.01))
+                                _gate_sparse_loss = _alpha * _gate.mean()
                         # Fold gate into λ to get per-query blend coefficient [B,H,T,1].
                         # Semantics: ã[i,j] = (1 - λ·g_i)·a_wav[i,j] + λ·g_i·E[i,j]
                         # When g_i=0 → pure wavelet (no dilution from λ).
                         # When g_i=1 → same as scalar-λ blend.
-                        # Contrast with old design (1-λ)·a_wav + λ·g_i·E: when g_i=0 wavelet
-                        # was still diluted by (1-λ), which is undesired.
                         _lam_eff = _lam_eff * _gate_eff.permute(0, 2, 1, 3)      # [B,H,T,1]
 
                     _path_logits = (_E_base * (_D ** -0.5)).to(torch.float32)

@@ -615,8 +615,8 @@ class SupplyTrainingArguments(TrainingArguments):
     )
     path_sparse_gate: bool = field(
         default=False,
-        metadata={"help": "PAT-100: enable sparse query-conditioned gate on beta. "
-                          "When True, gate_eff * beta is the only beta-scaling mechanism."},
+        metadata={"help": "PAT-100: enable sparse query-conditioned gate on path logits. "
+                          "When True, gate_eff scales each query token's path-logit row (conditioned on delta = q - q_corr)."},
     )
     gate_sparse_alpha: float = field(
         default=0.01,
@@ -625,6 +625,12 @@ class SupplyTrainingArguments(TrainingArguments):
     gate_warmup_steps: int = field(
         default=2000,
         metadata={"help": "PAT-100: number of steps over which the gate eta ramps from 0 to 1."},
+    )
+    path_gate_force_open: bool = field(
+        default=False,
+        metadata={"help": "PAT-100: forced-open gate control. When True, g_i≡1 (gate bypassed), "
+                          "giving full gradient access to path params. gate_eff = eta (warmup only). "
+                          "No sparse loss. Used to isolate gate-training dynamics from path learning."},
     )
     smooth_use: bool = field(
         default=False,
@@ -4130,6 +4136,7 @@ def main():
     config.path_sparse_gate = training_args.path_sparse_gate
     config.gate_sparse_alpha = training_args.gate_sparse_alpha
     config.gate_warmup_steps = training_args.gate_warmup_steps
+    config.path_gate_force_open = training_args.path_gate_force_open
     config.dataset_name = data_args.dataset_name
     config.wavelet_pe_softmax_use = training_args.wavelet_pe_softmax_use
     config.weight_alpha = training_args.weight_alpha
