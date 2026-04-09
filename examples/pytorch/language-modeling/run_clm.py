@@ -4138,6 +4138,8 @@ def main():
     config.smooth_use = training_args.smooth_use
     config.distilling_coe_warmup_use = training_args.distilling_coe_warmup_use
     config.scale_range = training_args.scale_range
+    if not hasattr(config, 'scale_type'):
+        config.scale_type = 'custom'  # default; modeling_gpt2 requires this attr
     config.path_blend_layers = training_args.path_blend_layers if training_args.path_blend_layers else None
     config.path_sparse_gate = training_args.path_sparse_gate
     config.gate_sparse_alpha = training_args.gate_sparse_alpha
