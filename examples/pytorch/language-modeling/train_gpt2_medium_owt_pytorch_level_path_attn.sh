@@ -94,6 +94,7 @@ echo '================= BEGIN RUN ================='
   --router_hidden_dim 32 \
   --rel_selection all \
   --preprocessing_num_workers 8 \
+  --ddp_timeout 21600 \
   --seed 42 \
   --overwrite_output_dir \
   --output_dir runs/gpt2_medium_owt_pytorch_level_path_attn \
