@@ -57,6 +57,7 @@ from transformers import (
     AutoConfig,
     AutoModelForCausalLM,
     AutoTokenizer,
+    EarlyStoppingCallback,
     HfArgumentParser,
     Trainer,
     TrainingArguments,
@@ -631,6 +632,11 @@ class SupplyTrainingArguments(TrainingArguments):
         metadata={"help": "PAT-100: forced-open gate control. When True, g_i≡1 (gate bypassed), "
                           "giving full gradient access to path params. gate_eff = eta (warmup only). "
                           "No sparse loss. Used to isolate gate-training dynamics from path learning."},
+    )
+    early_stopping_patience: int = field(
+        default=0,
+        metadata={"help": "PAT-101: if > 0, add EarlyStoppingCallback with this patience (number of "
+                          "eval steps with no improvement before stopping). Requires --load_best_model_at_end True."},
     )
     smooth_use: bool = field(
         default=False,
@@ -4996,7 +5002,7 @@ def main():
             "[passkey] generated %d examples at block_size=%d with %d-digit passkeys",
             _pk_num_samples, _pk_block_size, _pk_num_digits,
         )
-    elif data_args.dataset_name == 'wikitext':
+    elif data_args.dataset_name in ('wikitext', 'openwebtext', 'Skylion007/openwebtext'):
         with training_args.main_process_first(desc="dataset map tokenization"):
             if not data_args.streaming:
                 tokenized_datasets = raw_datasets.map(
@@ -6790,6 +6796,12 @@ def main():
     if eval_progress_log_every > 0:
         callbacks.append(EvalProgressCallback(log_every_batches=eval_progress_log_every))
         logger.info("[EvalProgress] enabled: log_every_batches=%d", int(eval_progress_log_every))
+
+    if getattr(training_args, 'early_stopping_patience', 0) > 0:
+        callbacks.append(EarlyStoppingCallback(
+            early_stopping_patience=training_args.early_stopping_patience,
+        ))
+        logger.info("[EarlyStopping] enabled: patience=%d", training_args.early_stopping_patience)
 
     rel_stats_callback = None
     rel_log_enabled = bool(getattr(config, "log_rel_stats", bool(training_args.log_rel_stats)))
