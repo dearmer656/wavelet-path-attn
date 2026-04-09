@@ -20,6 +20,12 @@ echo "RANK: $RANK"
 set -euxo pipefail
 echo 'Workdir: /project/nlp-work5/hongyu-s/transformers/examples/pytorch/language-modeling'
 cd /project/nlp-work5/hongyu-s/transformers/examples/pytorch/language-modeling
+
+# Use dev transformers from source; conda env provides torch/tokenizers
+source /home/is/hongyu-s/miniconda3/etc/profile.d/conda.sh
+conda activate latest_transformers
+export PYTHONPATH=/project/nlp-work5/hongyu-s/transformers/src:${PYTHONPATH:-}
+
 echo 'Launching OWT medium PaTH pretraining'
 echo '================= BEGIN RUN ================='
 
@@ -28,7 +34,7 @@ echo '================= BEGIN RUN ================='
 # Early stopping patience=8 at eval_steps=500 on val_loss (5% OWT train → val split).
 # Global batch = 16 (per_device) × 2 (GPUs) × 2 (grad_accum) = 64.
 
-/project/nlp-work5/hongyu-s/conda/envs/latest_transformers/bin/torchrun --nproc_per_node=2 --master_port=12421 ./run_clm.py \
+/cl/work5/hongyu-s/conda/envs/latest_transformers/bin/torchrun --nproc_per_node=2 --master_port=12421 ./run_clm.py \
   --model_type gpt2 \
   --tokenizer_name gpt2 \
   --config_name openai-community/gpt2-medium \

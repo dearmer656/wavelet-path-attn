@@ -20,6 +20,11 @@ echo "RANK: $RANK"
 set -euxo pipefail
 echo 'Workdir: /project/nlp-work5/hongyu-s/transformers/examples/pytorch/language-modeling'
 cd /project/nlp-work5/hongyu-s/transformers/examples/pytorch/language-modeling
+
+source /home/is/hongyu-s/miniconda3/etc/profile.d/conda.sh
+conda activate latest_transformers
+export PYTHONPATH=/project/nlp-work5/hongyu-s/transformers/src:${PYTHONPATH:-}
+
 echo 'Launching training/eval command'
 echo '================= BEGIN RUN ================='
 
@@ -27,7 +32,7 @@ echo '================= BEGIN RUN ================='
 # Set BACKBONE_CKPT to the best val-loss checkpoint from train_gpt2_medium_owt_pytorch_level_path_attn.sh.
 BACKBONE_CKPT="runs/gpt2_medium_owt_pytorch_level_path_attn/checkpoint-XXXXX"
 
-/project/nlp-work5/hongyu-s/conda/envs/latest_transformers/bin/torchrun --nproc_per_node=1 --master_port=12420 ./run_clm.py \
+/cl/work5/hongyu-s/conda/envs/latest_transformers/bin/torchrun --nproc_per_node=1 --master_port=12420 ./run_clm.py \
   --model_type gpt2 \
   --tokenizer_name gpt2 \
   --config_name openai-community/gpt2-medium \
