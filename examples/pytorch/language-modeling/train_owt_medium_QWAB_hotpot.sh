@@ -28,7 +28,7 @@ echo '================= BEGIN RUN ================='
 # Frozen factors vs PA-only script: only --wavelet_router True differs.
 BACKBONE_CKPT="runs/gpt2_medium_owt_pytorch_level_path_attn/checkpoint-XXXXX"
 
-torchrun --nproc_per_node=2 --master_port=12833 ./run_clm.py \
+/project/nlp-work5/hongyu-s/conda/envs/latest_transformers/bin/torchrun --nproc_per_node=2 --master_port=12833 ./run_clm.py \
   --model_type gpt2 \
   --tokenizer_name gpt2 \
   --config_name openai-community/gpt2-medium \

@@ -28,7 +28,7 @@ echo '================= BEGIN RUN ================='
 # Early stopping patience=8 at eval_steps=500 on val_loss (5% OWT train → val split).
 # Global batch = 16 (per_device) × 2 (GPUs) × 2 (grad_accum) = 64.
 
-torchrun --nproc_per_node=2 --master_port=12421 ./run_clm.py \
+/project/nlp-work5/hongyu-s/conda/envs/latest_transformers/bin/torchrun --nproc_per_node=2 --master_port=12421 ./run_clm.py \
   --model_type gpt2 \
   --tokenizer_name gpt2 \
   --config_name openai-community/gpt2-medium \
