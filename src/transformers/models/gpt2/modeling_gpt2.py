@@ -1892,7 +1892,8 @@ class GPT2Model(GPT2PreTrainedModel):
 
             router1_idx_layers.append(router1)
             router2_idx_layers.append(router2)
-            dis_loss_total += cur_dis_loss
+            if cur_dis_loss is not None:
+                dis_loss_total += cur_dis_loss
             hidden_states = outputs[0]
 
             if output_attentions:
