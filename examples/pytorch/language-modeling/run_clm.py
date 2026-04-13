@@ -633,6 +633,12 @@ class SupplyTrainingArguments(TrainingArguments):
                           "giving full gradient access to path params. gate_eff = eta (warmup only). "
                           "No sparse loss. Used to isolate gate-training dynamics from path learning."},
     )
+    path_fixed_interval: int = field(
+        default=0,
+        metadata={"help": "PAT-105: if > 0, apply fixed-interval cumulative mask every k tokens "
+                          "(1-indexed positions k, 2k, 3k, ...; 0-indexed: (t+1)%%k==0). "
+                          "path_sparse_gate must be False. path_lam remains learnable."},
+    )
     early_stopping_patience: int = field(
         default=0,
         metadata={"help": "PAT-101: if > 0, add EarlyStoppingCallback with this patience (number of "
@@ -4145,6 +4151,7 @@ def main():
     config.gate_sparse_alpha = training_args.gate_sparse_alpha
     config.gate_warmup_steps = training_args.gate_warmup_steps
     config.path_gate_force_open = training_args.path_gate_force_open
+    config.path_fixed_interval = training_args.path_fixed_interval
     config.dataset_name = data_args.dataset_name
     config.wavelet_pe_softmax_use = training_args.wavelet_pe_softmax_use
     config.weight_alpha = training_args.weight_alpha

@@ -731,6 +731,19 @@ class GPT2Attention(nn.Module):
                         # When g_i=1 → same as scalar-λ blend.
                         _lam_eff = _lam_eff * _gate_eff.permute(0, 2, 1, 3)      # [B,H,T,1]
 
+                    elif int(getattr(self.config, 'path_fixed_interval', 0)) > 0:
+                        # PAT-105: deterministic fixed-interval cumulative mask.
+                        # Trigger positions (1-indexed): k, 2k, 3k, ... → (t+1)%k==0 in 0-indexed.
+                        _k = int(self.config.path_fixed_interval)
+                        _pos_ids = torch.arange(_T_q, device=query_states.device)
+                        _interval_mask = ((_pos_ids + 1) % _k == 0).float().view(1, 1, _T_q, 1)  # [1,1,T,1]
+                        _lam_eff = _lam_eff * _interval_mask   # scalar * [1,1,T,1] → [1,1,T,1]
+                        # Log contribution magnitude proxy via dis_loss channel (detached).
+                        if self.training:
+                            _triggered = _interval_mask.squeeze(-1).squeeze(0).squeeze(0).bool()  # [T]
+                            if _triggered.any():
+                                _gate_sparse_loss = (_E_base * (_D ** -0.5))[..., _triggered, :].detach().abs().mean()
+
                     _path_logits = (_E_base * (_D ** -0.5)).to(torch.float32)
                     wavelet_rel_kwarg['_path_logits'] = _path_logits
                     wavelet_rel_kwarg['_path_lam'] = _lam_eff
