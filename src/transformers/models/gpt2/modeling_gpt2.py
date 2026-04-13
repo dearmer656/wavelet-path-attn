@@ -391,57 +391,48 @@ class GPT2Attention(nn.Module):
             wavelet_shifts = torch.tensor([float(t) for _, t in pairs], dtype=torch.float32)
             self.register_buffer("wavelet_scales", wavelet_scales, persistent=False)
             self.register_buffer("wavelet_shifts", wavelet_shifts, persistent=False)
-            # PaTH logit blending parameters (only when wavelet PE is active, fla is available,
-            # and this layer_idx is listed in config.path_blend_layers)
-            _path_blend_layers = getattr(config, 'path_blend_layers', None)
-            _use_path_blend = (
-                _path_ut_base_raw is not None and
-                _path_blend_layers is not None and
-                layer_idx is not None and
-                layer_idx in _path_blend_layers
-            )
-            if _use_path_blend:
-                # w projection: hidden_states → [B,T,H,D] float32 weights for path attention
-                self.path_w_proj = Conv1D(self.embed_dim, self.embed_dim)
-                # std=1e-4 init via _path_small_init_std (applied by _init_weights / post_init).
-                # F.normalize keeps ||w||=0.1 at every forward pass, bounding A off-diagonals
-                # to ≤ beta*0.01 ≤ 0.02 and κ(A) ≈ 2.6 for T=512 — no NaN from solve backward.
-                # Small init ensures A ≈ I before _init_weights fires (e.g. during __init__),
-                # consistent with the runtime normalization.
-                self.path_w_proj._path_small_init_std = 1e-4
-                # beta projection: hidden_states → [B,T,H] gate scalar (sigmoid → ×2 → (0,2))
-                # beta participates in A directly: A[i,j] = beta[i] * (w_i · w_j), so small
-                # init (beta ≈ sigmoid(0)*2 = 1) keeps A well-conditioned at initialisation.
-                self.path_beta_proj = Conv1D(self.num_heads, self.embed_dim)
-                self.path_beta_proj._path_small_init_std = 1e-4
-                # λ: learnable blend scalar, init=0 (pure wavelet PE at start), warms up to 1
-                self.path_lam = nn.Parameter(torch.zeros(1))
-                # step counter for linear warmup (not persistent — resets on reload, intentional)
-                self.register_buffer('_path_warmup_step', torch.tensor(0, dtype=torch.long), persistent=False)
-                # Safety gradient hooks: zero NaN/Inf gradients on all path parameters.
-                # Covers weight AND bias of both projections (bias also gets NaN grad when
-                # the triangular-solve backward is ill-conditioned).
-                def _safe_grad_hook(grad):
-                    return grad.nan_to_num(nan=0.0, posinf=0.0, neginf=0.0)
-                self.path_w_proj.weight.register_hook(_safe_grad_hook)
-                self.path_w_proj.bias.register_hook(_safe_grad_hook)
-                self.path_beta_proj.weight.register_hook(_safe_grad_hook)
-                self.path_beta_proj.bias.register_hook(_safe_grad_hook)
-                self.path_lam.register_hook(_safe_grad_hook)
-                # PAT-100: sparse query-conditioned gate on path logits (query-token-wise output control)
-                if getattr(config, 'path_sparse_gate', False):
-                    self.path_gate_ln = nn.LayerNorm(self.head_dim)
-                    self.path_gate_proj = nn.Linear(self.head_dim, 1, bias=True)
-                    nn.init.constant_(self.path_gate_proj.bias, -2.0)
-                    self.register_buffer(
-                        '_gate_warmup_step', torch.tensor(0, dtype=torch.long), persistent=False)
-                    # Guard gate params against NaN gradients (M_base can be NaN from ill-conditioned solve)
-                    for _p in list(self.path_gate_ln.parameters()) + list(self.path_gate_proj.parameters()):
-                        _p.register_hook(_safe_grad_hook)
         else:
             self.wavelet_relative_tensor = None
             self.wavelet_scales = None
             self.wavelet_shifts = None
+        # PaTH logit blending parameters — pe_method-agnostic (works with both 'wavelet' and 'vanilla').
+        # Previously gated inside pe_method=='wavelet' block, which silently blocked vanilla-PE runs.
+        _path_blend_layers = getattr(config, 'path_blend_layers', None)
+        _use_path_blend = (
+            _path_ut_base_raw is not None and
+            _path_blend_layers is not None and
+            layer_idx is not None and
+            layer_idx in _path_blend_layers
+        )
+        if _use_path_blend:
+            # w projection: hidden_states → [B,T,H,D] float32 weights for path attention
+            self.path_w_proj = Conv1D(self.embed_dim, self.embed_dim)
+            # std=1e-4 init via _path_small_init_std (applied by _init_weights / post_init).
+            self.path_w_proj._path_small_init_std = 1e-4
+            # beta projection: hidden_states → [B,T,H] gate scalar (sigmoid → ×2 → (0,2))
+            self.path_beta_proj = Conv1D(self.num_heads, self.embed_dim)
+            self.path_beta_proj._path_small_init_std = 1e-4
+            # λ: learnable blend scalar, init=0 (pure wavelet PE at start), warms up to 1
+            self.path_lam = nn.Parameter(torch.zeros(1))
+            # step counter for linear warmup (not persistent — resets on reload, intentional)
+            self.register_buffer('_path_warmup_step', torch.tensor(0, dtype=torch.long), persistent=False)
+            # Safety gradient hooks: zero NaN/Inf gradients on all path parameters.
+            def _safe_grad_hook(grad):
+                return grad.nan_to_num(nan=0.0, posinf=0.0, neginf=0.0)
+            self.path_w_proj.weight.register_hook(_safe_grad_hook)
+            self.path_w_proj.bias.register_hook(_safe_grad_hook)
+            self.path_beta_proj.weight.register_hook(_safe_grad_hook)
+            self.path_beta_proj.bias.register_hook(_safe_grad_hook)
+            self.path_lam.register_hook(_safe_grad_hook)
+            # PAT-100: sparse query-conditioned gate on path logits
+            if getattr(config, 'path_sparse_gate', False):
+                self.path_gate_ln = nn.LayerNorm(self.head_dim)
+                self.path_gate_proj = nn.Linear(self.head_dim, 1, bias=True)
+                nn.init.constant_(self.path_gate_proj.bias, -2.0)
+                self.register_buffer(
+                    '_gate_warmup_step', torch.tensor(0, dtype=torch.long), persistent=False)
+                for _p in list(self.path_gate_ln.parameters()) + list(self.path_gate_proj.parameters()):
+                    _p.register_hook(_safe_grad_hook)
 
         self.pruned_heads = set()
 
