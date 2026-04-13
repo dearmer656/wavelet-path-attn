@@ -665,7 +665,7 @@ class GPT2Attention(nn.Module):
             # PAT-100: sparse query-conditioned gate on path logits.
             # Single path_ut_base_raw call. M_base (returned by that call) provides q_corr
             # for gate conditioning; gate_eff then scales E_base_raw before lam-blending.
-            if (self.wavelet_relative_tensor is not None and hasattr(self, 'path_lam')
+            if (hasattr(self, 'path_lam')
                     and _path_ut_base_raw is not None and not self.is_cross_attention):
                 _B, _H, _T_q, _D = query_states.shape
                 _T_k = key_states.shape[-2]
