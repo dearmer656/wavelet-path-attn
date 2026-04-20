@@ -517,6 +517,10 @@ class SupplyTrainingArguments(TrainingArguments):
         default=None,
         metadata={"help": "LR for coe_for_rel parameter group"},
     )
+    qwab_lr: Optional[float] = field(
+        default=None,
+        metadata={"help": "Peak LR for QWAB ctxscale parameter group (wavelet_ctx_*, wavelet_bias_film*, wavelet_logit_bias_*, mlp_bias_*). If None, falls back to the global learning_rate. Has no effect on PA-only runs (no matching params)."},
+    )
     weight_alpha: float = field(
         default=0.0,
         metadata={"help": "The alpha value for weighting"}

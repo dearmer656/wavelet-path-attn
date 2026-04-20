@@ -1353,16 +1353,31 @@ class Trainer:
             def is_coe_for_rel_param(name: str) -> bool:
                 return "coe_for_rel" in name
 
+            def is_qwab_param(name: str) -> bool:
+                # QWAB ctxscale-specific modules (logit_bias_ctxscale_shift_v0 mode)
+                # These parameters start from near-zero init and may need a higher LR
+                # than the pre-trained backbone.  PA-only runs have none of these, so
+                # setting --qwab_lr has zero effect on PA-only fine-tunes.
+                return (
+                    ".wavelet_ctx_" in name
+                    or ".wavelet_bias_film" in name
+                    or ".wavelet_logit_bias_" in name
+                    or ".mlp_bias_" in name
+                )
+
             # 不再用 requires_grad 过滤；即便冻结了也先注册进 optimizer，便于后续解冻与监控
             params_decay_main, params_nodecay_main = [], []
             params_decay_B,    params_nodecay_B    = [], []
             params_decay_coe,  params_nodecay_coe  = [], []
+            params_decay_qwab, params_nodecay_qwab = [], []
 
             for n, p in opt_model.named_parameters():
                 if is_coe_for_rel_param(n):
                     (params_decay_coe if n in decay_parameters else params_nodecay_coe).append(p)
                 elif is_B_param(n):
                     (params_decay_B if n in decay_parameters else params_nodecay_B).append(p)
+                elif is_qwab_param(n):
+                    (params_decay_qwab if n in decay_parameters else params_nodecay_qwab).append(p)
                 else:
                     (params_decay_main if n in decay_parameters else params_nodecay_main).append(p)
 
@@ -1394,6 +1409,20 @@ class Trainer:
                     gB_decay["lr"]   = float(b_lr)
                     gB_nodecay["lr"] = float(b_lr)
                 optimizer_grouped_parameters.extend([gB_decay, gB_nodecay])
+
+            # QWAB ctxscale 分支（可选单独学习率 qwab_lr；不设则用默认 lr）
+            if len(params_decay_qwab) + len(params_nodecay_qwab) > 0:
+                qwab_lr = getattr(self.args, "qwab_lr", None)
+                gQ_decay   = {"params": params_decay_qwab,   "weight_decay": self.args.weight_decay, "name": "qwab_decay"}
+                gQ_nodecay = {"params": params_nodecay_qwab, "weight_decay": 0.0,                    "name": "qwab_nodecay"}
+                if qwab_lr is not None:
+                    gQ_decay["lr"]   = float(qwab_lr)
+                    gQ_nodecay["lr"] = float(qwab_lr)
+                optimizer_grouped_parameters.extend([gQ_decay, gQ_nodecay])
+                logger.info(
+                    "[qwab_lr] qwab_lr=%s | qwab_decay params=%d | qwab_nodecay params=%d",
+                    qwab_lr, len(params_decay_qwab), len(params_nodecay_qwab),
+                )
 
             # —— 以下保留原始逻辑（支持自定义优化器/kwargs/特殊优化器）——
             if self.optimizer_cls_and_kwargs is not None:
