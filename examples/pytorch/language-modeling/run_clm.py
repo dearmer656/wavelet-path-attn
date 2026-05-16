@@ -137,6 +137,12 @@ class ModelArguments:
             "help": "Number of frequency bands for wavelet router.",
         },
     )
+    qwab_groups_per_layer: int = field(
+        default=1,
+        metadata={
+            "help": "Head-group shared QWAB: split num_heads into G groups, each sharing one QWAB output. 1=fully shared (default), 2=two groups of num_heads/2.",
+        },
+    )
     wavelet_router: bool = field(
         default=False,
         metadata={
@@ -4161,6 +4167,7 @@ def main():
     config.router_band_num = model_args.router_band_num
     config.router_hidden_dim = model_args.router_hidden_dim
     config.rel_selection = cfg_str(cfg, "rel_selection", model_args.rel_selection)
+    config.qwab_groups_per_layer = max(1, int(model_args.qwab_groups_per_layer))
     config.wavelet_analysis_export = cfg_bool(
         cfg, "wavelet_analysis_export", bool(getattr(config, "wavelet_analysis_export", False))
     )
