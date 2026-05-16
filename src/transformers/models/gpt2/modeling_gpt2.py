@@ -106,6 +106,23 @@ class PWavMeanLogger:
 def eager_attention_forward(module, query, key, value, attention_mask, head_mask=None, **kwargs):
     attn_weights = torch.matmul(query, key.transpose(-1, -2))
 
+    # ALiBi linear position bias (pe_method='alibi')
+    if getattr(getattr(module, 'config', None), 'pe_method', None) == 'alibi':
+        q_len = query.size(-2)
+        k_len = key.size(-2)
+        num_heads = query.size(1)
+        # slopes: 2^{-8/H * h} for h=1,...,H  [H]
+        slopes = torch.pow(
+            2.0,
+            -8.0 / num_heads * torch.arange(1, num_heads + 1, dtype=torch.float32, device=query.device),
+        )
+        # distance: for causal position i,j: bias = -slope * (i-j), j<=i
+        i_idx = torch.arange(q_len, device=query.device, dtype=torch.float32).unsqueeze(1)  # [q_len, 1]
+        j_idx = torch.arange(k_len, device=query.device, dtype=torch.float32).unsqueeze(0)  # [1, k_len]
+        dist = (i_idx - j_idx).clamp(min=0)  # [q_len, k_len], 0 for future
+        alibi_bias = -slopes.view(num_heads, 1, 1) * dist.unsqueeze(0)  # [H, q_len, k_len]
+        attn_weights = attn_weights + alibi_bias.to(dtype=attn_weights.dtype).unsqueeze(0)  # [1,H,q,k]
+
     # Wavelet relative position bias (pe_method='wavelet', relative_type='4')
     wavelet_rel_buf = kwargs.get("wavelet_relative_tensor", None)
     if wavelet_rel_buf is not None:
@@ -1243,7 +1260,7 @@ class GPT2Model(GPT2PreTrainedModel):
         self.embed_dim = config.hidden_size
         self.wte = nn.Embedding(config.vocab_size, self.embed_dim)
         attn_impl = getattr(config, "attn_implementation", getattr(config, "_attn_implementation", "eager"))
-        if config.pe_method in ('no_pe', 'wavelet'):
+        if config.pe_method in ('no_pe', 'wavelet', 'alibi'):
             pass
         else:
             if config.pe_method != 'rotary' and attn_impl == 'eager':
@@ -1797,7 +1814,7 @@ class GPT2Model(GPT2PreTrainedModel):
         elif self.config.pe_method == 'rotary':
             assert attn_impl == "eager", "only in eager mode you can use rotary."
             hidden_states = inputs_embeds
-        elif self.config.pe_method in ('no_pe', 'wavelet'):
+        elif self.config.pe_method in ('no_pe', 'wavelet', 'alibi'):
             hidden_states = inputs_embeds
         else:
             position_embeds = self.wpe(position_ids)
