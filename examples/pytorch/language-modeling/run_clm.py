@@ -166,8 +166,8 @@ class ModelArguments:
     pe_method: str = field(
         default="vanilla",
         metadata={
-            "help": "Positional encoding method to use: vanilla | rotary | no_pe | wavelet.",
-            "choices": ["vanilla", "rotary", "no_pe", "wavelet"],
+            "help": "Positional encoding method to use: vanilla | rotary | no_pe | wavelet | alibi.",
+            "choices": ["vanilla", "rotary", "no_pe", "wavelet", "alibi"],
         },
     )
     relative_type: Optional[str] = field(

@@ -103,25 +103,24 @@ class PWavMeanLogger:
 
         tensor_path = os.path.join(self.save_dir, f"layer_{layer_idx:02d}_pwav_mean.pt")
         torch.save(mean_map, tensor_path)
+
+def _get_alibi_slopes(n_heads: int, device) -> torch.Tensor:
+    """Standard ALiBi slopes (Press et al. 2022), correct for non-power-of-2 head counts."""
+    import math
+    def _slopes_power_of_2(n):
+        start = 2.0 ** (-(2.0 ** -(math.log2(n) - 3)))
+        return [start * (start ** i) for i in range(n)]
+    if math.log2(n_heads) % 1 == 0:
+        slopes = _slopes_power_of_2(n_heads)
+    else:
+        closest_pow2 = 2 ** math.floor(math.log2(n_heads))
+        slopes = _slopes_power_of_2(closest_pow2)
+        extra = _slopes_power_of_2(2 * closest_pow2)[0::2]
+        slopes += extra[: n_heads - closest_pow2]
+    return torch.tensor(slopes, device=device, dtype=torch.float32)
+
 def eager_attention_forward(module, query, key, value, attention_mask, head_mask=None, **kwargs):
     attn_weights = torch.matmul(query, key.transpose(-1, -2))
-
-    # ALiBi linear position bias (pe_method='alibi')
-    if getattr(getattr(module, 'config', None), 'pe_method', None) == 'alibi':
-        q_len = query.size(-2)
-        k_len = key.size(-2)
-        num_heads = query.size(1)
-        # slopes: 2^{-8/H * h} for h=1,...,H  [H]
-        slopes = torch.pow(
-            2.0,
-            -8.0 / num_heads * torch.arange(1, num_heads + 1, dtype=torch.float32, device=query.device),
-        )
-        # distance: for causal position i,j: bias = -slope * (i-j), j<=i
-        i_idx = torch.arange(q_len, device=query.device, dtype=torch.float32).unsqueeze(1)  # [q_len, 1]
-        j_idx = torch.arange(k_len, device=query.device, dtype=torch.float32).unsqueeze(0)  # [1, k_len]
-        dist = (i_idx - j_idx).clamp(min=0)  # [q_len, k_len], 0 for future
-        alibi_bias = -slopes.view(num_heads, 1, 1) * dist.unsqueeze(0)  # [H, q_len, k_len]
-        attn_weights = attn_weights + alibi_bias.to(dtype=attn_weights.dtype).unsqueeze(0)  # [1,H,q,k]
 
     # Wavelet relative position bias (pe_method='wavelet', relative_type='4')
     wavelet_rel_buf = kwargs.get("wavelet_relative_tensor", None)
@@ -145,6 +144,20 @@ def eager_attention_forward(module, query, key, value, attention_mask, head_mask
         attn_weights = attn_weights / torch.full(
             [], value.size(-1) ** 0.5, dtype=attn_weights.dtype, device=attn_weights.device
         )
+
+    # ALiBi linear position bias (pe_method='alibi') — applied AFTER QK scaling
+    if getattr(getattr(module, 'config', None), 'pe_method', None) == 'alibi':
+        q_len = query.size(-2)
+        k_len = key.size(-2)
+        num_heads = query.size(1)
+        # Standard ALiBi slopes (Press et al. 2022), handles non-power-of-2 head counts
+        slopes = _get_alibi_slopes(num_heads, query.device).to(dtype=attn_weights.dtype)
+        # Correct query positions for KV-cache: query occupies positions [k_len-q_len, k_len)
+        q_pos = torch.arange(k_len - q_len, k_len, device=query.device, dtype=torch.float32).unsqueeze(1)
+        k_pos = torch.arange(k_len, device=query.device, dtype=torch.float32).unsqueeze(0)
+        dist = (q_pos - k_pos).clamp(min=0).to(dtype=attn_weights.dtype)  # [q_len, k_len]
+        alibi_bias = -slopes.view(num_heads, 1, 1) * dist.unsqueeze(0)    # [1, H, q_len, k_len]
+        attn_weights = attn_weights + alibi_bias
 
     # Layer-wise attention scaling
     if module.scale_attn_by_inverse_layer_idx:
