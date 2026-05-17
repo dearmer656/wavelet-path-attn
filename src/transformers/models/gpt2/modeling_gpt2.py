@@ -643,8 +643,10 @@ class GPT2Attention(nn.Module):
 
         using_eager = self.config._attn_implementation == "eager"
         attention_interface: Callable = eager_attention_forward
-        # wavelet PE requires eager (custom rel bias injected via kwarg)
+        # wavelet/alibi PE require eager (custom bias injected inside eager_attention_forward)
         if self.config.pe_method == 'wavelet' and getattr(self.config, 'relative_type', None) == '4':
+            using_eager = True
+        elif self.config.pe_method == 'alibi':
             using_eager = True
         elif self.config._attn_implementation != "eager" and self.config.pe_method != 'rotary':
             attention_interface = ALL_ATTENTION_FUNCTIONS[self.config._attn_implementation]
