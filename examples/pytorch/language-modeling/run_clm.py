@@ -183,8 +183,8 @@ class ModelArguments:
     bias_type: str = field(
         default="wavelet",
         metadata={
-            "help": "Wavelet logit bias function: wavelet (Ricker) | sine | linear.",
-            "choices": ["wavelet", "sine", "linear"],
+            "help": "Wavelet logit bias function: wavelet (Ricker) | sine | morlet | linear.",
+            "choices": ["wavelet", "sine", "morlet", "linear"],
         },
     )
     relative_type: Optional[str] = field(
@@ -4657,6 +4657,17 @@ def main():
                         module.coe_for_rel.fill_(float(config.coe_for_rel_init))
         missing_keys = set(loading_info.get("missing_keys", [])) if isinstance(loading_info, dict) else set()
         _sanitize_wavelet_scalar_params(model, config, missing_keys=missing_keys)
+        # rotary_embedding_torch stores freqs as nn.Parameter (saved in checkpoint).
+        # from_pretrained restores the checkpoint's theta=10000 freqs, overwriting __init__.
+        # Force-overwrite with the correct rope_theta after loading.
+        if getattr(config, 'pe_method', None) == 'rotary':
+            _rope_theta = float(getattr(config, 'rope_theta', 10000))
+            for _module in model.modules():
+                if hasattr(_module, 'rotary_emb') and hasattr(_module.rotary_emb, 'freqs'):
+                    _dim = _module.rotary_emb.freqs.shape[0] * 2
+                    _new_freqs = 1. / (_rope_theta ** (torch.arange(0, _dim, 2)[:_dim // 2].float() / _dim))
+                    _module.rotary_emb.freqs.data.copy_(_new_freqs.to(_module.rotary_emb.freqs.device))
+            logger.info(f"[RoPE] force-reset rotary_emb.freqs with rope_theta={_rope_theta}")
         ###### wavelet coe 可视化分支 ######
         # tracker = WaveletCoeTracker(out_dir="wavelet_coe_logs_w_learnable_coe_0_8_scale_rel2_wavelet_path_attn", vmin=0.5, vmax=1.5)
         # dtype = model_args.dtype if model_args.dtype in ["auto", None] else getattr(torch, model_args.dtype)
