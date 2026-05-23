@@ -176,6 +176,17 @@ class ModelArguments:
             "choices": ["vanilla", "rotary", "no_pe", "wavelet", "alibi"],
         },
     )
+    rope_theta: float = field(
+        default=10000.0,
+        metadata={"help": "RoPE base frequency theta. Increase for NTK-aware length extrapolation."},
+    )
+    bias_type: str = field(
+        default="wavelet",
+        metadata={
+            "help": "Wavelet logit bias function: wavelet (Ricker) | sine | linear.",
+            "choices": ["wavelet", "sine", "linear"],
+        },
+    )
     relative_type: Optional[str] = field(
         default=None,
         metadata={"help": "Relative PE sub-type. '4' = Ricker wavelet (used with pe_method=wavelet)."},
@@ -4518,7 +4529,8 @@ def main():
     config.block_size = block_size
     config.wavelet_analysis_block_size = int(block_size)
     config.wavelet_viz_block_size = int(block_size)
-    config.rope_theta = 10000
+    config.rope_theta = float(model_args.rope_theta)
+    config.bias_type = str(model_args.bias_type)
     # Expose tokenizer globally for dataset map helpers
     global GLOBAL_TOKENIZER
     GLOBAL_TOKENIZER = tokenizer
@@ -4752,7 +4764,7 @@ def main():
 
             tok = _get_tokenizer()
             
-            if config.hotpot_question_position == "before":
+            if getattr(config, "hotpot_question_position", "after") == "before":
                 q_part = f"Question: {q}\n"
                 ctx_part = "Context:\n"
                 suffix_text = "\nAnswer:"
@@ -4779,7 +4791,7 @@ def main():
             ans_ids = tok(" " + gold.strip(), add_special_tokens=False)["input_ids"]
 
             # 预算上下文长度
-            if config.hotpot_question_position == "before":
+            if getattr(config, "hotpot_question_position", "after") == "before":
                 prompt_ids = prefix_ids
                 prompt_labels = labels_prefix
             else:
@@ -4808,7 +4820,7 @@ def main():
             ids = prompt_ids + ans_ids + [tokenizer.eos_token_id]
 
             # labels：prompt 部分根据 q_use 决定，context/suffix 仍忽略；答案部分监督（eos 忽略）
-            if config.hotpot_question_position == "before":
+            if getattr(config, "hotpot_question_position", "after") == "before":
                 labels = prompt_labels + [-100]*len(ctx_ids) + [-100]*len(suffix_ids) + ans_ids + [-100]
             else:
                 labels = prompt_labels + [-100]*len(ctx_ids) + labels_suffix + ans_ids + [-100]
