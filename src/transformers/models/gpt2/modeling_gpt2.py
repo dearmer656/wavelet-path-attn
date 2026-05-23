@@ -397,7 +397,7 @@ class GPT2Attention(nn.Module):
         self.resid_dropout = nn.Dropout(config.resid_pdrop)
         self.is_causal = True
         if config.pe_method == 'rotary':
-            self.rotary_emb = RotaryEmbedding(dim=self.head_dim)
+            self.rotary_emb = RotaryEmbedding(dim=self.head_dim, theta=getattr(config, 'rope_theta', 10000))
 
         # Wavelet relative PE: precompute (head_dim, block_size, block_size) buffer
         if config.pe_method == 'wavelet' and getattr(config, 'relative_type', None) == '4':
