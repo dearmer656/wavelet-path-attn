@@ -183,8 +183,8 @@ class ModelArguments:
     bias_type: str = field(
         default="wavelet",
         metadata={
-            "help": "Wavelet logit bias function: wavelet (Ricker) | sine | morlet | linear.",
-            "choices": ["wavelet", "sine", "morlet", "linear"],
+            "help": "Wavelet logit bias function: wavelet (Ricker) | sine | morlet | gaussian | linear.",
+            "choices": ["wavelet", "sine", "morlet", "gaussian", "linear"],
         },
     )
     relative_type: Optional[str] = field(
@@ -471,6 +471,22 @@ class DataTrainingArguments:
     passkey_num_digits: int = field(
         default=5,
         metadata={"help": "Number of digits in the hidden passkey number."},
+    )
+    ruler_input_field: str = field(
+        default="input",
+        metadata={"help": "RULER JSONL field name for the prompt text."},
+    )
+    ruler_output_field: str = field(
+        default="outputs",
+        metadata={"help": "RULER JSONL field name for the gold answer(s)."},
+    )
+    ruler_task_field: str = field(
+        default="ruler_config",
+        metadata={"help": "RULER JSONL field name for task/config tag (used for per-task metrics)."},
+    )
+    ruler_length_field: str = field(
+        default="length",
+        metadata={"help": "RULER JSONL field name for sequence length metadata (used for per-length metrics)."},
     )
 
     overwrite_cache: bool = field(
@@ -3923,6 +3939,39 @@ def main():
                 from datasets import Dataset as _Dataset, DatasetDict as _DatasetDict
                 raw_datasets = _DatasetDict({"validation": _Dataset.from_dict({"text": ["passkey_placeholder"]})})
                 logger.info("[passkey] using synthetic passkey retrieval evaluation; raw_datasets is a placeholder.")
+            elif data_args.dataset_name == "ruler":
+                data_files = {}
+                if data_args.train_file is not None:
+                    data_files["train"] = data_args.train_file
+                if data_args.validation_file is not None:
+                    data_files["validation"] = data_args.validation_file
+                if not data_files:
+                    raise ValueError(
+                        "[ruler] please provide --validation_file (and optional --train_file) in JSON/JSONL format."
+                    )
+                raw_datasets = load_dataset("json", data_files=data_files, cache_dir=model_args.cache_dir)
+                logger.info(
+                    "[ruler] loaded local dataset files: %s",
+                    ", ".join([f"{k}={v}" for k, v in data_files.items()]),
+                )
+                if "validation" not in raw_datasets:
+                    if data_args.streaming:
+                        raw_datasets = split_streaming_dataset(
+                            raw_datasets["train"], data_args.validation_split_percentage
+                        )
+                    else:
+                        raw_datasets["validation"] = load_dataset(
+                            "json",
+                            data_files=data_files,
+                            split=f"train[:{data_args.validation_split_percentage}%]",
+                            cache_dir=model_args.cache_dir,
+                        )
+                        raw_datasets["train"] = load_dataset(
+                            "json",
+                            data_files=data_files,
+                            split=f"train[{data_args.validation_split_percentage}%:]",
+                            cache_dir=model_args.cache_dir,
+                        )
             else:
             # Downloading and loading a dataset from the hub.
                 raw_datasets = load_dataset(
@@ -4667,7 +4716,10 @@ def main():
                     _dim = _module.rotary_emb.freqs.shape[0] * 2
                     _new_freqs = 1. / (_rope_theta ** (torch.arange(0, _dim, 2)[:_dim // 2].float() / _dim))
                     _module.rotary_emb.freqs.data.copy_(_new_freqs.to(_module.rotary_emb.freqs.device))
-            logger.info(f"[RoPE] force-reset rotary_emb.freqs with rope_theta={_rope_theta}")
+                    # Invalidate stale cached rotation matrices so forward() recomputes from new freqs
+                    if hasattr(_module.rotary_emb, 'cached_freqs_seq_len'):
+                        _module.rotary_emb.cached_freqs_seq_len = 0
+            logger.info(f"[RoPE] force-reset rotary_emb.freqs with rope_theta={_rope_theta} (cache invalidated)")
         ###### wavelet coe 可视化分支 ######
         # tracker = WaveletCoeTracker(out_dir="wavelet_coe_logs_w_learnable_coe_0_8_scale_rel2_wavelet_path_attn", vmin=0.5, vmax=1.5)
         # dtype = model_args.dtype if model_args.dtype in ["auto", None] else getattr(torch, model_args.dtype)
@@ -4733,6 +4785,8 @@ def main():
     bucket_size = getattr(data_args, "xsum_bucket_size", 0)
     hotpot_level_cache = {}
     hotpot_placement_cache = {}   # maps split → list[float] of placement_actual_pct per example
+    ruler_task_cache = {}         # maps split -> list[str] of ruler task/config tags
+    ruler_length_cache = {}       # maps split -> list[int] of ruler sequence length metadata
     mix_eval_task_cache = {}
 
     probe_split = "train" if (training_args.do_train and "train" in raw_datasets) else list(raw_datasets.keys())[0]
@@ -5038,6 +5092,166 @@ def main():
             "[passkey] generated %d examples at block_size=%d with %d-digit passkeys",
             _pk_num_samples, _pk_block_size, _pk_num_digits,
         )
+    elif data_args.dataset_name == "ruler":
+        # =====================================================================
+        # RULER eval dataset (JSONL): build prefix-LM style samples where only
+        # answer tokens are supervised. Expected fields are configurable via:
+        #   --ruler_input_field / --ruler_output_field / --ruler_task_field
+        # Typical official format:
+        #   {"input": "...", "outputs": ["..."], "length": 4096, "ruler_config": "..."}
+        # =====================================================================
+        from datasets import DatasetDict as _DatasetDict
+
+        tokenizer.pad_token = tokenizer.eos_token
+        block_size = data_args.block_size
+        _ruler_input_field = str(getattr(data_args, "ruler_input_field", "input") or "input")
+        _ruler_output_field = str(getattr(data_args, "ruler_output_field", "outputs") or "outputs")
+        _ruler_task_field = str(getattr(data_args, "ruler_task_field", "ruler_config") or "ruler_config")
+        _ruler_length_field = str(getattr(data_args, "ruler_length_field", "length") or "length")
+
+        def _ruler_to_text(v):
+            if v is None:
+                return ""
+            if isinstance(v, str):
+                return v
+            if isinstance(v, (int, float, bool)):
+                return str(v)
+            if isinstance(v, list):
+                for _x in v:
+                    _s = _ruler_to_text(_x).strip()
+                    if _s:
+                        return _s
+                return ""
+            if isinstance(v, dict):
+                if "answers" in v:
+                    return _ruler_to_text(v.get("answers"))
+                if "text" in v:
+                    return _ruler_to_text(v.get("text"))
+                return json.dumps(v, ensure_ascii=False)
+            return str(v)
+
+        def _extract_prompt_and_answer(ex):
+            prompt = ""
+            for _k in (_ruler_input_field, "input", "prompt", "question"):
+                if _k in ex:
+                    prompt = _ruler_to_text(ex.get(_k)).strip()
+                    if prompt:
+                        break
+
+            answer = ""
+            for _k in (_ruler_output_field, "outputs", "answer", "target", "ground_truth"):
+                if _k in ex:
+                    answer = _ruler_to_text(ex.get(_k)).strip()
+                    if answer:
+                        break
+            return prompt, answer
+
+        def _extract_task_tag(ex):
+            for _k in (_ruler_task_field, "ruler_config", "task", "task_name", "category"):
+                if _k in ex:
+                    _v = _ruler_to_text(ex.get(_k)).strip()
+                    if _v:
+                        return _v
+            return "unknown"
+
+        def _extract_length_meta(ex):
+            _v = ex.get(_ruler_length_field, ex.get("length", -1))
+            try:
+                return int(_v)
+            except Exception:
+                return -1
+
+        def build_ruler_eval(ex):
+            prompt, answer = _extract_prompt_and_answer(ex)
+            task_tag = _extract_task_tag(ex)
+            length_meta = _extract_length_meta(ex)
+
+            if (not prompt) or (not answer):
+                return {
+                    "discard": True,
+                    "input_ids": [tokenizer.pad_token_id] * block_size,
+                    "labels": [-100] * block_size,
+                    "attention_mask": [0] * block_size,
+                    "ruler_task": task_tag,
+                    "ruler_length": int(length_meta),
+                }
+
+            prompt_ids = tokenizer(prompt, add_special_tokens=True, truncation=False)["input_ids"]
+            answer_text = answer if answer.startswith(" ") else (" " + answer)
+            answer_ids = tokenizer(answer_text, add_special_tokens=False, truncation=False)["input_ids"]
+            ids = prompt_ids + answer_ids + [tokenizer.eos_token_id]
+            labels = ([-100] * len(prompt_ids)) + answer_ids + [-100]
+
+            if len(ids) > block_size:
+                return {
+                    "discard": True,
+                    "input_ids": [tokenizer.pad_token_id] * block_size,
+                    "labels": [-100] * block_size,
+                    "attention_mask": [0] * block_size,
+                    "ruler_task": task_tag,
+                    "ruler_length": int(length_meta),
+                }
+
+            pad_len = block_size - len(ids)
+            ids = ids + [tokenizer.pad_token_id] * pad_len
+            labels = labels + [-100] * pad_len
+            attn = [1] * (block_size - pad_len) + [0] * pad_len
+            return {
+                "discard": False,
+                "input_ids": ids,
+                "labels": labels,
+                "attention_mask": attn,
+                "ruler_task": task_tag,
+                "ruler_length": int(length_meta),
+            }
+
+        need_splits = []
+        if training_args.do_train and "train" in raw_datasets:
+            need_splits.append("train")
+        if training_args.do_eval:
+            if "validation" in raw_datasets:
+                need_splits.append("validation")
+            elif "val" in raw_datasets:
+                need_splits.append("val")
+        if training_args.do_predict and "test" in raw_datasets:
+            need_splits.append("test")
+        if not need_splits:
+            raise ValueError("[ruler] no split to process (need train/validation/test)")
+
+        processed = _DatasetDict()
+        with training_args.main_process_first(desc="ruler build"):
+            for split in need_splits:
+                mapped = raw_datasets[split].map(
+                    build_ruler_eval,
+                    remove_columns=raw_datasets[split].column_names,
+                    num_proc=None,
+                    desc=f"ruler map (split={split})",
+                    load_from_cache_file=not data_args.overwrite_cache,
+                )
+                filtered = mapped.filter(lambda ex: not ex.get("discard", False))
+                out_split = "validation" if split == "val" else split
+                if "ruler_task" in filtered.column_names:
+                    ruler_task_cache[out_split] = [str(x) for x in filtered["ruler_task"]]
+                    filtered = filtered.remove_columns(["ruler_task"])
+                else:
+                    ruler_task_cache[out_split] = None
+                if "ruler_length" in filtered.column_names:
+                    _vals = []
+                    for _x in filtered["ruler_length"]:
+                        try:
+                            _vals.append(int(_x))
+                        except Exception:
+                            _vals.append(-1)
+                    ruler_length_cache[out_split] = _vals
+                    filtered = filtered.remove_columns(["ruler_length"])
+                else:
+                    ruler_length_cache[out_split] = None
+                filtered.set_format(type="python", columns=["input_ids", "attention_mask", "labels"])
+                processed[out_split] = filtered
+
+        lm_datasets = processed
+        if "validation" in lm_datasets:
+            logger.info("[ruler] validation examples kept=%d", int(len(lm_datasets["validation"])))
     elif data_args.dataset_name in ('wikitext', 'openwebtext', 'Skylion007/openwebtext'):
         with training_args.main_process_first(desc="dataset map tokenization"):
             if not data_args.streaming:
@@ -5577,6 +5791,7 @@ def main():
         IS_HOTPOTQA = (data_args.dataset_name == "hotpot_qa")
         IS_MIX = (data_args.dataset_name == "mix")
         IS_PASSKEY = (data_args.dataset_name == "passkey")
+        IS_RULER = (data_args.dataset_name == "ruler")
         eval_dataset = lm_datasets["validation"]
         if data_args.max_eval_samples is not None:
             if data_args.streaming:
@@ -5588,6 +5803,10 @@ def main():
                     hotpot_level_cache["validation"] = hotpot_level_cache["validation"][:max_eval_samples]
                 if IS_MIX and mix_eval_task_cache.get("validation") is not None:
                     mix_eval_task_cache["validation"] = mix_eval_task_cache["validation"][:max_eval_samples]
+                if IS_RULER and ruler_task_cache.get("validation") is not None:
+                    ruler_task_cache["validation"] = ruler_task_cache["validation"][:max_eval_samples]
+                if IS_RULER and ruler_length_cache.get("validation") is not None:
+                    ruler_length_cache["validation"] = ruler_length_cache["validation"][:max_eval_samples]
         elif IS_HOTPOTQA and hotpot_level_cache.get("validation") is not None and not data_args.streaming:
             # Align level cache length with potential dataset length changes (e.g., cache filtering)
             if len(hotpot_level_cache["validation"]) != len(eval_dataset):
@@ -5595,11 +5814,18 @@ def main():
         elif IS_MIX and mix_eval_task_cache.get("validation") is not None and not data_args.streaming:
             if len(mix_eval_task_cache["validation"]) != len(eval_dataset):
                 mix_eval_task_cache["validation"] = mix_eval_task_cache["validation"][: len(eval_dataset)]
+        elif IS_RULER and ruler_task_cache.get("validation") is not None and not data_args.streaming:
+            if len(ruler_task_cache["validation"]) != len(eval_dataset):
+                ruler_task_cache["validation"] = ruler_task_cache["validation"][: len(eval_dataset)]
+            if ruler_length_cache.get("validation") is not None and len(ruler_length_cache["validation"]) != len(eval_dataset):
+                ruler_length_cache["validation"] = ruler_length_cache["validation"][: len(eval_dataset)]
 
         #### hotpot_qa setting ########
         hotpot_eval_levels = hotpot_level_cache.get("validation") if IS_HOTPOTQA else None
         hotpot_eval_placements = hotpot_placement_cache.get("validation") if IS_HOTPOTQA else None
         mix_eval_tasks = mix_eval_task_cache.get("validation") if IS_MIX else None
+        ruler_eval_tasks = ruler_task_cache.get("validation") if IS_RULER else None
+        ruler_eval_lengths = ruler_length_cache.get("validation") if IS_RULER else None
 
         # Dump eval dataset (text + token ids) for downstream attention analysis
         # dump_dir = Path(training_args.output_dir)
@@ -6519,6 +6745,57 @@ def main():
                 _pk_em = float(np.mean(em_list)) if em_list else 0.0
                 logger.info("[passkey] block_size=%d  EM=%.4f  N=%d", data_args.block_size, _pk_em, len(em_list))
                 return {"passkey_em": _pk_em, "passkey_count": len(em_list)}
+            if IS_RULER:
+                preds_np = _to_numpy(preds)
+                labels_np = _to_numpy(labels)
+                labels_shift = labels_np[:, 1:]
+                preds_shift = preds_np[:, :-1]
+                em_list = []
+                f1_list = []
+                by_task = {}
+                by_length = {}
+                for _ri in range(labels_shift.shape[0]):
+                    _m = labels_shift[_ri] != -100
+                    if _m.sum() == 0:
+                        continue
+                    _ref_ids = labels_shift[_ri][_m].tolist()
+                    _pred_ids = preds_shift[_ri][_m].tolist()
+                    _ref_text = tokenizer.decode(_ref_ids, skip_special_tokens=True).strip()
+                    _pred_text = tokenizer.decode(_pred_ids, skip_special_tokens=True).strip()
+                    _em = float(_ref_text == _pred_text)
+                    _f1_score = float(_f1(_pred_text, _ref_text))
+                    em_list.append(_em)
+                    f1_list.append(_f1_score)
+                    if ruler_eval_tasks is not None and _ri < len(ruler_eval_tasks):
+                        _task = str(ruler_eval_tasks[_ri]).strip() or "unknown"
+                        by_task.setdefault(_task, []).append(_em)
+                    if ruler_eval_lengths is not None and _ri < len(ruler_eval_lengths):
+                        try:
+                            _len_key = int(ruler_eval_lengths[_ri])
+                        except Exception:
+                            _len_key = -1
+                        if _len_key > 0:
+                            by_length.setdefault(_len_key, []).append(_em)
+                out = {
+                    "ruler_em": float(np.mean(em_list)) if em_list else 0.0,
+                    "ruler_f1": float(np.mean(f1_list)) if f1_list else 0.0,
+                    "ruler_count": len(em_list),
+                }
+                for _task, _vals in by_task.items():
+                    _safe = re.sub(r"[^0-9A-Za-z_.-]", "_", _task)[:80]
+                    out[f"ruler_em_task_{_safe}"] = float(np.mean(_vals)) if _vals else 0.0
+                    out[f"ruler_count_task_{_safe}"] = len(_vals)
+                for _l, _vals in by_length.items():
+                    out[f"ruler_em_len_{int(_l)}"] = float(np.mean(_vals)) if _vals else 0.0
+                    out[f"ruler_count_len_{int(_l)}"] = len(_vals)
+                logger.info(
+                    "[ruler] block_size=%d EM=%.4f F1=%.4f N=%d",
+                    int(data_args.block_size),
+                    float(out["ruler_em"]),
+                    float(out["ruler_f1"]),
+                    int(out["ruler_count"]),
+                )
+                return out
             if not IS_XSUM:
                 if is_synth:
                     # to numpy
