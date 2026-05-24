@@ -58,15 +58,15 @@ python -m torch.distributed.run --nproc_per_node=4 --master_port="${MASTER_PORT}
   --gradient_accumulation_steps 1 \
   --num_train_epochs 10 \
   --learning_rate 1e-4 \
-  --weight_decay 0.01 \
-  --warmup_ratio 0.1 \
+  --weight_decay 0.0 \
+  --warmup_ratio 0.05 \
   --do_train \
   --do_eval \
   --eval_strategy steps \
-  --eval_steps 5000 \
+  --eval_steps 500 \
   --logging_steps 250 \
-  --save_steps 5000 \
-  --save_total_limit 10 \
+  --save_steps 2500 \
+  --save_total_limit 5 \
   --output_dir "${RUN_OUT}" \
   --overwrite_output_dir \
   --logging_dir "${RUN_OUT}/train/tensorboard" \
