@@ -119,6 +119,109 @@ def _get_alibi_slopes(n_heads: int, device) -> torch.Tensor:
         slopes += extra[: n_heads - closest_pow2]
     return torch.tensor(slopes, device=device, dtype=torch.float32)
 
+class QWABBias(nn.Module):
+    """Query-conditioned Wavelet Attention Bias for standard (non-path) attention.
+
+    Functionally equivalent to logit_bias_ctxscale_shift_v0 with wavelet_ctx_feat_mode=hidden_ln:
+    routes via LN-normalized hidden states only, no path-attention dependency.
+    """
+
+    def __init__(self, config):
+        super().__init__()
+        embed_dim = config.hidden_size
+        num_heads = config.num_attention_heads
+        head_dim = embed_dim // num_heads
+        K = int(getattr(config, "router_band_num", 8))
+        eps = float(getattr(config, "layer_norm_epsilon", 1e-5))
+
+        # Router: mean-pooled hidden_states → LN → Linear(head_dim, K+1)
+        self.feat_ln = nn.LayerNorm(head_dim, eps=eps)
+        self.router = nn.Linear(head_dim, K + 1, bias=True)  # K scales + 1 null
+
+        # Shift: full hidden_states → LN → Linear(E, 1) → sigmoid → token shift β
+        self.shift_ln = nn.LayerNorm(embed_dim, eps=eps)
+        self.shift_proj = nn.Linear(embed_dim, 1, bias=True)
+
+        # Learnable layer gate; init to -2.0 so bias starts near-zero
+        self.logit_bias_a = nn.Parameter(torch.tensor(-2.0))
+
+        # Ricker wavelet scales: 2^(scale_range[0] + step*i) for i=0..K-1
+        scale_range = list(getattr(config, "scale_range", [0, 16]))
+        step = (scale_range[1] - scale_range[0]) // K
+        scales = torch.tensor(
+            [2.0 ** (scale_range[0] + step * i) for i in range(K)], dtype=torch.float32
+        )
+        self.register_buffer("scales", scales)
+
+        self._num_heads = num_heads
+        self._head_dim = head_dim
+        self._K = K
+        self._eps = 1e-6
+        self._g_max = 0.5
+
+    def _bias_chunk(
+        self,
+        q0: int,
+        q1: int,
+        pi_scale: torch.Tensor,
+        beta: torch.Tensor,
+        diff: torch.Tensor,
+        eps: float,
+    ) -> torch.Tensor:
+        """Compute QWAB bias for query rows [q0, q1)."""
+        T = diff.shape[0]
+        chunk_bias = pi_scale.new_zeros(pi_scale.shape[0], q1 - q0, T)
+        for s_idx in range(self._K):
+            s = float(self.scales[s_idx].item())
+            u = (diff.view(1, 1, T) - beta[:, q0:q1].unsqueeze(-1) * s) / s  # [B, q_len, T]
+            basis = (1.0 - u.pow(2)) * torch.exp(-0.5 * u.pow(2))
+            basis = basis / (basis.pow(2).mean(-1, keepdim=True) + eps).sqrt()
+            basis = basis.clamp(-5.0, 5.0)
+            chunk_bias = chunk_bias + pi_scale[:, q0:q1, s_idx].unsqueeze(-1) * basis
+        return chunk_bias
+
+    def forward(self, hidden_states: torch.Tensor, chunk_size: int = 128) -> torch.Tensor:
+        """
+        Args:
+            hidden_states: [B, T, embed_dim]  (pre-attention LN output)
+            chunk_size: query chunk size for memory-efficient long-context eval
+        Returns:
+            [B, 1, T, T]  additive bias for all heads
+        """
+        B, T, _ = hidden_states.shape
+        H, D, K, eps = self._num_heads, self._head_dim, self._K, self._eps
+        hs = hidden_states.float()
+
+        # ---- routing ----
+        h_feat = hs.view(B, T, H, D).mean(dim=2)        # [B, T, D]
+        h_feat = self.feat_ln(h_feat)
+        rlogits = self.router(h_feat)                    # [B, T, K+1]
+        rlogits = rlogits / (rlogits.pow(2).mean(-1, keepdim=True) + eps).sqrt()
+        g_scales = torch.sigmoid(rlogits[..., 1:])       # [B, T, K]
+        g_null   = torch.sigmoid(rlogits[..., 0:1])      # [B, T, 1]  non-null mass
+        pi_scale = g_null * (g_scales / g_scales.sum(-1, keepdim=True).clamp_min(eps))  # [B, T, K]
+
+        # ---- shift ----
+        rho  = torch.sigmoid(self.shift_proj(self.shift_ln(hs)).squeeze(-1))  # [B, T]
+        beta = torch.round(rho * float(T - 1)).clamp_(0.0, float(T - 1))      # [B, T]
+
+        # ---- layer gate ----
+        g_layer = self._g_max * torch.sigmoid(self.logit_bias_a.float())
+
+        # ---- Ricker wavelet basis + weighted sum (chunked over query dim) ----
+        diff = torch.arange(T, device=hidden_states.device, dtype=torch.float32)
+        if T <= chunk_size:
+            bias = self._bias_chunk(0, T, pi_scale, beta, diff, eps)  # [B, T, T]
+        else:
+            chunks = []
+            for q0 in range(0, T, chunk_size):
+                q1 = min(q0 + chunk_size, T)
+                chunks.append(self._bias_chunk(q0, q1, pi_scale, beta, diff, eps))
+            bias = torch.cat(chunks, dim=1)  # [B, T, T]
+
+        return (g_layer * bias).unsqueeze(1).to(dtype=hidden_states.dtype)  # [B, 1, T, T]
+
+
 def eager_attention_forward(module, query, key, value, attention_mask, head_mask=None, **kwargs):
     attn_weights = torch.matmul(query, key.transpose(-1, -2))
 
@@ -158,6 +261,12 @@ def eager_attention_forward(module, query, key, value, attention_mask, head_mask
         dist = (q_pos - k_pos).clamp(min=0).to(dtype=attn_weights.dtype)  # [q_len, k_len]
         alibi_bias = -slopes.view(num_heads, 1, 1) * dist.unsqueeze(0)    # [1, H, q_len, k_len]
         attn_weights = attn_weights + alibi_bias
+
+    # QWAB logit bias (Rotary + QWAB mode)
+    _qwab_bias = kwargs.get("qwab_bias", None)
+    if _qwab_bias is not None:
+        q_len, k_len = query.size(-2), key.size(-2)
+        attn_weights = attn_weights + _qwab_bias[:, :, :q_len, :k_len].to(dtype=attn_weights.dtype)
 
     # Layer-wise attention scaling
     if module.scale_attn_by_inverse_layer_idx:
@@ -371,7 +480,12 @@ class GPT2Attention(nn.Module):
                 nn.Linear(32, self.num_heads * self.config.router_band_num, bias=False),
             )
         else:
-            self.router = None            
+            self.router = None
+        # QWAB for Rotary PE: hidden-state-conditioned wavelet logit bias
+        if getattr(config, 'wavelet_router', False) and config.pe_method == 'rotary':
+            self.qwab_bias_module = QWABBias(config)
+        else:
+            self.qwab_bias_module = None            
         if self.head_dim * self.num_heads != self.embed_dim:
             raise ValueError(
                 f"`embed_dim` must be divisible by num_heads (got `embed_dim`: {self.embed_dim} and `num_heads`:"
@@ -655,6 +769,12 @@ class GPT2Attention(nn.Module):
             key_states = self.rotary_emb.rotate_queries_or_keys(key_states)
             # query_states = query_states.permute(0, 2, 1, 3)
             # key_states = key_states.permute(0, 2, 1, 3)
+        # QWAB bias for Rotary PE (computed from hidden_states, no path-attention dependency)
+        _qwab_bias = None
+        if self.qwab_bias_module is not None and not is_cross_attention:
+            _T_q, _T_k = query_states.shape[-2], key_states.shape[-2]
+            if _T_q == _T_k:  # skip during KV-cache decode (T_q=1, T_k=full)
+                _qwab_bias = self.qwab_bias_module(hidden_states)
         router1 = None
         if self.router is not None:
             jitter_std = getattr(self.config, "router_jitter_std", 0.0)   # e.g. 0.01
@@ -777,6 +897,7 @@ class GPT2Attention(nn.Module):
                 is_causal=is_causal,
                 wavelet_decay_table=wavelet_decay_table,
                 router=router1,
+                qwab_bias=_qwab_bias,
                 **wavelet_rel_kwarg,
                 **kwargs,
             )
