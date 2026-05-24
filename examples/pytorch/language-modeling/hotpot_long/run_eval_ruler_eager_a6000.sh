@@ -50,7 +50,12 @@ echo "Node: $(hostname) | Model: ${MODEL_NAME} | block_size: ${BLOCK_SIZE} | pe:
 echo "RULER JSONL: ${RULER_JSONL}"
 
 mkdir -p "${HOTPOT_LONG_DIR}/logs"
-OUTPUT_DIR="${HOTPOT_LONG_DIR}/results_ruler/${MODEL_NAME}/L${BLOCK_SIZE}"
+RULER_BASENAME="$(basename "${RULER_JSONL}")"
+RULER_STEM="${RULER_BASENAME%.jsonl}"
+RULER_PARENT="$(basename "$(dirname "${RULER_JSONL}")")"
+RULER_TAG="${RULER_PARENT}_${RULER_STEM}"
+RULER_TAG="$(echo "${RULER_TAG}" | tr -cs '[:alnum:]_.-' '_')"
+OUTPUT_DIR="${HOTPOT_LONG_DIR}/results_ruler/${MODEL_NAME}/L${BLOCK_SIZE}/${RULER_TAG}"
 mkdir -p "${OUTPUT_DIR}"
 
 cd "${LANG_MODEL_DIR}"
@@ -69,6 +74,11 @@ python -m torch.distributed.run --nproc_per_node=4 --master_port=${MASTER_PORT} 
     --ruler_output_field outputs \
     --ruler_task_field ruler_config \
     --ruler_length_field length \
+    --ruler_eval_mode generate \
+    --ruler_max_new_tokens 32 \
+    --ruler_num_beams 1 \
+    --ruler_do_sample false \
+    --ruler_predictions_file "ruler_predictions_${RULER_TAG}.jsonl" \
     --do_eval \
     --block_size "${BLOCK_SIZE}" \
     --per_device_eval_batch_size 4 \

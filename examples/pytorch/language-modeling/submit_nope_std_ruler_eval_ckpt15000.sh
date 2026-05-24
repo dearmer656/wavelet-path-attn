@@ -25,11 +25,17 @@ echo "=== Submitting RULER eval for ${MODEL_NAME} ==="
 echo "RULER JSONL: ${RULER_JSONL}"
 echo "PE method: ${PE_METHOD}"
 
+RULER_BASENAME="$(basename "${RULER_JSONL}")"
+RULER_STEM="${RULER_BASENAME%.jsonl}"
+RULER_PARENT="$(basename "$(dirname "${RULER_JSONL}")")"
+RULER_TAG="${RULER_PARENT}_${RULER_STEM}"
+RULER_TAG="$(echo "${RULER_TAG}" | tr -cs '[:alnum:]_.-' '_')"
+
 # Keep minimal by default for rebuttal speed; extend as needed.
 for BSIZE in 4096; do
     JID=$(sbatch "${SCRIPT}" "${CKPT}" "${MODEL_NAME}" "${BSIZE}" "${CFG}" "${RULER_JSONL}" "${PE_METHOD}" | grep -oP '\d+')
     echo "  L${BSIZE}: job ${JID}"
 done
 
-echo "Done. Results will be in: hotpot_long/results_ruler/${MODEL_NAME}/"
+echo "Done. Results will be in: hotpot_long/results_ruler/${MODEL_NAME}/L*/${RULER_TAG}/"
 squeue -u hongyu-s --format="%.10i %.20j %.8T %.12M %R" | grep -E "JOBID|ruler_eval" || true

@@ -488,6 +488,34 @@ class DataTrainingArguments:
         default="length",
         metadata={"help": "RULER JSONL field name for sequence length metadata (used for per-length metrics)."},
     )
+    ruler_eval_mode: str = field(
+        default="generate",
+        metadata={"help": "RULER eval mode: generate (official-like) | teacher_forced (diagnostic)."},
+    )
+    ruler_max_new_tokens: int = field(
+        default=32,
+        metadata={"help": "RULER generation max_new_tokens (used when ruler_eval_mode=generate)."},
+    )
+    ruler_num_beams: int = field(
+        default=1,
+        metadata={"help": "RULER generation num_beams (used when ruler_eval_mode=generate)."},
+    )
+    ruler_do_sample: bool = field(
+        default=False,
+        metadata={"help": "RULER generation do_sample flag (used when ruler_eval_mode=generate)."},
+    )
+    ruler_top_p: float = field(
+        default=1.0,
+        metadata={"help": "RULER generation top_p (used only when ruler_do_sample=true)."},
+    )
+    ruler_temperature: float = field(
+        default=1.0,
+        metadata={"help": "RULER generation temperature (used only when ruler_do_sample=true)."},
+    )
+    ruler_predictions_file: str = field(
+        default="ruler_predictions.jsonl",
+        metadata={"help": "Output filename for per-example RULER generation predictions."},
+    )
 
     overwrite_cache: bool = field(
         default=False, metadata={"help": "Overwrite the cached training and evaluation sets"}
@@ -519,6 +547,9 @@ class DataTrainingArguments:
             if self.validation_file is not None:
                 extension = self.validation_file.split(".")[-1]
                 assert extension in ["csv", "json", "jsonl", "txt"], "`validation_file` should be a csv, a json, a jsonl or a txt file."
+        self.ruler_eval_mode = str(self.ruler_eval_mode).strip().lower()
+        if self.ruler_eval_mode not in {"generate", "teacher_forced"}:
+            raise ValueError(f"`ruler_eval_mode` must be one of: generate|teacher_forced; got {self.ruler_eval_mode!r}.")
 @dataclass
 class SupplyTrainingArguments(TrainingArguments):
     ablate_switch: bool = field(
@@ -4787,6 +4818,9 @@ def main():
     hotpot_placement_cache = {}   # maps split → list[float] of placement_actual_pct per example
     ruler_task_cache = {}         # maps split -> list[str] of ruler task/config tags
     ruler_length_cache = {}       # maps split -> list[int] of ruler sequence length metadata
+    ruler_golds_cache = {}        # maps split -> list[list[str]] of all valid gold outputs
+    ruler_prompt_len_cache = {}   # maps split -> list[int] prompt token length before generation
+    ruler_split_stats = {}        # maps split -> {"loaded","kept","discarded","truncated_prompt"}
     mix_eval_task_cache = {}
 
     probe_split = "train" if (training_args.do_train and "train" in raw_datasets) else list(raw_datasets.keys())[0]
@@ -5094,8 +5128,9 @@ def main():
         )
     elif data_args.dataset_name == "ruler":
         # =====================================================================
-        # RULER eval dataset (JSONL): build prefix-LM style samples where only
-        # answer tokens are supervised. Expected fields are configurable via:
+        # RULER eval dataset (JSONL): official-like path uses generation scoring
+        # on prompt-only inputs; teacher_forced mode is kept for diagnostics.
+        # Expected fields are configurable via:
         #   --ruler_input_field / --ruler_output_field / --ruler_task_field
         # Typical official format:
         #   {"input": "...", "outputs": ["..."], "length": 4096, "ruler_config": "..."}
@@ -5108,6 +5143,10 @@ def main():
         _ruler_output_field = str(getattr(data_args, "ruler_output_field", "outputs") or "outputs")
         _ruler_task_field = str(getattr(data_args, "ruler_task_field", "ruler_config") or "ruler_config")
         _ruler_length_field = str(getattr(data_args, "ruler_length_field", "length") or "length")
+        _ruler_eval_mode = str(getattr(data_args, "ruler_eval_mode", "generate") or "generate").strip().lower()
+        if _ruler_eval_mode not in {"generate", "teacher_forced"}:
+            raise ValueError(f"[ruler] unsupported ruler_eval_mode={_ruler_eval_mode}; expected generate|teacher_forced")
+        _ruler_generation_mode = bool(_ruler_eval_mode == "generate" and training_args.do_eval and not training_args.do_train)
 
         def _ruler_to_text(v):
             if v is None:
@@ -5130,7 +5169,7 @@ def main():
                 return json.dumps(v, ensure_ascii=False)
             return str(v)
 
-        def _extract_prompt_and_answer(ex):
+        def _extract_prompt_and_answers(ex):
             prompt = ""
             for _k in (_ruler_input_field, "input", "prompt", "question"):
                 if _k in ex:
@@ -5138,13 +5177,30 @@ def main():
                     if prompt:
                         break
 
-            answer = ""
+            golds = []
             for _k in (_ruler_output_field, "outputs", "answer", "target", "ground_truth"):
-                if _k in ex:
-                    answer = _ruler_to_text(ex.get(_k)).strip()
-                    if answer:
-                        break
-            return prompt, answer
+                if _k not in ex:
+                    continue
+                _v = ex.get(_k)
+                if isinstance(_v, list):
+                    for _x in _v:
+                        _s = _ruler_to_text(_x).strip()
+                        if _s:
+                            golds.append(_s)
+                else:
+                    _s = _ruler_to_text(_v).strip()
+                    if _s:
+                        golds.append(_s)
+                if golds:
+                    break
+            # Stable unique while preserving order.
+            _seen = set()
+            _uniq = []
+            for _g in golds:
+                if _g not in _seen:
+                    _seen.add(_g)
+                    _uniq.append(_g)
+            return prompt, _uniq
 
         def _extract_task_tag(ex):
             for _k in (_ruler_task_field, "ruler_config", "task", "task_name", "category"):
@@ -5162,11 +5218,12 @@ def main():
                 return -1
 
         def build_ruler_eval(ex):
-            prompt, answer = _extract_prompt_and_answer(ex)
+            prompt, golds = _extract_prompt_and_answers(ex)
             task_tag = _extract_task_tag(ex)
             length_meta = _extract_length_meta(ex)
+            prompt_truncated = False
 
-            if (not prompt) or (not answer):
+            if (not prompt) or (not golds):
                 return {
                     "discard": True,
                     "input_ids": [tokenizer.pad_token_id] * block_size,
@@ -5174,13 +5231,42 @@ def main():
                     "attention_mask": [0] * block_size,
                     "ruler_task": task_tag,
                     "ruler_length": int(length_meta),
+                    "ruler_golds": golds,
+                    "prompt_len": 0,
+                    "truncated_prompt": False,
                 }
 
             prompt_ids = tokenizer(prompt, add_special_tokens=True, truncation=False)["input_ids"]
-            answer_text = answer if answer.startswith(" ") else (" " + answer)
-            answer_ids = tokenizer(answer_text, add_special_tokens=False, truncation=False)["input_ids"]
-            ids = prompt_ids + answer_ids + [tokenizer.eos_token_id]
-            labels = ([-100] * len(prompt_ids)) + answer_ids + [-100]
+            if len(prompt_ids) > block_size:
+                prompt_ids = prompt_ids[-block_size:]
+                prompt_truncated = True
+
+            if _ruler_generation_mode:
+                ids = prompt_ids[:block_size]
+                labels = [-100] * len(ids)
+            else:
+                # Diagnostic-only path: teacher-forced target token scoring.
+                answer_text = golds[0]
+                answer_text = answer_text if answer_text.startswith(" ") else (" " + answer_text)
+                answer_ids = tokenizer(answer_text, add_special_tokens=False, truncation=False)["input_ids"]
+                if len(prompt_ids) + len(answer_ids) + 1 > block_size:
+                    keep_prompt = block_size - len(answer_ids) - 1
+                    if keep_prompt <= 0:
+                        return {
+                            "discard": True,
+                            "input_ids": [tokenizer.pad_token_id] * block_size,
+                            "labels": [-100] * block_size,
+                            "attention_mask": [0] * block_size,
+                            "ruler_task": task_tag,
+                            "ruler_length": int(length_meta),
+                            "ruler_golds": golds,
+                            "prompt_len": 0,
+                            "truncated_prompt": True,
+                        }
+                    prompt_ids = prompt_ids[-keep_prompt:]
+                    prompt_truncated = True
+                ids = prompt_ids + answer_ids + [tokenizer.eos_token_id]
+                labels = ([-100] * len(prompt_ids)) + answer_ids + [-100]
 
             if len(ids) > block_size:
                 return {
@@ -5190,6 +5276,9 @@ def main():
                     "attention_mask": [0] * block_size,
                     "ruler_task": task_tag,
                     "ruler_length": int(length_meta),
+                    "ruler_golds": golds,
+                    "prompt_len": 0,
+                    "truncated_prompt": prompt_truncated,
                 }
 
             pad_len = block_size - len(ids)
@@ -5203,6 +5292,9 @@ def main():
                 "attention_mask": attn,
                 "ruler_task": task_tag,
                 "ruler_length": int(length_meta),
+                "ruler_golds": golds,
+                "prompt_len": int(len(prompt_ids)),
+                "truncated_prompt": bool(prompt_truncated),
             }
 
         need_splits = []
@@ -5228,7 +5320,11 @@ def main():
                     desc=f"ruler map (split={split})",
                     load_from_cache_file=not data_args.overwrite_cache,
                 )
+                loaded_n = int(len(mapped))
+                truncated_n = int(sum(1 for _x in mapped["truncated_prompt"] if bool(_x))) if "truncated_prompt" in mapped.column_names else 0
                 filtered = mapped.filter(lambda ex: not ex.get("discard", False))
+                kept_n = int(len(filtered))
+                discarded_n = int(loaded_n - kept_n)
                 out_split = "validation" if split == "val" else split
                 if "ruler_task" in filtered.column_names:
                     ruler_task_cache[out_split] = [str(x) for x in filtered["ruler_task"]]
@@ -5246,8 +5342,49 @@ def main():
                     filtered = filtered.remove_columns(["ruler_length"])
                 else:
                     ruler_length_cache[out_split] = None
+                if "ruler_golds" in filtered.column_names:
+                    _golds = []
+                    for _x in filtered["ruler_golds"]:
+                        if isinstance(_x, list):
+                            _golds.append([str(t) for t in _x if str(t).strip()])
+                        elif _x is None:
+                            _golds.append([])
+                        else:
+                            _golds.append([str(_x)])
+                    ruler_golds_cache[out_split] = _golds
+                    filtered = filtered.remove_columns(["ruler_golds"])
+                else:
+                    ruler_golds_cache[out_split] = None
+                if "prompt_len" in filtered.column_names:
+                    _pl = []
+                    for _x in filtered["prompt_len"]:
+                        try:
+                            _pl.append(int(_x))
+                        except Exception:
+                            _pl.append(0)
+                    ruler_prompt_len_cache[out_split] = _pl
+                    filtered = filtered.remove_columns(["prompt_len"])
+                else:
+                    ruler_prompt_len_cache[out_split] = None
+                if "truncated_prompt" in filtered.column_names:
+                    filtered = filtered.remove_columns(["truncated_prompt"])
                 filtered.set_format(type="python", columns=["input_ids", "attention_mask", "labels"])
                 processed[out_split] = filtered
+                ruler_split_stats[out_split] = {
+                    "loaded": loaded_n,
+                    "kept": kept_n,
+                    "discarded": discarded_n,
+                    "truncated_prompt": truncated_n,
+                }
+                logger.info(
+                    "[ruler] split=%s mode=%s loaded=%d kept=%d discarded=%d truncated_prompt=%d",
+                    str(out_split),
+                    str(_ruler_eval_mode),
+                    int(loaded_n),
+                    int(kept_n),
+                    int(discarded_n),
+                    int(truncated_n),
+                )
 
         lm_datasets = processed
         if "validation" in lm_datasets:
@@ -5807,6 +5944,10 @@ def main():
                     ruler_task_cache["validation"] = ruler_task_cache["validation"][:max_eval_samples]
                 if IS_RULER and ruler_length_cache.get("validation") is not None:
                     ruler_length_cache["validation"] = ruler_length_cache["validation"][:max_eval_samples]
+                if IS_RULER and ruler_golds_cache.get("validation") is not None:
+                    ruler_golds_cache["validation"] = ruler_golds_cache["validation"][:max_eval_samples]
+                if IS_RULER and ruler_prompt_len_cache.get("validation") is not None:
+                    ruler_prompt_len_cache["validation"] = ruler_prompt_len_cache["validation"][:max_eval_samples]
         elif IS_HOTPOTQA and hotpot_level_cache.get("validation") is not None and not data_args.streaming:
             # Align level cache length with potential dataset length changes (e.g., cache filtering)
             if len(hotpot_level_cache["validation"]) != len(eval_dataset):
@@ -5819,6 +5960,10 @@ def main():
                 ruler_task_cache["validation"] = ruler_task_cache["validation"][: len(eval_dataset)]
             if ruler_length_cache.get("validation") is not None and len(ruler_length_cache["validation"]) != len(eval_dataset):
                 ruler_length_cache["validation"] = ruler_length_cache["validation"][: len(eval_dataset)]
+            if ruler_golds_cache.get("validation") is not None and len(ruler_golds_cache["validation"]) != len(eval_dataset):
+                ruler_golds_cache["validation"] = ruler_golds_cache["validation"][: len(eval_dataset)]
+            if ruler_prompt_len_cache.get("validation") is not None and len(ruler_prompt_len_cache["validation"]) != len(eval_dataset):
+                ruler_prompt_len_cache["validation"] = ruler_prompt_len_cache["validation"][: len(eval_dataset)]
 
         #### hotpot_qa setting ########
         hotpot_eval_levels = hotpot_level_cache.get("validation") if IS_HOTPOTQA else None
@@ -5826,6 +5971,8 @@ def main():
         mix_eval_tasks = mix_eval_task_cache.get("validation") if IS_MIX else None
         ruler_eval_tasks = ruler_task_cache.get("validation") if IS_RULER else None
         ruler_eval_lengths = ruler_length_cache.get("validation") if IS_RULER else None
+        ruler_eval_golds = ruler_golds_cache.get("validation") if IS_RULER else None
+        ruler_eval_prompt_lens = ruler_prompt_len_cache.get("validation") if IS_RULER else None
 
         # Dump eval dataset (text + token ids) for downstream attention analysis
         # dump_dir = Path(training_args.output_dir)
@@ -6758,12 +6905,19 @@ def main():
                     _m = labels_shift[_ri] != -100
                     if _m.sum() == 0:
                         continue
-                    _ref_ids = labels_shift[_ri][_m].tolist()
                     _pred_ids = preds_shift[_ri][_m].tolist()
-                    _ref_text = tokenizer.decode(_ref_ids, skip_special_tokens=True).strip()
                     _pred_text = tokenizer.decode(_pred_ids, skip_special_tokens=True).strip()
-                    _em = float(_ref_text == _pred_text)
-                    _f1_score = float(_f1(_pred_text, _ref_text))
+                    _golds = None
+                    if ruler_eval_golds is not None and _ri < len(ruler_eval_golds):
+                        _golds = [str(x).strip() for x in ruler_eval_golds[_ri] if str(x).strip()]
+                    if not _golds:
+                        _ref_ids = labels_shift[_ri][_m].tolist()
+                        _golds = [tokenizer.decode(_ref_ids, skip_special_tokens=True).strip()]
+                    _em = 0.0
+                    _f1_score = 0.0
+                    for _gold in _golds:
+                        _em = max(_em, float(_normalize(_pred_text) == _normalize(_gold)))
+                        _f1_score = max(_f1_score, float(_f1(_pred_text, _gold)))
                     em_list.append(_em)
                     f1_list.append(_f1_score)
                     if ruler_eval_tasks is not None and _ri < len(ruler_eval_tasks):
@@ -7076,6 +7230,192 @@ def main():
                     f"fenice={out.get('fenice', float('nan')):.4f}"
                 )
             return out
+
+        def run_ruler_generation_eval(_trainer, _eval_dataset):
+            """
+            Generation-based RULER evaluation.
+            Score is computed from generated answers against *all* valid gold outputs
+            (any-match max over golds), avoiding teacher-forced overestimation.
+            """
+            _mode = str(getattr(data_args, "ruler_eval_mode", "generate") or "generate").strip().lower()
+            if _mode != "generate":
+                return _trainer.evaluate()
+
+            if ruler_eval_golds is None:
+                raise ValueError("[ruler] generation eval requires ruler_eval_golds cache.")
+
+            _rank = dist.get_rank() if (dist.is_available() and dist.is_initialized()) else 0
+            _world = dist.get_world_size() if (dist.is_available() and dist.is_initialized()) else 1
+            _device = _trainer.args.device
+            _batch_size = max(1, int(_trainer.args.per_device_eval_batch_size))
+            _max_new_tokens = max(1, int(getattr(data_args, "ruler_max_new_tokens", 32)))
+            _num_beams = max(1, int(getattr(data_args, "ruler_num_beams", 1)))
+            _do_sample = bool(getattr(data_args, "ruler_do_sample", False))
+            _top_p = float(getattr(data_args, "ruler_top_p", 1.0))
+            _temperature = float(getattr(data_args, "ruler_temperature", 1.0))
+
+            _gen_kwargs = {
+                "max_new_tokens": int(_max_new_tokens),
+                "num_beams": int(_num_beams),
+                "do_sample": bool(_do_sample),
+                "pad_token_id": int(tokenizer.pad_token_id),
+                "eos_token_id": int(tokenizer.eos_token_id),
+            }
+            if _do_sample:
+                _gen_kwargs["top_p"] = float(_top_p)
+                _gen_kwargs["temperature"] = float(_temperature)
+
+            _model = getattr(_trainer.model, "module", _trainer.model)
+            _was_training = bool(_model.training)
+            _model.eval()
+
+            _all_indices = list(range(_rank, len(_eval_dataset), _world))
+            _records_local = []
+            for _st in range(0, len(_all_indices), _batch_size):
+                _batch_idx = _all_indices[_st:_st + _batch_size]
+                if not _batch_idx:
+                    continue
+                _input_ids = [list(_eval_dataset[_i]["input_ids"]) for _i in _batch_idx]
+                _attn = [list(_eval_dataset[_i]["attention_mask"]) for _i in _batch_idx]
+                _input_ids_t = torch.tensor(_input_ids, dtype=torch.long, device=_device)
+                _attn_t = torch.tensor(_attn, dtype=torch.long, device=_device)
+                with torch.no_grad():
+                    _gen = _model.generate(
+                        input_ids=_input_ids_t,
+                        attention_mask=_attn_t,
+                        **_gen_kwargs,
+                    )
+
+                _prompt_lens = _attn_t.sum(dim=-1).detach().cpu().tolist()
+                for _bi, _ds_idx in enumerate(_batch_idx):
+                    _pl = int(_prompt_lens[_bi])
+                    _out_ids = _gen[_bi].detach().cpu().tolist()
+                    _gen_ids = _out_ids[_pl:] if _pl < len(_out_ids) else []
+                    _pred = tokenizer.decode(_gen_ids, skip_special_tokens=True).strip()
+
+                    _golds = []
+                    if _ds_idx < len(ruler_eval_golds):
+                        _golds = [str(x).strip() for x in ruler_eval_golds[_ds_idx] if str(x).strip()]
+                    if not _golds:
+                        _golds = [""]
+
+                    _em = 0.0
+                    _f1s = 0.0
+                    for _g in _golds:
+                        _em = max(_em, float(_normalize(_pred) == _normalize(_g)))
+                        _f1s = max(_f1s, float(_f1(_pred, _g)))
+
+                    _task = "unknown"
+                    if ruler_eval_tasks is not None and _ds_idx < len(ruler_eval_tasks):
+                        _task = str(ruler_eval_tasks[_ds_idx]).strip() or "unknown"
+                    _length = -1
+                    if ruler_eval_lengths is not None and _ds_idx < len(ruler_eval_lengths):
+                        try:
+                            _length = int(ruler_eval_lengths[_ds_idx])
+                        except Exception:
+                            _length = -1
+                    _prompt_len_meta = _pl
+                    if ruler_eval_prompt_lens is not None and _ds_idx < len(ruler_eval_prompt_lens):
+                        try:
+                            _prompt_len_meta = int(ruler_eval_prompt_lens[_ds_idx])
+                        except Exception:
+                            _prompt_len_meta = _pl
+
+                    _records_local.append(
+                        {
+                            "dataset_index": int(_ds_idx),
+                            "rank": int(_rank),
+                            "task": _task,
+                            "length": int(_length),
+                            "prompt_len": int(_prompt_len_meta),
+                            "prediction": _pred,
+                            "golds": _golds,
+                            "em": float(_em),
+                            "f1": float(_f1s),
+                        }
+                    )
+
+            if _was_training:
+                _model.train()
+
+            if dist.is_available() and dist.is_initialized():
+                _gathered = [None for _ in range(_world)]
+                dist.all_gather_object(_gathered, _records_local)
+                _records = []
+                for _x in _gathered:
+                    if _x:
+                        _records.extend(_x)
+            else:
+                _records = _records_local
+
+            _metrics = {}
+            if _rank == 0:
+                _records = sorted(_records, key=lambda r: int(r.get("dataset_index", 0)))
+                _total = len(_records)
+                _ems = [float(r["em"]) for r in _records]
+                _f1s = [float(r["f1"]) for r in _records]
+
+                _by_task = {}
+                _by_len = {}
+                for _r in _records:
+                    _by_task.setdefault(str(_r.get("task", "unknown")), []).append(float(_r["em"]))
+                    _lk = int(_r.get("length", -1))
+                    if _lk > 0:
+                        _by_len.setdefault(_lk, []).append(float(_r["em"]))
+
+                _metrics = {
+                    "ruler_em": float(np.mean(_ems)) if _ems else 0.0,
+                    "ruler_f1": float(np.mean(_f1s)) if _f1s else 0.0,
+                    "ruler_count": int(_total),
+                    "eval_ruler_em": float(np.mean(_ems)) if _ems else 0.0,
+                    "eval_ruler_f1": float(np.mean(_f1s)) if _f1s else 0.0,
+                    "eval_ruler_count": int(_total),
+                }
+                for _task, _vals in _by_task.items():
+                    _safe = re.sub(r"[^0-9A-Za-z_.-]", "_", _task)[:80]
+                    _metrics[f"ruler_em_task_{_safe}"] = float(np.mean(_vals)) if _vals else 0.0
+                    _metrics[f"ruler_count_task_{_safe}"] = int(len(_vals))
+                for _l, _vals in _by_len.items():
+                    _metrics[f"ruler_em_len_{int(_l)}"] = float(np.mean(_vals)) if _vals else 0.0
+                    _metrics[f"ruler_count_len_{int(_l)}"] = int(len(_vals))
+
+                _stats = ruler_split_stats.get("validation", {}) if isinstance(ruler_split_stats, dict) else {}
+                _metrics["ruler_loaded"] = int(_stats.get("loaded", len(_eval_dataset)))
+                _metrics["ruler_kept"] = int(_stats.get("kept", len(_eval_dataset)))
+                _metrics["ruler_discarded"] = int(_stats.get("discarded", 0))
+                _metrics["ruler_truncated_prompt"] = int(_stats.get("truncated_prompt", 0))
+                _metrics["eval_ruler_loaded"] = int(_metrics["ruler_loaded"])
+                _metrics["eval_ruler_kept"] = int(_metrics["ruler_kept"])
+                _metrics["eval_ruler_discarded"] = int(_metrics["ruler_discarded"])
+                _metrics["eval_ruler_truncated_prompt"] = int(_metrics["ruler_truncated_prompt"])
+
+                _pred_file = str(getattr(data_args, "ruler_predictions_file", "ruler_predictions.jsonl") or "ruler_predictions.jsonl")
+                _pred_path = Path(training_args.output_dir) / _pred_file
+                _pred_path.parent.mkdir(parents=True, exist_ok=True)
+                with _pred_path.open("w", encoding="utf-8") as _f:
+                    for _i, _r in enumerate(_records):
+                        _row = dict(_r)
+                        _row["sample_index"] = int(_i)
+                        _f.write(json.dumps(_row, ensure_ascii=False) + "\n")
+
+                logger.info(
+                    "[ruler-generate] N=%d em=%.4f f1=%.4f loaded=%d kept=%d discarded=%d truncated_prompt=%d pred_file=%s",
+                    int(_metrics["ruler_count"]),
+                    float(_metrics["ruler_em"]),
+                    float(_metrics["ruler_f1"]),
+                    int(_metrics["ruler_loaded"]),
+                    int(_metrics["ruler_kept"]),
+                    int(_metrics["ruler_discarded"]),
+                    int(_metrics["ruler_truncated_prompt"]),
+                    str(_pred_path),
+                )
+
+            if dist.is_available() and dist.is_initialized():
+                _obj = [_metrics if _rank == 0 else None]
+                dist.broadcast_object_list(_obj, src=0)
+                _metrics = _obj[0] if _obj[0] is not None else {}
+
+            return _metrics
     # Initialize our Trainer
 
     enable_path_debug_eval = cfg_bool(cfg, "path_debug_eval_enable", False)
@@ -7295,7 +7635,10 @@ def main():
         except Exception:
             pass
 
-        metrics = trainer.evaluate()
+        if data_args.dataset_name == "ruler" and str(getattr(data_args, "ruler_eval_mode", "generate")).strip().lower() == "generate":
+            metrics = run_ruler_generation_eval(trainer, eval_dataset)
+        else:
+            metrics = trainer.evaluate()
 
         max_eval_samples = data_args.max_eval_samples if data_args.max_eval_samples is not None else len(eval_dataset)
         if data_args.streaming:
