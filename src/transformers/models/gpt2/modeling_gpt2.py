@@ -122,9 +122,14 @@ def _get_alibi_slopes(n_heads: int, device) -> torch.Tensor:
 class QWABBias(nn.Module):
     """Query-conditioned Wavelet Attention Bias for standard (non-path) attention.
 
-    Functionally equivalent to logit_bias_ctxscale_shift_v0 with wavelet_ctx_feat_mode=hidden_ln:
-    routes via LN-normalized hidden states only, no path-attention dependency.
+    Matches _build_ctxscale_shift_logit_bias_v0 with wavelet_ctx_feat_mode=hidden_ln,
+    except the routing feature is hidden_states (no q_corr from path attention).
+    All other details (shift formula, basis normalization, p99 clamp, gate init,
+    g_bias_max clamp) are identical to the FLA path_attn defaults.
     """
+
+    _G_MAX = 0.5
+    _G_BIAS_MAX = 4.0
 
     def __init__(self, config):
         super().__init__()
@@ -134,16 +139,15 @@ class QWABBias(nn.Module):
         K = int(getattr(config, "router_band_num", 8))
         eps = float(getattr(config, "layer_norm_epsilon", 1e-5))
 
-        # Router: mean-pooled hidden_states → LN → Linear(head_dim, K+1)
-        self.feat_ln = nn.LayerNorm(head_dim, eps=eps)
+        # hidden_ln mode: router takes mean-pooled hidden_states directly (no feat_ln)
         self.router = nn.Linear(head_dim, K + 1, bias=True)  # K scales + 1 null
 
         # Shift: full hidden_states → LN → Linear(E, 1) → sigmoid → token shift β
         self.shift_ln = nn.LayerNorm(embed_dim, eps=eps)
         self.shift_proj = nn.Linear(embed_dim, 1, bias=True)
 
-        # Learnable layer gate; init to -2.0 so bias starts near-zero
-        self.logit_bias_a = nn.Parameter(torch.tensor(-2.0))
+        # Learnable layer gate; init matches FLA default (wavelet_logit_bias_a_init=-5.0)
+        self.logit_bias_a = nn.Parameter(torch.tensor(-5.0))
 
         # Ricker wavelet scales: 2^(scale_range[0] + step*i) for i=0..K-1
         scale_range = list(getattr(config, "scale_range", [0, 16]))
@@ -157,7 +161,21 @@ class QWABBias(nn.Module):
         self._head_dim = head_dim
         self._K = K
         self._eps = 1e-6
-        self._g_max = 0.5
+
+    @staticmethod
+    def _clamp_p99(x: torch.Tensor, eps: float = 1e-6) -> torch.Tensor:
+        """Per-chunk p99 absolute-value clamp, matching FLA _maybe_clamp_p99 defaults."""
+        abs_flat = x.detach().abs().reshape(-1)
+        if abs_flat.numel() == 0:
+            return x
+        n = abs_flat.numel()
+        if n > 4096:
+            idx = torch.linspace(0, n - 1, steps=4096, device=abs_flat.device).long()
+            abs_eval = abs_flat.index_select(0, idx)
+        else:
+            abs_eval = abs_flat
+        clamp_v = torch.quantile(abs_eval, 0.99).clamp_min(eps)
+        return x.clamp(min=-clamp_v, max=clamp_v)
 
     def _bias_chunk(
         self,
@@ -173,10 +191,11 @@ class QWABBias(nn.Module):
         chunk_bias = pi_scale.new_zeros(pi_scale.shape[0], q1 - q0, T)
         for s_idx in range(self._K):
             s = float(self.scales[s_idx].item())
-            u = (diff.view(1, 1, T) - beta[:, q0:q1].unsqueeze(-1) * s) / s  # [B, q_len, T]
+            # FLA default (use_scale_coupled_shift=False): center fixed at absolute token β
+            u = (diff.view(1, 1, T) - beta[:, q0:q1].unsqueeze(-1)) / s  # [B, q_len, T]
             basis = (1.0 - u.pow(2)) * torch.exp(-0.5 * u.pow(2))
             basis = basis / (basis.pow(2).mean(-1, keepdim=True) + eps).sqrt()
-            basis = basis.clamp(-5.0, 5.0)
+            basis = self._clamp_p99(basis, eps=eps)
             chunk_bias = chunk_bias + pi_scale[:, q0:q1, s_idx].unsqueeze(-1) * basis
         return chunk_bias
 
@@ -190,15 +209,16 @@ class QWABBias(nn.Module):
         """
         B, T, _ = hidden_states.shape
         H, D, K, eps = self._num_heads, self._head_dim, self._K, self._eps
-        hs = hidden_states.float()
+        # detach: routing feature must not propagate gradients through hidden_states
+        # (matches FLA hidden_ln mode which calls hidden_states.detach())
+        hs = hidden_states.detach().float()
 
-        # ---- routing ----
-        h_feat = hs.view(B, T, H, D).mean(dim=2)        # [B, T, D]
-        h_feat = self.feat_ln(h_feat)
-        rlogits = self.router(h_feat)                    # [B, T, K+1]
+        # ---- routing (hidden_ln: mean over heads, no feat_ln) ----
+        h_feat = hs.view(B, T, H, D).mean(dim=2)             # [B, T, D]
+        rlogits = self.router(h_feat)                         # [B, T, K+1]
         rlogits = rlogits / (rlogits.pow(2).mean(-1, keepdim=True) + eps).sqrt()
-        g_scales = torch.sigmoid(rlogits[..., 1:])       # [B, T, K]
-        g_null   = torch.sigmoid(rlogits[..., 0:1])      # [B, T, 1]  non-null mass
+        g_scales = torch.sigmoid(rlogits[..., 1:])            # [B, T, K]
+        g_null   = torch.sigmoid(rlogits[..., 0:1])           # [B, T, 1]
         pi_scale = g_null * (g_scales / g_scales.sum(-1, keepdim=True).clamp_min(eps))  # [B, T, K]
 
         # ---- shift ----
@@ -206,7 +226,7 @@ class QWABBias(nn.Module):
         beta = torch.round(rho * float(T - 1)).clamp_(0.0, float(T - 1))      # [B, T]
 
         # ---- layer gate ----
-        g_layer = self._g_max * torch.sigmoid(self.logit_bias_a.float())
+        g_layer = self._G_MAX * torch.sigmoid(self.logit_bias_a.float())
 
         # ---- Ricker wavelet basis + weighted sum (chunked over query dim) ----
         diff = torch.arange(T, device=hidden_states.device, dtype=torch.float32)
@@ -219,7 +239,9 @@ class QWABBias(nn.Module):
                 chunks.append(self._bias_chunk(q0, q1, pi_scale, beta, diff, eps))
             bias = torch.cat(chunks, dim=1)  # [B, T, T]
 
-        return (g_layer * bias).unsqueeze(1).to(dtype=hidden_states.dtype)  # [B, 1, T, T]
+        # g_bias_max clamp matches FLA default (wavelet_ctxscale_g_bias_max=4.0)
+        out = (g_layer * bias).clamp(min=-self._G_BIAS_MAX, max=self._G_BIAS_MAX)
+        return out.unsqueeze(1).to(dtype=hidden_states.dtype)  # [B, 1, T, T]
 
 
 def eager_attention_forward(module, query, key, value, attention_mask, head_mask=None, **kwargs):
