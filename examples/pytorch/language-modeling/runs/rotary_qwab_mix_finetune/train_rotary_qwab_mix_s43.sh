@@ -3,7 +3,8 @@
 #SBATCH --output=/cl/work5/hongyu-s/transformers/examples/pytorch/language-modeling/runs/rotary_qwab_mix_finetune/s43/%j_train_rotary_qwab_mix_s43.txt
 #SBATCH --partition=gpu_long
 #SBATCH --time=100:00:00
-#SBATCH --gres=gpu:a6000:4
+#SBATCH --gres=gpu:a100-80:2
+#SBATCH --nodelist=elm44
 #SBATCH --ntasks=1
 #SBATCH --cpus-per-task=4
 
@@ -47,14 +48,14 @@ trap '_slack "DONE"' EXIT
 _slack "START on $(hostname)"
 echo "================= BEGIN: Rotary+QWAB mix fine-tune s43 ================="
 
-python -m torch.distributed.run --nproc_per_node=4 --master_port="${MASTER_PORT}" ./run_clm.py \
+python -m torch.distributed.run --nproc_per_node=2 --master_port="${MASTER_PORT}" ./run_clm.py \
   --model_name_or_path "${PRETRAIN_CKPT}" \
   --tokenizer_name gpt2 \
   --dataset_name mix \
   --pe_method rotary \
   --attn_implementation eager \
   --block_size 512 \
-  --per_device_train_batch_size 16 \
+  --per_device_train_batch_size 32 \
   --per_device_eval_batch_size 16 \
   --gradient_accumulation_steps 1 \
   --num_train_epochs 10 \
