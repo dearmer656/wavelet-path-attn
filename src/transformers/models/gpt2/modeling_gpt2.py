@@ -214,7 +214,9 @@ class QWABBias(nn.Module):
             chunk_size: query chunk size for memory-efficient long-context eval
         Returns:
             bias: [B, 1, T, T]  additive bias broadcast to all heads
-            dis_loss: scalar — mean null-gate activation (monitoring: ~0=active, ~0.5=collapsed)
+            branch_amp: scalar — mean g_null (monitoring: ~0=QWAB off/collapsed, ~0.5+=QWAB active)
+                        NOT a collapse penalty; do NOT add to loss with positive geom_p weight.
+                        To use as collapse penalty, flip: (1 - branch_amp).
         """
         B, T, _ = hidden_states.shape
         K, eps = self._K, self._eps
@@ -254,10 +256,14 @@ class QWABBias(nn.Module):
         # g_bias_max clamp matches FLA default (wavelet_ctxscale_g_bias_max=4.0)
         out = (g_layer * bias).clamp(min=-self._G_BIAS_MAX, max=self._G_BIAS_MAX)
 
-        # dis_loss = mean null-gate activation; ~0.5 = router collapsed (always null), ~0 = active
-        dis_loss = g_null.squeeze(-1).mean().to(dtype=hidden_states.dtype)
+        # branch_amp: g_null controls overall QWAB contribution (0=off, 1=fully active).
+        # ~0   → QWAB branch collapsed/disabled
+        # ~0.5 → QWAB moderately active (sigmoid init value)
+        # ~1   → QWAB strongly active
+        # This is a branch-amplitude monitor, NOT a null-gate collapse penalty.
+        branch_amp = g_null.squeeze(-1).mean().to(dtype=hidden_states.dtype)
 
-        return out.unsqueeze(1).to(dtype=hidden_states.dtype), dis_loss  # [B, 1, T, T], scalar
+        return out.unsqueeze(1).to(dtype=hidden_states.dtype), branch_amp  # [B, 1, T, T], scalar
 
 
 def eager_attention_forward(module, query, key, value, attention_mask, head_mask=None, **kwargs):
@@ -809,11 +815,11 @@ class GPT2Attention(nn.Module):
             # key_states = key_states.permute(0, 2, 1, 3)
         # QWAB bias for Rotary PE (computed from hidden_states, no path-attention dependency)
         _qwab_bias = None
-        _qwab_dis_loss = None
+        _qwab_branch_amp = None
         if self.qwab_bias_module is not None and not is_cross_attention:
             _T_q, _T_k = query_states.shape[-2], key_states.shape[-2]
             if _T_q == _T_k:  # skip during KV-cache decode (T_q=1, T_k=full)
-                _qwab_bias, _qwab_dis_loss = self.qwab_bias_module(hidden_states)
+                _qwab_bias, _qwab_branch_amp = self.qwab_bias_module(hidden_states)
         router1 = None
         if self.router is not None:
             jitter_std = getattr(self.config, "router_jitter_std", 0.0)   # e.g. 0.01
@@ -845,8 +851,10 @@ class GPT2Attention(nn.Module):
             router1 = torch.softmax(router1_logits / 1.0, dim=-1)  # [B,T,H,S]            
 
         _gate_sparse_loss = query_states.new_zeros(())
-        if _qwab_dis_loss is not None:
-            _gate_sparse_loss = _gate_sparse_loss + _qwab_dis_loss
+        if _qwab_branch_amp is not None:
+            # Accumulate branch_amp as dis_loss for monitoring via training logs.
+            # geom_p defaults to 0 so this does NOT affect the training loss unless explicitly set.
+            _gate_sparse_loss = _gate_sparse_loss + _qwab_branch_amp
         if using_eager and self.reorder_and_upcast_attn and self.config.pe_method not in ('rotary', 'wavelet'):
             attn_output, attn_weights = self._upcast_and_reordered_attn(
                 query_states, key_states, value_states, attention_mask, head_mask
