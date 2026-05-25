@@ -518,18 +518,20 @@ class GPT2Attention(nn.Module):
         self.num_heads = config.num_attention_heads
         self.head_dim = self.embed_dim // self.num_heads
         self.split_size = self.embed_dim
-        if getattr(config, 'wavelet_router', False) and getattr(config, 'pe_method', 'no_pe') == 'no_pe':
+        # use_qwab_bias=True OR (wavelet_router=True + rotary) → activate QWABBias
+        _use_qwab_bias = (
+            getattr(config, 'use_qwab_bias', False) or
+            (getattr(config, 'wavelet_router', False) and getattr(config, 'pe_method', 'no_pe') == 'rotary')
+        )
+        # Old WPE frequency router: only when wavelet_router=True, no_pe, and NOT using QWABBias
+        if getattr(config, 'wavelet_router', False) and getattr(config, 'pe_method', 'no_pe') == 'no_pe' and not _use_qwab_bias:
             self.router = nn.Sequential(
                 nn.Linear(self.embed_dim, 32, bias=False),
                 nn.Linear(32, self.num_heads * self.config.router_band_num, bias=False),
             )
         else:
             self.router = None
-        # QWAB for Rotary PE: hidden-state-conditioned wavelet logit bias
-        if getattr(config, 'wavelet_router', False) and config.pe_method == 'rotary':
-            self.qwab_bias_module = QWABBias(config)
-        else:
-            self.qwab_bias_module = None            
+        self.qwab_bias_module = QWABBias(config) if _use_qwab_bias else None            
         if self.head_dim * self.num_heads != self.embed_dim:
             raise ValueError(
                 f"`embed_dim` must be divisible by num_heads (got `embed_dim`: {self.embed_dim} and `num_heads`:"

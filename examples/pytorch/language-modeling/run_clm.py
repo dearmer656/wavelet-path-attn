@@ -149,6 +149,12 @@ class ModelArguments:
             "help": "Whether to use wavelet router.",
         },
     )
+    use_qwab_bias: bool = field(
+        default=False,
+        metadata={
+            "help": "Enable QWABBias module. Use with pe_method=no_pe to activate QWAB without triggering the old WPE frequency router.",
+        },
+    )
     qk_rotation: bool = field(
         default=False,
         metadata={
@@ -4202,33 +4208,48 @@ def main():
     # os._exit(0)
     ################################# generate tokenizer.json #################################
 
-    config.attn_implementation = model_args.attn_implementation
-    config.use_forget_gate = model_args.use_forget_gate
-    config.path_use_qk_norm = model_args.path_use_qk_norm
-    config.path_use_low_rank_w = model_args.path_use_low_rank_w
-    config.path_use_w_shortconv = model_args.path_use_w_shortconv
-    config.path_conv_size = model_args.path_conv_size
-    config.path_conv_bias = model_args.path_conv_bias
+    # Keep checkpoint/config structure by default. Only override when CLI explicitly provides a flag.
+    if _cli_flag_present("--attn_implementation"):
+        config.attn_implementation = model_args.attn_implementation
+    if _cli_flag_present("--use_forget_gate"):
+        config.use_forget_gate = model_args.use_forget_gate
+    if _cli_flag_present("--path_use_qk_norm"):
+        config.path_use_qk_norm = model_args.path_use_qk_norm
+    if _cli_flag_present("--path_use_low_rank_w"):
+        config.path_use_low_rank_w = model_args.path_use_low_rank_w
+    if _cli_flag_present("--path_use_w_shortconv"):
+        config.path_use_w_shortconv = model_args.path_use_w_shortconv
+    if _cli_flag_present("--path_conv_size"):
+        config.path_conv_size = model_args.path_conv_size
+    if _cli_flag_present("--path_conv_bias"):
+        config.path_conv_bias = model_args.path_conv_bias
     # Important for checkpoint compatibility: only override when explicitly provided.
     if model_args.num_harmonics is not None:
         config.num_harmonics = int(model_args.num_harmonics)
-    config.share_freq_across_heads = model_args.share_freq_across_heads
+    if _cli_flag_present("--share_freq_across_heads"):
+        config.share_freq_across_heads = model_args.share_freq_across_heads
     if _cli_flag_present("--pe_method"):
         config.pe_method = model_args.pe_method
     if model_args.relative_type is not None:
         config.relative_type = model_args.relative_type
-    config.use_beta_modulation = model_args.use_beta_modulation
+    if _cli_flag_present("--use_beta_modulation"):
+        config.use_beta_modulation = model_args.use_beta_modulation
     wavelet_mode_cli_provided = _cli_flag_present("--wavelet_mode")
     if wavelet_mode_cli_provided:
         config.wavelet_mode = model_args.wavelet_mode
         wavelet_mode_source = "cli"
+    elif "wavelet_mode" in cfg:
+        config.wavelet_mode = cfg_str(cfg, "wavelet_mode", str(getattr(config, "wavelet_mode", model_args.wavelet_mode)))
+        wavelet_mode_source = "cfg"
     else:
-        config.wavelet_mode = cfg_str(cfg, "wavelet_mode", model_args.wavelet_mode)
-        wavelet_mode_source = "cfg_or_default"
+        # Preserve checkpoint value if no CLI/cfg override is provided.
+        config.wavelet_mode = str(getattr(config, "wavelet_mode", model_args.wavelet_mode))
+        wavelet_mode_source = "checkpoint_or_default"
     config.path_attn_impl = model_args.path_attn_impl
     config.use_soft_wavelet_fox = model_args.use_soft_wavelet_fox
     config.logging_steps = training_args.logging_steps
-    config.wavelet_baseline_use = model_args.wavelet_baseline_use
+    if _cli_flag_present("--wavelet_baseline_use"):
+        config.wavelet_baseline_use = model_args.wavelet_baseline_use
     config.init_theta = model_args.init_theta
     config.sample_num = training_args.sample_num
     config.spectral_loss_coe = training_args.spectral_loss_coe
@@ -4252,11 +4273,17 @@ def main():
     config.loss_type = training_args.loss_type
     config.model_name_or_path = model_args.model_name_or_path
     config.analyzer = training_args.analyzer
-    config.qk_rotation = model_args.qk_rotation
+    if _cli_flag_present("--qk_rotation"):
+        config.qk_rotation = model_args.qk_rotation
     config.ablate_switch = training_args.ablate_switch
-    config.wavelet_router = model_args.wavelet_router
-    config.router_band_num = model_args.router_band_num
-    config.router_hidden_dim = model_args.router_hidden_dim
+    if _cli_flag_present("--wavelet_router"):
+        config.wavelet_router = model_args.wavelet_router
+    if _cli_flag_present("--use_qwab_bias"):
+        config.use_qwab_bias = model_args.use_qwab_bias
+    if _cli_flag_present("--router_band_num"):
+        config.router_band_num = model_args.router_band_num
+    if _cli_flag_present("--router_hidden_dim"):
+        config.router_hidden_dim = model_args.router_hidden_dim
     config.rel_selection = cfg_str(cfg, "rel_selection", model_args.rel_selection)
     config.qwab_groups_per_layer = max(1, int(model_args.qwab_groups_per_layer))
     config.wavelet_analysis_export = cfg_bool(
@@ -5147,6 +5174,9 @@ def main():
         if _ruler_eval_mode not in {"generate", "teacher_forced"}:
             raise ValueError(f"[ruler] unsupported ruler_eval_mode={_ruler_eval_mode}; expected generate|teacher_forced")
         _ruler_generation_mode = bool(_ruler_eval_mode == "generate" and training_args.do_eval and not training_args.do_train)
+        _ruler_gen_max_new_tokens = max(1, int(getattr(data_args, "ruler_max_new_tokens", 32)))
+        _ruler_ctx_limit = int(max_pos_embeddings) if int(max_pos_embeddings) > 0 else int(block_size)
+        _ruler_prompt_token_cap = min(int(block_size), max(1, int(_ruler_ctx_limit - _ruler_gen_max_new_tokens)))
 
         def _ruler_to_text(v):
             if v is None:
@@ -5242,6 +5272,9 @@ def main():
                 prompt_truncated = True
 
             if _ruler_generation_mode:
+                if len(prompt_ids) > _ruler_prompt_token_cap:
+                    prompt_ids = prompt_ids[-_ruler_prompt_token_cap:]
+                    prompt_truncated = True
                 ids = prompt_ids[:block_size]
                 labels = [-100] * len(ids)
             else:
@@ -7253,6 +7286,13 @@ def main():
             _do_sample = bool(getattr(data_args, "ruler_do_sample", False))
             _top_p = float(getattr(data_args, "ruler_top_p", 1.0))
             _temperature = float(getattr(data_args, "ruler_temperature", 1.0))
+            _model_cfg = getattr(_trainer.model, "config", config)
+            _ctx_limit = int(getattr(_model_cfg, "max_position_embeddings", 0) or 0)
+            if _ctx_limit <= 0:
+                _ctx_limit = int(getattr(_model_cfg, "n_positions", 0) or 0)
+            if _ctx_limit <= 0:
+                _ctx_limit = int(block_size)
+            _prompt_token_cap = max(1, int(_ctx_limit - _max_new_tokens))
 
             _gen_kwargs = {
                 "max_new_tokens": int(_max_new_tokens),
@@ -7275,8 +7315,26 @@ def main():
                 _batch_idx = _all_indices[_st:_st + _batch_size]
                 if not _batch_idx:
                     continue
-                _input_ids = [list(_eval_dataset[_i]["input_ids"]) for _i in _batch_idx]
-                _attn = [list(_eval_dataset[_i]["attention_mask"]) for _i in _batch_idx]
+                # Build left-padded prompt-only batch for decoder-only generation.
+                # This avoids right-padding degradation and keeps prompt length <= context budget.
+                _seqs = []
+                for _i in _batch_idx:
+                    _ids_full = list(_eval_dataset[_i]["input_ids"])
+                    _attn_full = list(_eval_dataset[_i]["attention_mask"])
+                    _pl = int(sum(1 for _m in _attn_full if int(_m) == 1))
+                    _seq = _ids_full[:_pl]
+                    if len(_seq) > _prompt_token_cap:
+                        _seq = _seq[-_prompt_token_cap:]
+                    if not _seq:
+                        _seq = [int(tokenizer.eos_token_id)]
+                    _seqs.append(_seq)
+                _max_pl = max(len(_s) for _s in _seqs)
+                _input_ids = []
+                _attn = []
+                for _seq in _seqs:
+                    _pad = _max_pl - len(_seq)
+                    _input_ids.append([int(tokenizer.pad_token_id)] * _pad + _seq)
+                    _attn.append([0] * _pad + [1] * len(_seq))
                 _input_ids_t = torch.tensor(_input_ids, dtype=torch.long, device=_device)
                 _attn_t = torch.tensor(_attn, dtype=torch.long, device=_device)
                 with torch.no_grad():
@@ -7287,10 +7345,13 @@ def main():
                     )
 
                 _prompt_lens = _attn_t.sum(dim=-1).detach().cpu().tolist()
+                # For left-padded decoder-only generation, new tokens start after
+                # the full batch input width (not per-sample prompt length).
+                _gen_start = int(_input_ids_t.shape[1])
                 for _bi, _ds_idx in enumerate(_batch_idx):
                     _pl = int(_prompt_lens[_bi])
                     _out_ids = _gen[_bi].detach().cpu().tolist()
-                    _gen_ids = _out_ids[_pl:] if _pl < len(_out_ids) else []
+                    _gen_ids = _out_ids[_gen_start:] if _gen_start < len(_out_ids) else []
                     _pred = tokenizer.decode(_gen_ids, skip_special_tokens=True).strip()
 
                     _golds = []
