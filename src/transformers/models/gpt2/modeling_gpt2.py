@@ -148,6 +148,11 @@ class QWABBias(nn.Module):
 
         # Learnable layer gate; init matches FLA default (wavelet_logit_bias_a_init=-5.0)
         self.logit_bias_a = nn.Parameter(torch.tensor(-5.0))
+        # Gradient hook: NaN/Inf zeroing + clamp to [-1, 1] (matches FLA wavelet_gate_grad_clip=1.0)
+        self._gate_grad_clip = 1.0
+        self.logit_bias_a.register_hook(self._gate_grad_hook)
+        # Forward clamp for numeric safety (matches FLA wavelet_ctxscale_lock_clamp_abs=8.0)
+        self._gate_clamp_abs = 8.0
 
         # Ricker wavelet scales: 2^(scale_range[0] + step*i) for i=0..K-1
         scale_range = list(getattr(config, "scale_range", [0, 16]))
@@ -161,6 +166,13 @@ class QWABBias(nn.Module):
         self._head_dim = head_dim
         self._K = K
         self._eps = 1e-6
+
+    def _gate_grad_hook(self, grad: torch.Tensor) -> torch.Tensor:
+        """NaN/Inf zeroing + gradient clip on logit_bias_a (mirrors FLA _capture_wavelet_gate_grad)."""
+        g = grad.detach().to(dtype=torch.float32)
+        g = torch.nan_to_num(g, nan=0.0, posinf=0.0, neginf=0.0)
+        g = g.clamp(-self._gate_grad_clip, self._gate_grad_clip)
+        return g.to(dtype=grad.dtype)
 
     @staticmethod
     def _clamp_p99(x: torch.Tensor, eps: float = 1e-6) -> torch.Tensor:
@@ -225,8 +237,13 @@ class QWABBias(nn.Module):
         rho  = torch.sigmoid(self.shift_proj(self.shift_ln(hs)).squeeze(-1))  # [B, T]
         beta = torch.round(rho * float(T - 1)).clamp_(0.0, float(T - 1))      # [B, T]
 
-        # ---- layer gate ----
-        g_layer = self._G_MAX * torch.sigmoid(self.logit_bias_a.float())
+        # ---- layer gate (with forward clamp STE + NaN guard, matching FLA) ----
+        a_raw = self.logit_bias_a.float()
+        a_clamped = a_raw.clamp(-self._gate_clamp_abs, self._gate_clamp_abs)
+        a_used = a_raw + (a_clamped - a_raw).detach()  # STE: forward clamped, grad unclamped
+        g_layer = self._G_MAX * torch.sigmoid(a_used)
+        if not torch.isfinite(g_layer):
+            g_layer = torch.nan_to_num(g_layer, nan=0.0, posinf=self._G_MAX, neginf=0.0)
 
         # ---- Ricker wavelet basis + weighted sum (chunked over query dim) ----
         diff = torch.arange(T, device=hidden_states.device, dtype=torch.float32)
