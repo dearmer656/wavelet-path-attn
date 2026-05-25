@@ -134,13 +134,11 @@ class QWABBias(nn.Module):
     def __init__(self, config):
         super().__init__()
         embed_dim = config.hidden_size
-        num_heads = config.num_attention_heads
-        head_dim = embed_dim // num_heads
         K = int(getattr(config, "router_band_num", 8))
         eps = float(getattr(config, "layer_norm_epsilon", 1e-5))
 
-        # hidden_ln mode: router takes mean-pooled hidden_states directly (no feat_ln)
-        self.router = nn.Linear(head_dim, K + 1, bias=True)  # K scales + 1 null
+        # Router input: full hidden_states [B, T, embed_dim] directly (no head mean)
+        self.router = nn.Linear(embed_dim, K + 1, bias=True)  # K scales + 1 null
 
         # Shift: full hidden_states → LN → Linear(E, 1) → sigmoid → token shift β
         self.shift_ln = nn.LayerNorm(embed_dim, eps=eps)
@@ -162,8 +160,6 @@ class QWABBias(nn.Module):
         )
         self.register_buffer("scales", scales)
 
-        self._num_heads = num_heads
-        self._head_dim = head_dim
         self._K = K
         self._eps = 1e-6
 
@@ -211,23 +207,22 @@ class QWABBias(nn.Module):
             chunk_bias = chunk_bias + pi_scale[:, q0:q1, s_idx].unsqueeze(-1) * basis
         return chunk_bias
 
-    def forward(self, hidden_states: torch.Tensor, chunk_size: int = 128) -> torch.Tensor:
+    def forward(self, hidden_states: torch.Tensor, chunk_size: int = 128):
         """
         Args:
             hidden_states: [B, T, embed_dim]  (pre-attention LN output)
             chunk_size: query chunk size for memory-efficient long-context eval
         Returns:
-            [B, 1, T, T]  additive bias for all heads
+            bias: [B, 1, T, T]  additive bias broadcast to all heads
+            dis_loss: scalar — mean null-gate activation (monitoring: ~0=active, ~0.5=collapsed)
         """
         B, T, _ = hidden_states.shape
-        H, D, K, eps = self._num_heads, self._head_dim, self._K, self._eps
-        # detach: routing feature must not propagate gradients through hidden_states
-        # (matches FLA hidden_ln mode which calls hidden_states.detach())
+        K, eps = self._K, self._eps
+        # detach: routing must not backprop through hidden_states
         hs = hidden_states.detach().float()
 
-        # ---- routing (hidden_ln: mean over heads, no feat_ln) ----
-        h_feat = hs.view(B, T, H, D).mean(dim=2)             # [B, T, D]
-        rlogits = self.router(h_feat)                         # [B, T, K+1]
+        # ---- routing: hidden_states [B, T, embed_dim] → per-token scale weights ----
+        rlogits = self.router(hs)                         # [B, T, K+1]
         rlogits = rlogits / (rlogits.pow(2).mean(-1, keepdim=True) + eps).sqrt()
         g_scales = torch.sigmoid(rlogits[..., 1:])            # [B, T, K]
         g_null   = torch.sigmoid(rlogits[..., 0:1])           # [B, T, 1]
@@ -258,7 +253,11 @@ class QWABBias(nn.Module):
 
         # g_bias_max clamp matches FLA default (wavelet_ctxscale_g_bias_max=4.0)
         out = (g_layer * bias).clamp(min=-self._G_BIAS_MAX, max=self._G_BIAS_MAX)
-        return out.unsqueeze(1).to(dtype=hidden_states.dtype)  # [B, 1, T, T]
+
+        # dis_loss = mean null-gate activation; ~0.5 = router collapsed (always null), ~0 = active
+        dis_loss = g_null.squeeze(-1).mean().to(dtype=hidden_states.dtype)
+
+        return out.unsqueeze(1).to(dtype=hidden_states.dtype), dis_loss  # [B, 1, T, T], scalar
 
 
 def eager_attention_forward(module, query, key, value, attention_mask, head_mask=None, **kwargs):
@@ -513,7 +512,7 @@ class GPT2Attention(nn.Module):
         self.num_heads = config.num_attention_heads
         self.head_dim = self.embed_dim // self.num_heads
         self.split_size = self.embed_dim
-        if config.wavelet_router and config.pe_method == 'no_pe':
+        if getattr(config, 'wavelet_router', False) and getattr(config, 'pe_method', 'no_pe') == 'no_pe':
             self.router = nn.Sequential(
                 nn.Linear(self.embed_dim, 32, bias=False),
                 nn.Linear(32, self.num_heads * self.config.router_band_num, bias=False),
@@ -810,10 +809,11 @@ class GPT2Attention(nn.Module):
             # key_states = key_states.permute(0, 2, 1, 3)
         # QWAB bias for Rotary PE (computed from hidden_states, no path-attention dependency)
         _qwab_bias = None
+        _qwab_dis_loss = None
         if self.qwab_bias_module is not None and not is_cross_attention:
             _T_q, _T_k = query_states.shape[-2], key_states.shape[-2]
             if _T_q == _T_k:  # skip during KV-cache decode (T_q=1, T_k=full)
-                _qwab_bias = self.qwab_bias_module(hidden_states)
+                _qwab_bias, _qwab_dis_loss = self.qwab_bias_module(hidden_states)
         router1 = None
         if self.router is not None:
             jitter_std = getattr(self.config, "router_jitter_std", 0.0)   # e.g. 0.01
@@ -845,6 +845,8 @@ class GPT2Attention(nn.Module):
             router1 = torch.softmax(router1_logits / 1.0, dim=-1)  # [B,T,H,S]            
 
         _gate_sparse_loss = query_states.new_zeros(())
+        if _qwab_dis_loss is not None:
+            _gate_sparse_loss = _gate_sparse_loss + _qwab_dis_loss
         if using_eager and self.reorder_and_upcast_attn and self.config.pe_method not in ('rotary', 'wavelet'):
             attn_output, attn_weights = self._upcast_and_reordered_attn(
                 query_states, key_states, value_states, attention_mask, head_mask
