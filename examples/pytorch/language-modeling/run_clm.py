@@ -155,6 +155,12 @@ class ModelArguments:
             "help": "Enable QWABBias module. Use with pe_method=no_pe to activate QWAB without triggering the old WPE frequency router.",
         },
     )
+    qwab_train_block_size: Optional[int] = field(
+        default=None,
+        metadata={
+            "help": "Block size used during QWAB training. Saved in config.json at training time so eval with a larger --block_size does not push wavelet centers OOD. Pass this explicitly for existing checkpoints trained before this field was introduced.",
+        },
+    )
     qk_rotation: bool = field(
         default=False,
         metadata={
@@ -4636,6 +4642,14 @@ def main():
     config.block_size = block_size
     config.wavelet_analysis_block_size = int(block_size)
     config.wavelet_viz_block_size = int(block_size)
+    # Persist training block_size so eval at larger --block_size doesn't override it.
+    if _cli_flag_present("--qwab_train_block_size") and model_args.qwab_train_block_size is not None:
+        config.qwab_train_block_size = model_args.qwab_train_block_size
+    elif not getattr(config, "qwab_train_block_size", None):
+        # At training time, save the current block_size for future evals.
+        # At eval time with existing checkpoints (no key in config.json), this
+        # incorrectly uses eval block_size — pass --qwab_train_block_size explicitly.
+        config.qwab_train_block_size = block_size
     config.rope_theta = float(model_args.rope_theta)
     config.bias_type = str(model_args.bias_type)
     # Expose tokenizer globally for dataset map helpers
@@ -5176,7 +5190,11 @@ def main():
         _ruler_generation_mode = bool(_ruler_eval_mode == "generate" and training_args.do_eval and not training_args.do_train)
         _ruler_gen_max_new_tokens = max(1, int(getattr(data_args, "ruler_max_new_tokens", 32)))
         _ruler_ctx_limit = int(max_pos_embeddings) if int(max_pos_embeddings) > 0 else int(block_size)
-        _ruler_prompt_token_cap = min(int(block_size), max(1, int(_ruler_ctx_limit - _ruler_gen_max_new_tokens)))
+        # RULER is frequently evaluated on checkpoints whose config n_positions is stale
+        # relative to actual long-context runtime setup. Keep prompt cap aligned to
+        # the active eval block_size instead of reserving an extra max_new_tokens window.
+        _ruler_ctx_limit = max(int(_ruler_ctx_limit), int(block_size))
+        _ruler_prompt_token_cap = min(int(block_size), max(1, int(_ruler_ctx_limit)))
 
         def _ruler_to_text(v):
             if v is None:
@@ -7292,7 +7310,8 @@ def main():
                 _ctx_limit = int(getattr(_model_cfg, "n_positions", 0) or 0)
             if _ctx_limit <= 0:
                 _ctx_limit = int(block_size)
-            _prompt_token_cap = max(1, int(_ctx_limit - _max_new_tokens))
+            _ctx_limit = max(int(_ctx_limit), int(block_size))
+            _prompt_token_cap = min(int(block_size), max(1, int(_ctx_limit)))
 
             _gen_kwargs = {
                 "max_new_tokens": int(_max_new_tokens),
