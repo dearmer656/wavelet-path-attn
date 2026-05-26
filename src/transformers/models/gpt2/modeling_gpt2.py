@@ -162,6 +162,7 @@ class QWABBias(nn.Module):
 
         self._K = K
         self._eps = 1e-6
+        self._train_T = int(getattr(config, "block_size", 512))
 
     def _gate_grad_hook(self, grad: torch.Tensor) -> torch.Tensor:
         """NaN/Inf zeroing + gradient clip on logit_bias_a (mirrors FLA _capture_wavelet_gate_grad)."""
@@ -232,7 +233,10 @@ class QWABBias(nn.Module):
 
         # ---- shift ----
         rho  = torch.sigmoid(self.shift_proj(self.shift_ln(hs)).squeeze(-1))  # [B, T]
-        beta = torch.round(rho * float(T - 1)).clamp_(0.0, float(T - 1))      # [B, T]
+        # Clamp wavelet center to training range [0, train_T-1] so that eval at longer T
+        # does not shift centers to OOD positions (beta was learned for T=block_size).
+        _max_beta = float(min(T, self._train_T) - 1)
+        beta = torch.round(rho * _max_beta).clamp_(0.0, _max_beta)            # [B, T]
 
         # ---- layer gate (with forward clamp STE + NaN guard, matching FLA) ----
         a_raw = self.logit_bias_a.float()
