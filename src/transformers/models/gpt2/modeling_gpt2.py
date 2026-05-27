@@ -236,9 +236,12 @@ class QWABBias(nn.Module):
 
         # ---- shift ----
         rho  = torch.sigmoid(self.shift_proj(self.shift_ln(hs)).squeeze(-1))  # [B, T]
-        # Clamp wavelet center to training range [0, train_T-1] so that eval at longer T
-        # does not shift centers to OOD positions (beta was learned for T=block_size).
-        _max_beta = float(min(T, self._train_T) - 1)
+        # rho in (0,1) is a learned fractional position; scale by current T so wavelet
+        # centers spread proportionally across the full eval length.
+        # Bug fix: the previous min(T, _train_T) clamp capped all centers at 511 for
+        # T>512, systematically biasing long-range attention toward position 511 and
+        # causing catastrophic PPL collapse at L2048/L4096 (PPL 80/907 vs baseline 4.3/4.4).
+        _max_beta = float(T - 1)
         beta = torch.round(rho * _max_beta).clamp_(0.0, _max_beta)            # [B, T]
 
         # ---- layer gate (with forward clamp STE + NaN guard, matching FLA) ----
