@@ -2,12 +2,15 @@
 #SBATCH --job-name=hp_nope_qwab
 #SBATCH --output=/cl/work5/hongyu-s/transformers/examples/pytorch/language-modeling/runs/small_nope_qwab_10ep_s42/ckpt_eval_hm/%j_hotpot_nope_qwab_s42.txt
 #SBATCH --partition=gpu_long
-#SBATCH --gres=gpu:a6000:4
+#SBATCH --nodelist=elm73
+#SBATCH --gres=gpu:6000:4
 #SBATCH --time=24:00:00
 #SBATCH --ntasks=1
 #SBATCH --cpus-per-task=4
 
 # PAT-165: HotpotQA-Long eval for NoPE+QWAB small model, seed=42
+# Re-run after beta clamp fix (f4a1a40f68) + _train_T cleanup.
+# use_cache=False ensures QWAB bias is active during decode (no T_q!=T_k skip).
 # block_sizes: 512 / 2048 / 4096
 
 set -euxo pipefail
@@ -27,12 +30,11 @@ cd "${WORKDIR}"
 
 RUN_DIR="${WORKDIR}/runs/small_nope_qwab_10ep_s42"
 BEST_CKPT="${RUN_DIR}/checkpoint-15000"
-MODEL_LABEL="nope_qwab_s42"
 JSONL="${WORKDIR}/hotpot_long/data/hotpot_long_dev_uniform.jsonl"
-RESULT_DIR="${RUN_DIR}/ckpt_eval_hm"
+RESULT_DIR="${RUN_DIR}/ckpt_eval_hm_fixedbeta"
 mkdir -p "${RESULT_DIR}"
 
-echo "=== NoPE+QWAB HotpotQA-Long eval | ckpt: ${BEST_CKPT} ==="
+echo "=== NoPE+QWAB HotpotQA-Long eval (beta fix + no_cache) | ckpt: ${BEST_CKPT} ==="
 
 JOB_PORT_OFFSET=$(( ${SLURM_JOB_ID:-0} % 10000 ))
 
@@ -64,6 +66,7 @@ for BLOCK_SIZE in 512 2048 4096; do
     --dataset_config_name distractor \
     --hotpot_long_jsonl "${JSONL}" \
     --hotpot_long_lengths "${BLOCK_SIZE}" \
+    --eval_generate_no_cache True \
     --do_eval \
     --block_size "${BLOCK_SIZE}" \
     --per_device_eval_batch_size 8 \
@@ -76,4 +79,4 @@ for BLOCK_SIZE in 512 2048 4096; do
   echo "  [DONE] L${BLOCK_SIZE}: $(cat ${OUT_DIR}/eval_results.json 2>/dev/null || echo 'no results')"
 done
 
-echo "=== Done: NoPE+QWAB HotpotQA eval. Results: ${RESULT_DIR} ==="
+echo "=== Done: NoPE+QWAB HotpotQA eval (beta fix). Results: ${RESULT_DIR} ==="

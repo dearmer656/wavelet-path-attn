@@ -476,6 +476,10 @@ class DataTrainingArguments:
         default=None,
         metadata={"help": "Comma-separated target lengths to filter from hotpot_long_jsonl (e.g. '2048,4096')."},
     )
+    eval_generate_no_cache: bool = field(
+        default=False,
+        metadata={"help": "Pass use_cache=False to model.generate() during eval. Required for correct QWAB eval when T_q!=T_k skip is active."},
+    )
     passkey_num_samples: int = field(
         default=50,
         metadata={"help": "Number of passkey retrieval examples to generate per evaluation run."},
@@ -7320,6 +7324,8 @@ def main():
                 "pad_token_id": int(tokenizer.pad_token_id),
                 "eos_token_id": int(tokenizer.eos_token_id),
             }
+            if getattr(data_args, "eval_generate_no_cache", False):
+                _gen_kwargs["use_cache"] = False
             if _do_sample:
                 _gen_kwargs["top_p"] = float(_top_p)
                 _gen_kwargs["temperature"] = float(_temperature)
@@ -7718,6 +7724,9 @@ def main():
         if data_args.dataset_name == "ruler" and str(getattr(data_args, "ruler_eval_mode", "generate")).strip().lower() == "generate":
             metrics = run_ruler_generation_eval(trainer, eval_dataset)
         else:
+            import gc; gc.collect()
+            if torch.cuda.is_available():
+                torch.cuda.empty_cache()
             metrics = trainer.evaluate()
 
         max_eval_samples = data_args.max_eval_samples if data_args.max_eval_samples is not None else len(eval_dataset)

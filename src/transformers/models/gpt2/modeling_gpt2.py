@@ -162,10 +162,6 @@ class QWABBias(nn.Module):
 
         self._K = K
         self._eps = 1e-6
-        # qwab_train_block_size is explicitly set at training time (and saved in config.json).
-        # At eval with a larger --block_size, config.block_size is overridden but this key is not,
-        # so _train_T always reflects the block_size used during training.
-        self._train_T = int(getattr(config, "qwab_train_block_size", None) or getattr(config, "block_size", 512))
 
     def _gate_grad_hook(self, grad: torch.Tensor) -> torch.Tensor:
         """NaN/Inf zeroing + gradient clip on logit_bias_a (mirrors FLA _capture_wavelet_gate_grad)."""
