@@ -292,6 +292,8 @@ class DAPEAliBiBias(nn.Module):
         )
         nn.init.zeros_(self.mlp[-1].weight)
         nn.init.zeros_(self.mlp[-1].bias)
+        # Marker: _init_weights must preserve zero-init so model reduces to pure ALiBi at t=0.
+        self.mlp[-1]._dape_zero_init = True
 
     def forward(
         self,
@@ -911,10 +913,10 @@ class GPT2Attention(nn.Module):
 
         using_eager = self.config._attn_implementation == "eager"
         attention_interface: Callable = eager_attention_forward
-        # wavelet/alibi PE require eager (custom bias injected inside eager_attention_forward)
+        # wavelet/alibi/dape_alibi PE require eager (custom bias injected inside eager_attention_forward)
         if self.config.pe_method == 'wavelet' and getattr(self.config, 'relative_type', None) == '4':
             using_eager = True
-        elif self.config.pe_method == 'alibi':
+        elif self.config.pe_method in ('alibi', 'dape_alibi'):
             using_eager = True
         elif self.config._attn_implementation != "eager" and self.config.pe_method != 'rotary':
             attention_interface = ALL_ATTENTION_FUNCTIONS[self.config._attn_implementation]
@@ -1302,10 +1304,16 @@ class GPT2PreTrainedModel(PreTrainedModel):
     def _init_weights(self, module):
         """Initialize the weights."""
         if isinstance(module, (nn.Linear, Conv1D)):
-            std = getattr(module, "_path_small_init_std", self.config.initializer_range)
-            module.weight.data.normal_(mean=0.0, std=std)
-            if module.bias is not None:
-                module.bias.data.zero_()
+            if getattr(module, '_dape_zero_init', False):
+                # DAPE correction output layer: must stay at zero so model = pure ALiBi at t=0.
+                module.weight.data.zero_()
+                if module.bias is not None:
+                    module.bias.data.zero_()
+            else:
+                std = getattr(module, "_path_small_init_std", self.config.initializer_range)
+                module.weight.data.normal_(mean=0.0, std=std)
+                if module.bias is not None:
+                    module.bias.data.zero_()
         elif isinstance(module, nn.Embedding):
             module.weight.data.normal_(mean=0.0, std=self.config.initializer_range)
             if module.padding_idx is not None:
