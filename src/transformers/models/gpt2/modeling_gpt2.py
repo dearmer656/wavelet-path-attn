@@ -967,7 +967,7 @@ class GPT2Attention(nn.Module):
             # Accumulate branch_amp as dis_loss for monitoring via training logs.
             # geom_p defaults to 0 so this does NOT affect the training loss unless explicitly set.
             _gate_sparse_loss = _gate_sparse_loss + _qwab_branch_amp
-        if using_eager and self.reorder_and_upcast_attn and self.config.pe_method not in ('rotary', 'wavelet'):
+        if using_eager and self.reorder_and_upcast_attn and self.config.pe_method not in ('rotary', 'wavelet', 'alibi', 'dape_alibi'):
             attn_output, attn_weights = self._upcast_and_reordered_attn(
                 query_states, key_states, value_states, attention_mask, head_mask
             )
