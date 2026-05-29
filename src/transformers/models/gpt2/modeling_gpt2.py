@@ -272,6 +272,43 @@ class QWABBias(nn.Module):
         return out.unsqueeze(1).to(dtype=hidden_states.dtype), branch_amp  # [B, 1, T, T], scalar
 
 
+class DAPEAliBiBias(nn.Module):
+    """DAPE-ALiBi: ALiBi base bias + cross-head adaptive correction MLP.
+
+    Formula: a_out = a_raw + b_alibi + MLP([a_raw, b_alibi])
+    MLP: R^{2H} -> R^H, weights shared across all position pairs (i, j).
+    Zero-init output layer: at init correction=0, model reduces to pure ALiBi.
+
+    Reference: DAPE (Ye et al. 2023) cross-head correction pattern applied to ALiBi base.
+    """
+
+    def __init__(self, num_heads: int, hidden_dim: int = 32):
+        super().__init__()
+        self.num_heads = num_heads
+        self.mlp = nn.Sequential(
+            nn.Linear(2 * num_heads, hidden_dim, bias=True),
+            nn.ReLU(),
+            nn.Linear(hidden_dim, num_heads, bias=True),
+        )
+        nn.init.zeros_(self.mlp[-1].weight)
+        nn.init.zeros_(self.mlp[-1].bias)
+
+    def forward(
+        self,
+        a_raw: torch.Tensor,    # [B, H, q, k] detached raw logits (pre-ALiBi)
+        alibi_bias: torch.Tensor,  # [H, q, k] or [1, H, q, k]
+    ) -> torch.Tensor:
+        """Returns adaptive correction [B, H, q, k] to add on top of a_raw + alibi_bias."""
+        if alibi_bias.dim() == 3:
+            alibi_bias = alibi_bias.unsqueeze(0)  # [H, q, k] → [1, H, q, k]
+        B, H, q, k = a_raw.shape
+        a = a_raw.permute(0, 2, 3, 1).float()                          # [B, q, k, H]
+        b = alibi_bias.permute(0, 2, 3, 1).expand(B, q, k, H).float() # [B, q, k, H]
+        feat = torch.cat([a, b], dim=-1)                                # [B, q, k, 2H]
+        correction = self.mlp(feat)                                     # [B, q, k, H]
+        return correction.permute(0, 3, 1, 2).to(dtype=a_raw.dtype)    # [B, H, q, k]
+
+
 def eager_attention_forward(module, query, key, value, attention_mask, head_mask=None, **kwargs):
     attn_weights = torch.matmul(query, key.transpose(-1, -2))
 
@@ -280,26 +317,20 @@ def eager_attention_forward(module, query, key, value, attention_mask, head_mask
     if wavelet_rel_buf is not None:
         q_len = query.size(-2)
         k_len = key.size(-2)
-        if hasattr(module, "_get_wavelet_relative_tensor"):
-            W = module._get_wavelet_relative_tensor(
-                q_len=q_len,
-                k_len=k_len,
-                device=query.device,
-                dtype=query.dtype,
-                base_tensor=wavelet_rel_buf,
-            )
+        if hasattr(module, "_add_wavelet_rel_inplace"):
+            module._add_wavelet_rel_inplace(attn_weights, query, q_len, k_len, wavelet_rel_buf)
         else:
             W = wavelet_rel_buf[:, :q_len, :k_len].to(device=query.device, dtype=query.dtype)  # [D, q_len, k_len]
-        rel = torch.einsum("bhld,dln->bhln", query, W)
-        attn_weights = attn_weights + rel
+            attn_weights = attn_weights + torch.einsum("bhld,dln->bhln", query, W)
 
     if module.scale_attn_weights:
         attn_weights = attn_weights / torch.full(
             [], value.size(-1) ** 0.5, dtype=attn_weights.dtype, device=attn_weights.device
         )
 
-    # ALiBi linear position bias (pe_method='alibi') — applied AFTER QK scaling
-    if getattr(getattr(module, 'config', None), 'pe_method', None) == 'alibi':
+    # ALiBi / DAPE-ALiBi position bias — applied AFTER QK scaling
+    _pe_method = getattr(getattr(module, 'config', None), 'pe_method', None)
+    if _pe_method in ('alibi', 'dape_alibi'):
         q_len = query.size(-2)
         k_len = key.size(-2)
         num_heads = query.size(1)
@@ -310,7 +341,13 @@ def eager_attention_forward(module, query, key, value, attention_mask, head_mask
         k_pos = torch.arange(k_len, device=query.device, dtype=torch.float32).unsqueeze(0)
         dist = (q_pos - k_pos).clamp(min=0).to(dtype=attn_weights.dtype)  # [q_len, k_len]
         alibi_bias = -slopes.view(num_heads, 1, 1) * dist.unsqueeze(0)    # [1, H, q_len, k_len]
-        attn_weights = attn_weights + alibi_bias
+        if _pe_method == 'dape_alibi' and getattr(module, 'dape_alibi_module', None) is not None:
+            # DAPE-ALiBi: a_out = a_raw + b_alibi + MLP([a_raw, b_alibi])
+            a_raw = attn_weights.detach()  # detach: no double-gradient through QK
+            attn_weights = attn_weights + alibi_bias
+            attn_weights = attn_weights + module.dape_alibi_module(a_raw, alibi_bias)
+        else:
+            attn_weights = attn_weights + alibi_bias
 
     # QWAB logit bias (Rotary + QWAB mode)
     _qwab_bias = kwargs.get("qwab_bias", None)
@@ -537,7 +574,12 @@ class GPT2Attention(nn.Module):
             )
         else:
             self.router = None
-        self.qwab_bias_module = QWABBias(config) if _use_qwab_bias else None            
+        self.qwab_bias_module = QWABBias(config) if _use_qwab_bias else None
+        self.dape_alibi_module = (
+            DAPEAliBiBias(self.num_heads)
+            if getattr(config, 'pe_method', 'vanilla') == 'dape_alibi'
+            else None
+        )
         if self.head_dim * self.num_heads != self.embed_dim:
             raise ValueError(
                 f"`embed_dim` must be divisible by num_heads (got `embed_dim`: {self.embed_dim} and `num_heads`:"
@@ -663,7 +705,67 @@ class GPT2Attention(nn.Module):
         scales = self.wavelet_scales.to(device=device, dtype=dtype).view(-1, 1, 1)  # [D,1,1]
         shifts = self.wavelet_shifts.to(device=device, dtype=dtype).view(-1, 1, 1)  # [D,1,1]
         u = delta / scales - shifts
-        return (1.0 - u * u) * torch.exp(-0.5 * u * u)
+        u.mul_(u)                                # in-place: u → u²
+        exp_term = torch.empty_like(u)
+        torch.mul(u, -0.5, out=exp_term)         # no intermediate: -0.5 * u²
+        exp_term.exp_()                          # in-place: exp(-0.5 * u²)
+        u.neg_().add_(1.0)                       # in-place: u → 1 - u²
+        return u.mul_(exp_term)                  # in-place: (1 - u²) * exp(-0.5 * u²)
+
+    def _add_wavelet_rel_inplace(
+        self,
+        attn_weights: torch.Tensor,
+        query: torch.Tensor,
+        q_len: int,
+        k_len: int,
+        base_tensor: Optional[torch.Tensor] = None,
+        d_chunk: int = 8,
+        q_chunk: int = 512,
+    ) -> None:
+        """Add wavelet relative bias directly into attn_weights in-place.
+
+        Double-chunked over D and q_len so the largest intermediate is
+        [d_chunk, q_chunk, k_len] instead of [D, q_len, k_len], avoiding OOM
+        at long sequence lengths (e.g. L=12288).
+        """
+        rel_buf = self.wavelet_relative_tensor if base_tensor is None else base_tensor
+        device, dtype = query.device, query.dtype
+
+        # Fast path: cached buffer covers requested length (L <= max_position_embeddings)
+        if rel_buf is not None and rel_buf.size(1) >= q_len and rel_buf.size(2) >= k_len:
+            W = rel_buf[:, :q_len, :k_len].to(device=device, dtype=dtype)
+            attn_weights.add_(torch.einsum("bhld,dln->bhln", query, W))
+            return
+
+        if self.wavelet_scales is None or self.wavelet_shifts is None:
+            raise RuntimeError("wavelet_scales/wavelet_shifts are required for dynamic wavelet relative tensor.")
+
+        scales = self.wavelet_scales.to(device=device, dtype=dtype)
+        shifts = self.wavelet_shifts.to(device=device, dtype=dtype)
+        D = scales.size(0)
+        j_idx = torch.arange(k_len, dtype=dtype, device=device).unsqueeze(0)  # [1, k_len]
+
+        for q0 in range(0, q_len, q_chunk):
+            q1 = min(q0 + q_chunk, q_len)
+            i_idx = torch.arange(q0, q1, dtype=dtype, device=device).unsqueeze(1)  # [qc, 1]
+            delta_q = i_idx - j_idx  # [qc, k_len]
+            q_slice = query[:, :, q0:q1, :]  # [B, H, qc, D]
+
+            for d0 in range(0, D, d_chunk):
+                d1 = min(d0 + d_chunk, D)
+                s_c = scales[d0:d1].view(-1, 1, 1)
+                t_c = shifts[d0:d1].view(-1, 1, 1)
+                u = delta_q.unsqueeze(0) / s_c - t_c  # [dc, qc, k_len]
+                u.mul_(u)                               # in-place: u → u²
+                exp_u = u.mul(-0.5).exp_()              # [dc, qc, k_len]
+                u.neg_().add_(1.0)                      # in-place: u → 1 - u²
+                W_c = u.mul_(exp_u)                     # in-place: (1-u²)·exp(-½u²)
+                del exp_u
+                # attn_weights[:, :, q0:q1, :] shape [B, H, qc, k_len]
+                attn_weights[:, :, q0:q1, :].add_(
+                    torch.einsum("bhld,dln->bhln", q_slice[..., d0:d1], W_c)
+                )
+                del u, W_c
 
     def prune_heads(self, heads):
         if len(heads) == 0:
@@ -1453,7 +1555,7 @@ class GPT2Model(GPT2PreTrainedModel):
         self.embed_dim = config.hidden_size
         self.wte = nn.Embedding(config.vocab_size, self.embed_dim)
         attn_impl = getattr(config, "attn_implementation", getattr(config, "_attn_implementation", "eager"))
-        if config.pe_method in ('no_pe', 'wavelet', 'alibi'):
+        if config.pe_method in ('no_pe', 'wavelet', 'alibi', 'dape_alibi'):
             pass
         else:
             if config.pe_method != 'rotary' and attn_impl == 'eager':
@@ -2007,7 +2109,7 @@ class GPT2Model(GPT2PreTrainedModel):
         elif self.config.pe_method == 'rotary':
             assert attn_impl == "eager", "only in eager mode you can use rotary."
             hidden_states = inputs_embeds
-        elif self.config.pe_method in ('no_pe', 'wavelet', 'alibi'):
+        elif self.config.pe_method in ('no_pe', 'wavelet', 'alibi', 'dape_alibi'):
             hidden_states = inputs_embeds
         else:
             position_embeds = self.wpe(position_ids)

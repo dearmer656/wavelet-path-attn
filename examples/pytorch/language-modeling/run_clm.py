@@ -185,7 +185,7 @@ class ModelArguments:
         default="vanilla",
         metadata={
             "help": "Positional encoding method to use: vanilla | rotary | no_pe | wavelet | alibi.",
-            "choices": ["vanilla", "rotary", "no_pe", "wavelet", "alibi"],
+            "choices": ["vanilla", "rotary", "no_pe", "wavelet", "alibi", "dape_alibi"],
         },
     )
     rope_theta: float = field(
