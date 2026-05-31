@@ -198,7 +198,7 @@ def prepare_fd001_datasets(
         'feature_cols': FEATURE_COLS,
         'mean': mean,
         'std': std,
-        'train_engines': sorted(train_engines),
-        'val_engines': sorted(val_engines),
+        'train_engines': [int(x) for x in sorted(train_engines)],
+        'val_engines': [int(x) for x in sorted(val_engines)],
     }
     return train_ds, val_ds, test_ds, meta
