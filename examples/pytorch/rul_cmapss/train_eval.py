@@ -193,23 +193,24 @@ def smoke_test_all_models(n_features: int = 24, window_size: int = 30,
       - full mask  : all timesteps real (normal batch)
       - padded mask: first sample has 15 real timesteps, rest right-padded with 0
     """
+    device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
     n_real = min(15, window_size)
-    x = torch.randn(2, window_size, n_features)
+    x = torch.randn(2, window_size, n_features, device=device)
 
     # full mask: all 1s
-    mask_full = torch.ones(2, window_size)
+    mask_full = torch.ones(2, window_size, device=device)
 
     # padded mask: sample 0 has n_real real steps then zeros; sample 1 is full
     mask_padded = torch.stack([
         torch.cat([torch.ones(n_real), torch.zeros(window_size - n_real)]),
         torch.ones(window_size),
-    ])
+    ]).to(device)
 
     for name in ['path', 'rope', 'alibi', 'nope', 'lstm', 'tcn']:
         model = build_model(name, n_features=n_features, n_layer=n_layer,
                             num_heads=num_heads, head_dim=head_dim,
                             max_position_embeddings=max_position_embeddings)
-        model.eval()
+        model.eval().to(device)
         with torch.no_grad():
             pred_full   = model(x, attention_mask=mask_full)
             pred_padded = model(x, attention_mask=mask_padded)
