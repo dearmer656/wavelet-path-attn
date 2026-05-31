@@ -12,6 +12,8 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+import warnings
+
 from .dependency_versions_table import deps
 from .utils.versions import require_version, require_version_core
 
@@ -54,7 +56,13 @@ for pkg in pkgs_to_check_at_runtime:
             if not is_accelerate_available():
                 continue  # not required, check version only if installed
 
-        require_version_core(deps[pkg])
+        try:
+            require_version_core(deps[pkg])
+        except ImportError as e:
+            if pkg == "tokenizers":
+                warnings.warn(f"[transformers] tokenizers version mismatch (ignored): {e}")
+            else:
+                raise
     else:
         raise ValueError(f"can't find {pkg} in {deps.keys()}, check dependency_versions_table.py")
 
