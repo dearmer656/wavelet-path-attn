@@ -43,7 +43,7 @@ class GPT2RULBase(nn.Module):
             attn_implementation=attn_implementation,
             pe_method=pe_method,
             use_cache=False,
-            vocab_size=50257,
+            vocab_size=1,  # wte never used (inputs_embeds bypasses it); keep minimal
             # safe defaults so GPT2Model.__init__ / PaTHAttention.__init__ never
             # access missing wavelet/path fields
             wavelet_mode='off',
