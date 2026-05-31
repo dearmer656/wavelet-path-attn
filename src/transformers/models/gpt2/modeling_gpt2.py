@@ -1298,6 +1298,15 @@ class GPT2PreTrainedModel(PreTrainedModel):
 
     _can_compile_fullgraph = True
 
+    # Custom attention implementations handled inside GPT2Model/GPT2Block directly;
+    # bypass the base-class validation so they don't raise ValueError.
+    _CUSTOM_ATTN_IMPLS = {"path_attn", "path_attn_wfreq"}
+
+    def get_correct_attn_implementation(self, requested_attention, is_init_check=False):
+        if requested_attention in self._CUSTOM_ATTN_IMPLS:
+            return requested_attention
+        return super().get_correct_attn_implementation(requested_attention, is_init_check)
+
     def __init__(self, *inputs, **kwargs):
         super().__init__(*inputs, **kwargs)
 
