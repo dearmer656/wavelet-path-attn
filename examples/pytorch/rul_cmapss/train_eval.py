@@ -173,31 +173,53 @@ def evaluate(
     include_phm: bool = False,
     max_rul: int = 125,
 ) -> dict:
-    """Returns metrics dict with 'raw' and 'clipped' sub-dicts plus prediction distributions."""
+    """Returns metrics dict with raw/clipped sub-dicts and separate pred distributions."""
     y_true, y_pred_raw, y_pred_clipped = predict(model, loader, device, max_rul)
     return {
-        'raw':     compute_metrics(y_true, y_pred_raw,     critical_rul, include_phm),
-        'clipped': compute_metrics(y_true, y_pred_clipped, critical_rul, include_phm),
-        'pred_dist':   _pred_dist(y_pred_clipped),
-        'target_dist': _pred_dist(y_true),
+        'raw':              compute_metrics(y_true, y_pred_raw,     critical_rul, include_phm),
+        'clipped':          compute_metrics(y_true, y_pred_clipped, critical_rul, include_phm),
+        'pred_dist_raw':    _pred_dist(y_pred_raw),
+        'pred_dist_clipped': _pred_dist(y_pred_clipped),
+        'target_dist':      _pred_dist(y_true),
     }
 
 
 def smoke_test_all_models(n_features: int = 24, window_size: int = 30,
                           n_layer: int = 2, num_heads: int = 4, head_dim: int = 16,
                           max_position_embeddings: int = 256) -> None:
-    """Forward-pass smoke test for all 6 model variants. Raises on shape mismatch."""
-    x    = torch.randn(2, window_size, n_features)
-    mask = torch.ones(2, window_size)
+    """Forward-pass smoke test for all 6 model variants.
+
+    Tests two cases per model:
+      - full mask  : all timesteps real (normal batch)
+      - padded mask: first sample has 15 real timesteps, rest right-padded with 0
+    """
+    n_real = min(15, window_size)
+    x = torch.randn(2, window_size, n_features)
+
+    # full mask: all 1s
+    mask_full = torch.ones(2, window_size)
+
+    # padded mask: sample 0 has n_real real steps then zeros; sample 1 is full
+    mask_padded = torch.stack([
+        torch.cat([torch.ones(n_real), torch.zeros(window_size - n_real)]),
+        torch.ones(window_size),
+    ])
+
     for name in ['path', 'rope', 'alibi', 'nope', 'lstm', 'tcn']:
         model = build_model(name, n_features=n_features, n_layer=n_layer,
                             num_heads=num_heads, head_dim=head_dim,
                             max_position_embeddings=max_position_embeddings)
         model.eval()
         with torch.no_grad():
-            pred = model(x, attention_mask=mask)
-        assert pred.shape == (2,), f"smoke_test FAIL model={name} shape={pred.shape}"
-        print(f'  smoke_test {name:6s}: pred={pred.detach().numpy().tolist()}  OK')
+            pred_full   = model(x, attention_mask=mask_full)
+            pred_padded = model(x, attention_mask=mask_padded)
+        assert pred_full.shape   == (2,), f"smoke_test FAIL model={name} full shape={pred_full.shape}"
+        assert pred_padded.shape == (2,), f"smoke_test FAIL model={name} padded shape={pred_padded.shape}"
+        # padded and full results must differ (mask is actually used)
+        if name not in ('path',):  # PaTH ignores mask by design (documented)
+            assert not torch.allclose(pred_full[0], pred_padded[0], atol=1e-5), \
+                f"smoke_test WARN model={name}: padded result identical to full — mask may be ignored"
+        print(f'  smoke_test {name:6s}  full={pred_full.tolist()}  padded={pred_padded.tolist()}  OK')
 
 
 def run_experiment(args) -> dict:
@@ -269,7 +291,8 @@ def run_experiment(args) -> dict:
                            include_phm=args.include_phm, max_rul=args.max_rul)
 
     print('Test metrics (clipped):', test_result['clipped'])
-    print('Pred dist:', test_result['pred_dist'])
+    print('Pred dist raw:    ', test_result['pred_dist_raw'])
+    print('Pred dist clipped:', test_result['pred_dist_clipped'])
 
     results = {
         'model':                args.model,
@@ -277,7 +300,8 @@ def run_experiment(args) -> dict:
         'best_val_epoch':       best_val_epoch,
         'test_clipped':         test_result['clipped'],
         'test_raw':             test_result['raw'],
-        'pred_dist':            test_result['pred_dist'],
+        'pred_dist_raw':        test_result['pred_dist_raw'],
+        'pred_dist_clipped':    test_result['pred_dist_clipped'],
         'target_dist':          test_result['target_dist'],
         'n_train_samples':      len(train_ds),
         'n_val_samples':        len(val_ds),
