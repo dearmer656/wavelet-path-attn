@@ -27,14 +27,14 @@ mkdir -p examples/pytorch/rul_cmapss/outputs/fd001
 
 # DATA: place train_FD001.txt, test_FD001.txt, RUL_FD001.txt in data/cmapss/
 # Download from: https://ti.arc.nasa.gov/tech/dash/groups/pcoe/prognostic-data-repository/#turbofan
-if [ ! -f data/cmapss/train_FD001.txt ]; then
-    echo "ERROR: data/cmapss/train_FD001.txt not found. Please download C-MAPSS FD001 data first."
+if [ ! -f data/cmapss/CMaps/train_FD001.txt ]; then
+    echo "ERROR: data/cmapss/CMaps/train_FD001.txt not found."
     exit 1
 fi
 
 $PYTHON examples/pytorch/rul_cmapss/run_fd001.py \
     --model path \
-    --data_dir data/cmapss \
+    --data_dir data/cmapss/CMaps \
     --output_dir examples/pytorch/rul_cmapss/outputs/fd001 \
     --window_size 30 \
     --stride 1 \
