@@ -70,7 +70,9 @@ def build_model(
     max_position_embeddings: int = 256,
 ) -> nn.Module:
     """Instantiate a model by name. model_name in {path, rope, alibi, nope, lstm, tcn}."""
-    sys.path.insert(0, os.path.dirname(__file__))
+    _dir = os.path.dirname(__file__)
+    if _dir not in sys.path:
+        sys.path.insert(0, _dir)
     from models import PaTHRUL, TransformerRUL, LSTM_RUL, TCN_RUL
 
     hidden_size = num_heads * head_dim
@@ -166,6 +168,8 @@ def evaluate(
 
 def run_experiment(args) -> dict:
     """Full pipeline: data → model → training → evaluation → results.json."""
+    if args.epochs < 1:
+        raise ValueError(f"--epochs must be >= 1, got {args.epochs}")
     set_seed(args.seed)
     device = torch.device(args.device if torch.cuda.is_available() else 'cpu')
 

@@ -51,7 +51,13 @@ class GPT2RULBase(nn.Module):
     def forward(self, x: torch.FloatTensor, attention_mask: torch.FloatTensor | None = None) -> torch.FloatTensor:
         h = self.sensor_proj(x)                                           # [B, T, hidden]
         outputs = self.backbone(inputs_embeds=h, attention_mask=attention_mask, return_dict=False)
-        last_h = outputs[0][:, -1, :]                                     # [B, hidden]
+        hidden = outputs[0]                                               # [B, T, hidden]
+        if attention_mask is not None:
+            # right-padded mask: [1,1,...,1,0,...,0]; last real pos = sum-1
+            last_idx = (attention_mask.sum(dim=1).long() - 1).clamp(min=0)  # [B]
+            last_h = hidden[torch.arange(hidden.size(0), device=hidden.device), last_idx]
+        else:
+            last_h = hidden[:, -1, :]                                     # [B, hidden]
         return self.reg_head(last_h).squeeze(-1)                          # [B]
 
 

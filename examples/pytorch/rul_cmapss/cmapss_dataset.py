@@ -54,9 +54,9 @@ class WindowedRULDataset(Dataset):
     """Sliding-window RUL dataset. mask is None for fully-observed windows."""
 
     def __init__(self, x: np.ndarray, y: np.ndarray, mask: np.ndarray | None = None):
-        self.x = torch.tensor(x, dtype=torch.float32)
-        self.y = torch.tensor(y, dtype=torch.float32)
-        self.mask = torch.tensor(mask, dtype=torch.float32) if mask is not None else None
+        self.x = torch.as_tensor(x, dtype=torch.float32)
+        self.y = torch.as_tensor(y, dtype=torch.float32)
+        self.mask = torch.as_tensor(mask, dtype=torch.float32) if mask is not None else None
 
     def __len__(self) -> int:
         return len(self.y)
@@ -86,6 +86,11 @@ def build_train_windows(
         for end in range(window_size - 1, n, stride):
             xs.append(feats[end - window_size + 1 : end + 1])
             ys.append(ruls[end])
+    if not xs:
+        raise ValueError(
+            f"No windows produced: all engines shorter than window_size={window_size}. "
+            "Try reducing --window_size."
+        )
     return np.stack(xs), np.array(ys, dtype=np.float32)
 
 
@@ -96,10 +101,15 @@ def build_test_windows(
     window_size: int = 30,
     max_rul: int = 125,
 ) -> tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray]:
-    """Build one window per test engine. Left-zero-pads sequences shorter than window_size.
-    
+    """Build one window per test engine. Right-zero-pads sequences shorter than window_size.
+
     Returns engine_ids[K], x[K,T,F], y[K], masks[K,T].
-    masks[i,t] = 1 for real timestep, 0 for left-pad.
+    masks[i,t] = 1 for real timestep, 0 for right-pad.
+
+    Right-padding is used so that under causal attention the last real timestep
+    (position n-1) never attends to padded positions — safe for PaTH which
+    ignores attention_mask. The regression head uses the last *real* position
+    (masks.sum()-1), not always position T-1.
     """
     engine_ids, xs, ys, masks = [], [], [], []
     rul_lookup = dict(zip(rul_df['engine_id'], rul_df['rul']))
@@ -112,12 +122,18 @@ def build_test_windows(
             mask = np.ones(window_size, dtype=np.float32)
         else:
             pad  = np.zeros((window_size - n, len(feature_cols)), dtype=np.float32)
-            win  = np.concatenate([pad, feats], axis=0)
-            mask = np.concatenate([np.zeros(window_size - n, dtype=np.float32),
-                                   np.ones(n, dtype=np.float32)])
+            win  = np.concatenate([feats, pad], axis=0)   # real first, pad at end
+            mask = np.concatenate([np.ones(n, dtype=np.float32),
+                                   np.zeros(window_size - n, dtype=np.float32)])
         engine_ids.append(eid)
         xs.append(win)
-        ys.append(min(float(rul_lookup[eid]), float(max_rul)))
+        rul = rul_lookup.get(eid)
+        if rul is None:
+            raise KeyError(
+                f"Engine {eid} in test file not found in RUL file. "
+                f"RUL file has {len(rul_lookup)} engines: {sorted(rul_lookup)[:5]}..."
+            )
+        ys.append(min(float(rul), float(max_rul)))
         masks.append(mask)
     return (
         np.array(engine_ids),
