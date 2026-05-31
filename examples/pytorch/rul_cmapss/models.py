@@ -44,12 +44,15 @@ class GPT2RULBase(nn.Module):
             pe_method=pe_method,
             use_cache=False,
             vocab_size=50257,
-            # safe defaults so GPT2Model.__init__ never accesses missing wavelet/path fields
+            # safe defaults so GPT2Model.__init__ / PaTHAttention.__init__ never
+            # access missing wavelet/path fields
             wavelet_mode='off',
             scale_type='none',
             scale_range=[0, 16],
             analyzer=False,
             block_size=max_position_embeddings,
+            distill_teacher='none',
+            wavelet_router=False,
         )
         self.backbone = GPT2Model(config)
         self.reg_head = nn.Linear(hidden_size, 1)
