@@ -9,7 +9,7 @@ import torch.nn.functional as F
 # Add repo root to path so we can import transformers from src/
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..', '..', '..', 'src'))
 from transformers.models.gpt2.modeling_gpt2 import GPT2Model
-from transformers import GPT2Config
+from transformers.models.gpt2.configuration_gpt2 import GPT2Config
 
 
 class GPT2RULBase(nn.Module):
