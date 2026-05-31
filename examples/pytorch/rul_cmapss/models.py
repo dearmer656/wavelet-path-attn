@@ -56,6 +56,7 @@ class GPT2RULBase(nn.Module):
             qk_rotation=False,
             ablate_switch=False,
             distill_in_which_layers=0,
+            rel_selection='all',
         )
         self.backbone = GPT2Model(config)
         self.reg_head = nn.Linear(hidden_size, 1)
