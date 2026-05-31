@@ -2,6 +2,8 @@ import os
 
 import numpy as np
 import pandas as pd
+import torch
+from torch.utils.data import Dataset
 
 
 FEATURE_COLS = ['op_setting_1','op_setting_2','op_setting_3'] + ['sensor_{}'.format(i) for i in range(1,22)]
@@ -46,3 +48,130 @@ def apply_standardizer(df: pd.DataFrame, feature_cols: list, mean: np.ndarray, s
     df = df.copy()
     df[feature_cols] = (df[feature_cols].values.astype(np.float32) - mean) / std
     return df
+
+
+class WindowedRULDataset(Dataset):
+    """Sliding-window RUL dataset. mask is None for fully-observed windows."""
+
+    def __init__(self, x: np.ndarray, y: np.ndarray, mask: np.ndarray | None = None):
+        self.x = torch.tensor(x, dtype=torch.float32)
+        self.y = torch.tensor(y, dtype=torch.float32)
+        self.mask = torch.tensor(mask, dtype=torch.float32) if mask is not None else None
+
+    def __len__(self) -> int:
+        return len(self.y)
+
+    def __getitem__(self, idx: int):
+        mask = self.mask[idx] if self.mask is not None else None
+        return self.x[idx], self.y[idx], mask
+
+
+def build_train_windows(
+    train_df: pd.DataFrame,
+    feature_cols: list,
+    window_size: int = 30,
+    stride: int = 1,
+) -> tuple[np.ndarray, np.ndarray]:
+    """Slide window over each engine's sequence.
+    
+    Returns x[N, T, F], y[N] where y is RUL at the last timestep of each window.
+    train_df must already have a 'rul' column.
+    """
+    xs, ys = [], []
+    for _, seq in train_df.groupby('engine_id'):
+        seq = seq.sort_values('cycle')
+        feats = seq[feature_cols].values.astype(np.float32)
+        ruls  = seq['rul'].values.astype(np.float32)
+        n = len(feats)
+        for end in range(window_size - 1, n, stride):
+            xs.append(feats[end - window_size + 1 : end + 1])
+            ys.append(ruls[end])
+    return np.stack(xs), np.array(ys, dtype=np.float32)
+
+
+def build_test_windows(
+    test_df: pd.DataFrame,
+    rul_df: pd.DataFrame,
+    feature_cols: list,
+    window_size: int = 30,
+    max_rul: int = 125,
+) -> tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray]:
+    """Build one window per test engine. Left-zero-pads sequences shorter than window_size.
+    
+    Returns engine_ids[K], x[K,T,F], y[K], masks[K,T].
+    masks[i,t] = 1 for real timestep, 0 for left-pad.
+    """
+    engine_ids, xs, ys, masks = [], [], [], []
+    rul_lookup = dict(zip(rul_df['engine_id'], rul_df['rul']))
+    for eid, seq in test_df.groupby('engine_id'):
+        seq = seq.sort_values('cycle')
+        feats = seq[feature_cols].values.astype(np.float32)
+        n = len(feats)
+        if n >= window_size:
+            win  = feats[-window_size:]
+            mask = np.ones(window_size, dtype=np.float32)
+        else:
+            pad  = np.zeros((window_size - n, len(feature_cols)), dtype=np.float32)
+            win  = np.concatenate([pad, feats], axis=0)
+            mask = np.concatenate([np.zeros(window_size - n, dtype=np.float32),
+                                   np.ones(n, dtype=np.float32)])
+        engine_ids.append(eid)
+        xs.append(win)
+        ys.append(min(float(rul_lookup[eid]), float(max_rul)))
+        masks.append(mask)
+    return (
+        np.array(engine_ids),
+        np.stack(xs),
+        np.array(ys, dtype=np.float32),
+        np.stack(masks),
+    )
+
+
+def prepare_fd001_datasets(
+    data_dir: str,
+    window_size: int = 30,
+    stride: int = 1,
+    max_rul: int = 125,
+    val_ratio: float = 0.2,
+    split_seed: int = 42,
+) -> tuple["WindowedRULDataset", "WindowedRULDataset", "WindowedRULDataset", dict]:
+    """Full pipeline: load → label → split → normalize → build datasets.
+    
+    Engine-level train/val split prevents data leakage.
+    Scaler is fit on training-engine rows only.
+    """
+    train_raw, test_raw, rul_df = load_fd001_raw(data_dir)
+    train_labeled = add_piecewise_rul(train_raw, max_rul=max_rul)
+
+    # engine-level split
+    rng = np.random.default_rng(split_seed)
+    engine_ids = train_labeled['engine_id'].unique()
+    rng.shuffle(engine_ids)
+    n_val = max(1, int(len(engine_ids) * val_ratio))
+    val_engines   = set(engine_ids[:n_val])
+    train_engines = set(engine_ids[n_val:])
+
+    train_split = train_labeled[train_labeled['engine_id'].isin(train_engines)]
+    val_split   = train_labeled[train_labeled['engine_id'].isin(val_engines)]
+
+    mean, std = fit_standardizer(train_split, FEATURE_COLS)
+    train_norm = apply_standardizer(train_split, FEATURE_COLS, mean, std)
+    val_norm   = apply_standardizer(val_split,   FEATURE_COLS, mean, std)
+    test_norm  = apply_standardizer(test_raw,    FEATURE_COLS, mean, std)
+
+    x_tr, y_tr = build_train_windows(train_norm, FEATURE_COLS, window_size, stride)
+    x_va, y_va = build_train_windows(val_norm,   FEATURE_COLS, window_size, stride)
+    _, x_te, y_te, te_masks = build_test_windows(test_norm, rul_df, FEATURE_COLS, window_size, max_rul)
+
+    train_ds = WindowedRULDataset(x_tr, y_tr)
+    val_ds   = WindowedRULDataset(x_va, y_va)
+    test_ds  = WindowedRULDataset(x_te, y_te, te_masks)
+
+    meta = {
+        'feature_cols': FEATURE_COLS,
+        'mean': mean,
+        'std': std,
+        'train_engines': sorted(train_engines),
+        'val_engines': sorted(val_engines),
+    }
+    return train_ds, val_ds, test_ds, meta
