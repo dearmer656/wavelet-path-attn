@@ -1,4 +1,8 @@
 import argparse
+import os
+import sys
+
+sys.path.insert(0, os.path.dirname(__file__))
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -36,8 +40,9 @@ def build_parser() -> argparse.ArgumentParser:
 
 def main() -> None:
     parser = build_parser()
-    parser.parse_args()
-    print("not yet implemented")
+    args = parser.parse_args()
+    from train_eval import run_experiment
+    run_experiment(args)
 
 
 if __name__ == "__main__":
