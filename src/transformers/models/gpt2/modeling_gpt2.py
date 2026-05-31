@@ -482,11 +482,11 @@ class GPT2PaTHAttention(nn.Module):
                 num_harmonics=getattr(config, "num_harmonics", 2),
                 use_soft_wavelet_fox=getattr(config, "use_soft_wavelet_fox", False),
                 wavelet_mode=getattr(config, "wavelet_mode", "router_rel"),
-                logging_steps = config.logging_steps,
-                wavelet_baseline_use = config.wavelet_baseline_use,
-                attn_pdrop = config.attn_pdrop,
-                init_theta = config.init_theta,   # initial theta for path attention ratio
-                use_forget_gate = config.use_forget_gate,
+                logging_steps = getattr(config, "logging_steps", 1000),
+                wavelet_baseline_use = getattr(config, "wavelet_baseline_use", False),
+                attn_pdrop = getattr(config, "attn_pdrop", 0.1),
+                init_theta = getattr(config, "init_theta", 0.847),
+                use_forget_gate = getattr(config, "use_forget_gate", False),
                 config=config,
             )
         self.resid_dropout = nn.Dropout(config.resid_pdrop)
