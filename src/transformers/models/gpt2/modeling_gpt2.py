@@ -23,7 +23,8 @@ from typing import Callable, Optional, Union
 import torch
 from torch import nn
 from torch.nn import BCEWithLogitsLoss, CrossEntropyLoss, MSELoss
-
+import torch.nn.functional as F
+import os
 from ...activations import ACT2FN, get_activation
 from ...cache_utils import Cache, DynamicCache, EncoderDecoderCache
 from ...generation import GenerationMixin
@@ -49,23 +50,312 @@ from ...utils.deprecation import deprecate_kwarg
 from ...utils.model_parallel_utils import assert_device_map, get_device_map
 from .configuration_gpt2 import GPT2Config
 
-# try:
-#     from fla.layers.path_attn import PaTHAttention as _PaTHAttention
-#     from fla.layers.path_attn import PaTHAttentionWfreq as _PaTHAttentionWfreq
-# except Exception as _e:
-#     _PaTHAttention = None
-#     _PaTHAttentionWfreq = None
-from fla.layers.path_attn import PaTHAttention as _PaTHAttention
+
+from einops import rearrange
+
+try:
+    from fla.layers.path_attn import PaTHAttention as _PaTHAttention
+    from fla.layers.path_attn import PaTHAttentionWfreq as _PaTHAttentionWfreq
+    from fla.layers.path_attn import path_ut_base_raw as _path_ut_base_raw
+except Exception as _e:
+    _PaTHAttention = None
+    _PaTHAttentionWfreq = None
+    _path_ut_base_raw = None
+try:
+    from fla.layers.freq_analysis_utils import *
+except Exception:
+    pass
+# from fla.layers.path_attn import PaTHAttention as _PaTHAttention
 logger = logging.get_logger(__name__)
+
+class PWavMeanLogger:
+    """One-shot logger for per-layer P_wav mean heatmaps."""
+
+    def __init__(self, save_dir: str = "analysis/pwav_mean", cmap: str = "hot") -> None:
+        self.save_dir = save_dir
+        self.cmap = cmap
+        self.recorded_layers: set[int] = set()
+        os.makedirs(save_dir, exist_ok=True)
+
+    def update(self, layer_idx: int, p_wav: torch.Tensor) -> None:
+        # Only log once per layer to avoid spamming the disk during long runs.
+        if p_wav is None:
+            return
+        if layer_idx in self.recorded_layers:
+            return
+        self.recorded_layers.add(layer_idx)
+
+        with torch.no_grad():
+            # 平均掉 batch 和 head，得到 [T,T]
+            mean_map = p_wav.mean(dim=(0, 1)).detach().float().cpu()
+
+        fig, ax = plt.subplots(figsize=(6, 5))
+        im = ax.imshow(mean_map, cmap=self.cmap, aspect="auto")
+        ax.set_xlabel("Key position j")
+        ax.set_ylabel("Query position i")
+        ax.set_title(f"P_wav mean (layer {layer_idx})")
+        fig.colorbar(im, ax=ax)
+        fig.tight_layout()
+
+        fig_path = os.path.join(self.save_dir, f"layer_{layer_idx:02d}_pwav_mean.png")
+        fig.savefig(fig_path)
+        plt.close(fig)
+
+        tensor_path = os.path.join(self.save_dir, f"layer_{layer_idx:02d}_pwav_mean.pt")
+        torch.save(mean_map, tensor_path)
+
+def _get_alibi_slopes(n_heads: int, device) -> torch.Tensor:
+    """Standard ALiBi slopes (Press et al. 2022), correct for non-power-of-2 head counts."""
+    import math
+    def _slopes_power_of_2(n):
+        start = 2.0 ** (-(2.0 ** -(math.log2(n) - 3)))
+        return [start * (start ** i) for i in range(n)]
+    if math.log2(n_heads) % 1 == 0:
+        slopes = _slopes_power_of_2(n_heads)
+    else:
+        closest_pow2 = 2 ** math.floor(math.log2(n_heads))
+        slopes = _slopes_power_of_2(closest_pow2)
+        extra = _slopes_power_of_2(2 * closest_pow2)[0::2]
+        slopes += extra[: n_heads - closest_pow2]
+    return torch.tensor(slopes, device=device, dtype=torch.float32)
+
+class QWABBias(nn.Module):
+    """Query-conditioned Wavelet Attention Bias for standard (non-path) attention.
+
+    Matches _build_ctxscale_shift_logit_bias_v0 with wavelet_ctx_feat_mode=hidden_ln,
+    except the routing feature is hidden_states (no q_corr from path attention).
+    All other details (shift formula, basis normalization, p99 clamp, gate init,
+    g_bias_max clamp) are identical to the FLA path_attn defaults.
+    """
+
+    _G_MAX = 0.5
+    _G_BIAS_MAX = 4.0
+
+    def __init__(self, config):
+        super().__init__()
+        embed_dim = config.hidden_size
+        K = int(getattr(config, "router_band_num", 8))
+        eps = float(getattr(config, "layer_norm_epsilon", 1e-5))
+
+        # Router input: full hidden_states [B, T, embed_dim] directly (no head mean)
+        self.router = nn.Linear(embed_dim, K + 1, bias=True)  # K scales + 1 null
+
+        # Shift: full hidden_states → LN → Linear(E, 1) → sigmoid → token shift β
+        self.shift_ln = nn.LayerNorm(embed_dim, eps=eps)
+        self.shift_proj = nn.Linear(embed_dim, 1, bias=True)
+
+        # Learnable layer gate; init matches FLA default (wavelet_logit_bias_a_init=-5.0)
+        self.logit_bias_a = nn.Parameter(torch.tensor(-5.0))
+        # Gradient hook: NaN/Inf zeroing + clamp to [-1, 1] (matches FLA wavelet_gate_grad_clip=1.0)
+        self._gate_grad_clip = 1.0
+        self.logit_bias_a.register_hook(self._gate_grad_hook)
+        # Forward clamp for numeric safety (matches FLA wavelet_ctxscale_lock_clamp_abs=8.0)
+        self._gate_clamp_abs = 8.0
+
+        # Ricker wavelet scales: 2^(scale_range[0] + step*i) for i=0..K-1
+        scale_range = list(getattr(config, "scale_range", [0, 16]))
+        step = (scale_range[1] - scale_range[0]) // K
+        scales = torch.tensor(
+            [2.0 ** (scale_range[0] + step * i) for i in range(K)], dtype=torch.float32
+        )
+        self.register_buffer("scales", scales)
+
+        self._K = K
+        self._eps = 1e-6
+
+    def _gate_grad_hook(self, grad: torch.Tensor) -> torch.Tensor:
+        """NaN/Inf zeroing + gradient clip on logit_bias_a (mirrors FLA _capture_wavelet_gate_grad)."""
+        g = grad.detach().to(dtype=torch.float32)
+        g = torch.nan_to_num(g, nan=0.0, posinf=0.0, neginf=0.0)
+        g = g.clamp(-self._gate_grad_clip, self._gate_grad_clip)
+        return g.to(dtype=grad.dtype)
+
+    @staticmethod
+    def _clamp_p99(x: torch.Tensor, eps: float = 1e-6) -> torch.Tensor:
+        """Per-chunk p99 absolute-value clamp, matching FLA _maybe_clamp_p99 defaults."""
+        abs_flat = x.detach().abs().reshape(-1)
+        if abs_flat.numel() == 0:
+            return x
+        n = abs_flat.numel()
+        if n > 4096:
+            idx = torch.linspace(0, n - 1, steps=4096, device=abs_flat.device).long()
+            abs_eval = abs_flat.index_select(0, idx)
+        else:
+            abs_eval = abs_flat
+        clamp_v = torch.quantile(abs_eval, 0.99).clamp_min(eps)
+        return x.clamp(min=-clamp_v, max=clamp_v)
+
+    def _bias_chunk(
+        self,
+        q0: int,
+        q1: int,
+        pi_scale: torch.Tensor,
+        beta: torch.Tensor,
+        diff: torch.Tensor,
+        eps: float,
+    ) -> torch.Tensor:
+        """Compute QWAB bias for query rows [q0, q1)."""
+        T = diff.shape[0]
+        chunk_bias = pi_scale.new_zeros(pi_scale.shape[0], q1 - q0, T)
+        for s_idx in range(self._K):
+            s = float(self.scales[s_idx].item())
+            # FLA default (use_scale_coupled_shift=False): center fixed at absolute token β
+            u = (diff.view(1, 1, T) - beta[:, q0:q1].unsqueeze(-1)) / s  # [B, q_len, T]
+            basis = (1.0 - u.pow(2)) * torch.exp(-0.5 * u.pow(2))
+            basis = basis / (basis.pow(2).mean(-1, keepdim=True) + eps).sqrt()
+            basis = self._clamp_p99(basis, eps=eps)
+            chunk_bias = chunk_bias + pi_scale[:, q0:q1, s_idx].unsqueeze(-1) * basis
+        return chunk_bias
+
+    def forward(self, hidden_states: torch.Tensor, chunk_size: int = 128):
+        """
+        Args:
+            hidden_states: [B, T, embed_dim]  (pre-attention LN output)
+            chunk_size: query chunk size for memory-efficient long-context eval
+        Returns:
+            bias: [B, 1, T, T]  additive bias broadcast to all heads
+            branch_amp: scalar — mean g_null (monitoring: ~0=QWAB off/collapsed, ~0.5+=QWAB active)
+                        NOT a collapse penalty; do NOT add to loss with positive geom_p weight.
+                        To use as collapse penalty, flip: (1 - branch_amp).
+        """
+        B, T, _ = hidden_states.shape
+        K, eps = self._K, self._eps
+        # detach: routing must not backprop through hidden_states
+        hs = hidden_states.detach().float()
+
+        # ---- routing: hidden_states [B, T, embed_dim] → per-token scale weights ----
+        rlogits = self.router(hs)                         # [B, T, K+1]
+        rlogits = rlogits / (rlogits.pow(2).mean(-1, keepdim=True) + eps).sqrt()
+        g_scales = torch.sigmoid(rlogits[..., 1:])            # [B, T, K]
+        g_null   = torch.sigmoid(rlogits[..., 0:1])           # [B, T, 1]
+        pi_scale = g_null * (g_scales / g_scales.sum(-1, keepdim=True).clamp_min(eps))  # [B, T, K]
+
+        # ---- shift ----
+        rho  = torch.sigmoid(self.shift_proj(self.shift_ln(hs)).squeeze(-1))  # [B, T]
+        # rho in (0,1) is a learned fractional position; scale by current T so wavelet
+        # centers spread proportionally across the full eval length.
+        # Bug fix: the previous min(T, _train_T) clamp capped all centers at 511 for
+        # T>512, systematically biasing long-range attention toward position 511 and
+        # causing catastrophic PPL collapse at L2048/L4096 (PPL 80/907 vs baseline 4.3/4.4).
+        _max_beta = float(T - 1)
+        beta = torch.round(rho * _max_beta).clamp_(0.0, _max_beta)            # [B, T]
+
+        # ---- layer gate (with forward clamp STE + NaN guard, matching FLA) ----
+        a_raw = self.logit_bias_a.float()
+        a_clamped = a_raw.clamp(-self._gate_clamp_abs, self._gate_clamp_abs)
+        a_used = a_raw + (a_clamped - a_raw).detach()  # STE: forward clamped, grad unclamped
+        g_layer = self._G_MAX * torch.sigmoid(a_used)
+        if not torch.isfinite(g_layer):
+            g_layer = torch.nan_to_num(g_layer, nan=0.0, posinf=self._G_MAX, neginf=0.0)
+
+        # ---- Ricker wavelet basis + weighted sum (chunked over query dim) ----
+        diff = torch.arange(T, device=hidden_states.device, dtype=torch.float32)
+        if T <= chunk_size:
+            bias = self._bias_chunk(0, T, pi_scale, beta, diff, eps)  # [B, T, T]
+        else:
+            chunks = []
+            for q0 in range(0, T, chunk_size):
+                q1 = min(q0 + chunk_size, T)
+                chunks.append(self._bias_chunk(q0, q1, pi_scale, beta, diff, eps))
+            bias = torch.cat(chunks, dim=1)  # [B, T, T]
+
+        # g_bias_max clamp matches FLA default (wavelet_ctxscale_g_bias_max=4.0)
+        out = (g_layer * bias).clamp(min=-self._G_BIAS_MAX, max=self._G_BIAS_MAX)
+
+        # branch_amp: g_null controls overall QWAB contribution (0=off, 1=fully active).
+        # ~0   → QWAB branch collapsed/disabled
+        # ~0.5 → QWAB moderately active (sigmoid init value)
+        # ~1   → QWAB strongly active
+        # This is a branch-amplitude monitor, NOT a null-gate collapse penalty.
+        branch_amp = g_null.squeeze(-1).mean().to(dtype=hidden_states.dtype)
+
+        return out.unsqueeze(1).to(dtype=hidden_states.dtype), branch_amp  # [B, 1, T, T], scalar
+
+
+class DAPEAliBiBias(nn.Module):
+    """DAPE-ALiBi: ALiBi base bias + cross-head adaptive correction MLP.
+
+    Formula: a_out = a_raw + b_alibi + MLP([a_raw, b_alibi])
+    MLP: R^{2H} -> R^H, weights shared across all position pairs (i, j).
+    Zero-init output layer: at init correction=0, model reduces to pure ALiBi.
+
+    Reference: DAPE (Ye et al. 2023) cross-head correction pattern applied to ALiBi base.
+    """
+
+    def __init__(self, num_heads: int, hidden_dim: int = 32):
+        super().__init__()
+        self.num_heads = num_heads
+        self.mlp = nn.Sequential(
+            nn.Linear(2 * num_heads, hidden_dim, bias=True),
+            nn.ReLU(),
+            nn.Linear(hidden_dim, num_heads, bias=True),
+        )
+        nn.init.zeros_(self.mlp[-1].weight)
+        nn.init.zeros_(self.mlp[-1].bias)
+        # Marker: _init_weights must preserve zero-init so model reduces to pure ALiBi at t=0.
+        self.mlp[-1]._dape_zero_init = True
+
+    def forward(
+        self,
+        a_raw: torch.Tensor,    # [B, H, q, k] detached raw logits (pre-ALiBi)
+        alibi_bias: torch.Tensor,  # [H, q, k] or [1, H, q, k]
+    ) -> torch.Tensor:
+        """Returns adaptive correction [B, H, q, k] to add on top of a_raw + alibi_bias."""
+        if alibi_bias.dim() == 3:
+            alibi_bias = alibi_bias.unsqueeze(0)  # [H, q, k] → [1, H, q, k]
+        B, H, q, k = a_raw.shape
+        a = a_raw.permute(0, 2, 3, 1).float()                          # [B, q, k, H]
+        b = alibi_bias.permute(0, 2, 3, 1).expand(B, q, k, H).float() # [B, q, k, H]
+        feat = torch.cat([a, b], dim=-1)                                # [B, q, k, 2H]
+        correction = self.mlp(feat)                                     # [B, q, k, H]
+        return correction.permute(0, 3, 1, 2).to(dtype=a_raw.dtype)    # [B, H, q, k]
 
 
 def eager_attention_forward(module, query, key, value, attention_mask, head_mask=None, **kwargs):
     attn_weights = torch.matmul(query, key.transpose(-1, -2))
 
+    # Wavelet relative position bias (pe_method='wavelet', relative_type='4')
+    wavelet_rel_buf = kwargs.get("wavelet_relative_tensor", None)
+    if wavelet_rel_buf is not None:
+        q_len = query.size(-2)
+        k_len = key.size(-2)
+        if hasattr(module, "_add_wavelet_rel_inplace"):
+            module._add_wavelet_rel_inplace(attn_weights, query, q_len, k_len, wavelet_rel_buf)
+        else:
+            W = wavelet_rel_buf[:, :q_len, :k_len].to(device=query.device, dtype=query.dtype)  # [D, q_len, k_len]
+            attn_weights = attn_weights + torch.einsum("bhld,dln->bhln", query, W)
+
     if module.scale_attn_weights:
         attn_weights = attn_weights / torch.full(
             [], value.size(-1) ** 0.5, dtype=attn_weights.dtype, device=attn_weights.device
         )
+
+    # ALiBi / DAPE-ALiBi position bias — applied AFTER QK scaling
+    _pe_method = getattr(getattr(module, 'config', None), 'pe_method', None)
+    if _pe_method in ('alibi', 'dape_alibi'):
+        q_len = query.size(-2)
+        k_len = key.size(-2)
+        num_heads = query.size(1)
+        # Standard ALiBi slopes (Press et al. 2022), handles non-power-of-2 head counts
+        slopes = _get_alibi_slopes(num_heads, query.device).to(dtype=attn_weights.dtype)
+        # Correct query positions for KV-cache: query occupies positions [k_len-q_len, k_len)
+        q_pos = torch.arange(k_len - q_len, k_len, device=query.device, dtype=torch.float32).unsqueeze(1)
+        k_pos = torch.arange(k_len, device=query.device, dtype=torch.float32).unsqueeze(0)
+        dist = (q_pos - k_pos).clamp(min=0).to(dtype=attn_weights.dtype)  # [q_len, k_len]
+        alibi_bias = -slopes.view(num_heads, 1, 1) * dist.unsqueeze(0)    # [1, H, q_len, k_len]
+        if _pe_method == 'dape_alibi' and getattr(module, 'dape_alibi_module', None) is not None:
+            # DAPE-ALiBi: a_out = a_raw + b_alibi + MLP([a_raw, b_alibi])
+            a_raw = attn_weights.detach()  # detach: no double-gradient through QK
+            attn_weights = attn_weights + alibi_bias
+            attn_weights = attn_weights + module.dape_alibi_module(a_raw, alibi_bias)
+        else:
+            attn_weights = attn_weights + alibi_bias
+
+    # QWAB logit bias (Rotary + QWAB mode)
+    _qwab_bias = kwargs.get("qwab_bias", None)
+    if _qwab_bias is not None:
+        q_len, k_len = query.size(-2), key.size(-2)
+        attn_weights = attn_weights + _qwab_bias[:, :, :q_len, :k_len].to(dtype=attn_weights.dtype)
 
     # Layer-wise attention scaling
     if module.scale_attn_by_inverse_layer_idx:
@@ -74,18 +364,58 @@ def eager_attention_forward(module, query, key, value, attention_mask, head_mask
     if not module.is_cross_attention:
         # if only "normal" attention layer implements causal mask
         query_length, key_length = query.size(-2), key.size(-2)
-        causal_mask = module.bias[:, :, key_length - query_length : key_length, :key_length]
+        if module.bias.size(-1) >= key_length:
+            causal_mask = module.bias[:, :, key_length - query_length : key_length, :key_length]
+        else:
+            # Fallback for long-context eval where key_length exceeds the precomputed bias buffer.
+            causal_mask = torch.tril(
+                torch.ones((query_length, key_length), dtype=torch.bool, device=attn_weights.device),
+                diagonal=key_length - query_length,
+            ).view(1, 1, query_length, key_length)
         mask_value = torch.finfo(attn_weights.dtype).min
         # Need to be a tensor, otherwise we get error: `RuntimeError: expected scalar type float but found double`.
         # Need to be on the same device, otherwise `RuntimeError: ..., x and y to be on the same device`
         mask_value = torch.full([], mask_value, dtype=attn_weights.dtype, device=attn_weights.device)
         attn_weights = torch.where(causal_mask, attn_weights.to(attn_weights.dtype), mask_value)
 
+    # PaTH logit blending: must happen BEFORE attention_mask to preserve padding/key-mask semantics.
+    # attention_mask is additive (subtracts large value from masked positions); if we blend after it,
+    # large-negative padding values get diluted by finite path_logits when lam > 0, effectively
+    # unmasking padding tokens.  By blending here — after the causal mask (future = finfo.min) but
+    # before the additive attention_mask — the padding mask is applied on top of the blended logit
+    # and its semantics are preserved.
+    # path_logits: [B,H,T,T] float32, natural scale, lower-triangular (upper=0).
+    # After the causal mask above, lower triangle of attn_weights is finite; blending is safe.
+    _path_logits = kwargs.get('_path_logits', None)
+    _path_lam = kwargs.get('_path_lam', None)
+    # Guard: skip for cross-attention — causal-triangle blend is meaningless there (q_len != k_len
+    # in general, and no causal ordering applies between encoder and decoder sequences).
+    if _path_logits is not None and _path_lam is not None and not module.is_cross_attention:
+        _T = attn_weights.shape[-1]
+        _causal_blend = torch.ones(_T, _T, device=attn_weights.device, dtype=torch.bool).tril()
+        # nan_to_num + clamp: path_ut_base_raw with random init can produce NaN (ill-conditioned
+        # triangular solve) or very large finite values (near float32 overflow ~1e38).
+        # Even with _path_lam=0, 0*NaN=NaN in IEEE.  Very large finite values are not caught
+        # by nan_to_num but still overflow path_lam.grad when summed over B*H*T*T elements,
+        # producing grad_norm=inf from step 1 and preventing any learning.
+        # Clamp to ±100 (>> typical pre-softmax attention logit range of ±50) so gradient
+        # stays finite while preserving signal once path_w_proj has learned meaningful weights.
+        _path_safe = _path_logits.to(attn_weights.dtype).nan_to_num(nan=0.0, posinf=0.0, neginf=0.0).clamp(-100.0, 100.0)
+        _lam_safe = _path_lam.to(attn_weights.dtype).nan_to_num(nan=0.0, posinf=1.0, neginf=0.0).clamp(0.0, 1.0)
+        attn_weights = torch.where(
+            _causal_blend,
+            (1.0 - _lam_safe) * attn_weights + _lam_safe * _path_safe,
+            attn_weights,
+        )
+
     if attention_mask is not None:
         # Apply the attention mask
         causal_mask = attention_mask[:, :, :, : key.shape[-2]]
         attn_weights = attn_weights + causal_mask
 
+    # Final safety net before softmax: prevent NaN/Inf from poisoning the whole row.
+    _attn_min = torch.finfo(attn_weights.dtype).min
+    attn_weights = attn_weights.nan_to_num(nan=0.0, posinf=0.0, neginf=_attn_min)
     attn_weights = nn.functional.softmax(attn_weights, dim=-1)
 
     # Downcast (if necessary) back to V's dtype (if in mixed-precision) -- No-Op otherwise
@@ -132,6 +462,10 @@ class GPT2PaTHAttention(nn.Module):
                 conv_bias=getattr(config, "path_conv_bias", False),
                 num_harmonics=getattr(config, "num_harmonics", 2),
                 share_freq_across_heads=getattr(config, "share_freq_across_heads", False),
+                single_A_B=getattr(config, "single_A_B", False),
+                use_beta_modulation=getattr(config, "use_beta_modulation", False),
+                use_soft_wavelet_fox=getattr(config, "use_soft_wavelet_fox", False),
+                wavelet_mode=getattr(config, "wavelet_mode", "router_rel"),
             )
         elif getattr(config, "attn_implementation", None) == "path_attn":
             self.core = _PaTHAttention(
@@ -140,12 +474,20 @@ class GPT2PaTHAttention(nn.Module):
                 num_kv_heads=getattr(config, "num_key_value_heads", None),
                 layer_idx=layer_idx,
                 # 可选开关，从 config 读取（不存在则给默认）
-                use_forget_gate=getattr(config, "path_use_forget_gate", False),
                 use_qk_norm=getattr(config, "path_use_qk_norm", False),
                 use_low_rank_w=getattr(config, "path_use_low_rank_w", True),
                 use_w_shortconv=getattr(config, "path_use_w_shortconv", True),
                 conv_size=getattr(config, "path_conv_size", 3),
                 conv_bias=getattr(config, "path_conv_bias", False),
+                num_harmonics=getattr(config, "num_harmonics", 2),
+                use_soft_wavelet_fox=getattr(config, "use_soft_wavelet_fox", False),
+                wavelet_mode=getattr(config, "wavelet_mode", "router_rel"),
+                logging_steps = config.logging_steps,
+                wavelet_baseline_use = config.wavelet_baseline_use,
+                attn_pdrop = config.attn_pdrop,
+                init_theta = config.init_theta,   # initial theta for path attention ratio
+                use_forget_gate = config.use_forget_gate,
+                config=config,
             )
         self.resid_dropout = nn.Dropout(config.resid_pdrop)
 
@@ -161,6 +503,10 @@ class GPT2PaTHAttention(nn.Module):
         use_cache: Optional[bool] = False,
         output_attentions: Optional[bool] = False,
         attention_mask_2d: Optional[torch.Tensor] = None,   # 我们在 GPT2Model 额外传入的 2D 0/1 mask
+        wavelet_decay_table: Optional[torch.Tensor] = None, # 我们在 GPT2Model 额外传入的 wavelet 衰减表
+        geom_p = 0,
+        analyzer=None,
+        input_ids=None,
         **kwargs,
     ):
         if encoder_hidden_states is not None:
@@ -177,21 +523,26 @@ class GPT2PaTHAttention(nn.Module):
         # 如需解码加速，后续可扩展成模块内维护 self._path_cache。
         path_cache = getattr(self, "_path_cache", None) if use_cache else None
         # print(hidden_states, 'in GPT2PaTHAttention.')
-        # pdb.set_trace()
-        attn_out, _weights, path_cache = self.core(
+        router1, router2 = None, None
+        attn_out, _weights, path_cache, dis_loss, router1, router2 = self.core(
             hidden_states,
             attention_mask=mask_2d,          # 2D 0/1 mask（或 None）
             past_key_values=path_cache,      # PaTH 自己的 cache（dict）
             output_attentions=output_attentions,
             use_cache=use_cache,
+            wavelet_decay_table=wavelet_decay_table,
+            geom_p=geom_p,
+            analyzer=analyzer,
+            input_ids=input_ids,
+            **kwargs,  # 透传如 global_step/max_steps 等额外上下文
         )
         if use_cache:
             self._path_cache = path_cache
 
         attn_out = self.resid_dropout(attn_out)
         # GPT2Block 期望返回 (attn_output, attn_weights)
-        return attn_out, None
-
+        return attn_out, None, dis_loss, router1, router2
+from rotary_embedding_torch import RotaryEmbedding
 class GPT2Attention(nn.Module):
     def __init__(self, config, is_cross_attention=False, layer_idx=None):
         super().__init__()
@@ -204,12 +555,33 @@ class GPT2Attention(nn.Module):
             ),
             persistent=False,
         )
+   
+
         self.register_buffer("masked_bias", torch.tensor(-1e4), persistent=False)
 
         self.embed_dim = config.hidden_size
         self.num_heads = config.num_attention_heads
         self.head_dim = self.embed_dim // self.num_heads
         self.split_size = self.embed_dim
+        # use_qwab_bias=True OR (wavelet_router=True + rotary) → activate QWABBias
+        _use_qwab_bias = (
+            getattr(config, 'use_qwab_bias', False) or
+            (getattr(config, 'wavelet_router', False) and getattr(config, 'pe_method', 'no_pe') == 'rotary')
+        )
+        # Old WPE frequency router: only when wavelet_router=True, no_pe, and NOT using QWABBias
+        if getattr(config, 'wavelet_router', False) and getattr(config, 'pe_method', 'no_pe') == 'no_pe' and not _use_qwab_bias:
+            self.router = nn.Sequential(
+                nn.Linear(self.embed_dim, 32, bias=False),
+                nn.Linear(32, self.num_heads * self.config.router_band_num, bias=False),
+            )
+        else:
+            self.router = None
+        self.qwab_bias_module = QWABBias(config) if _use_qwab_bias else None
+        self.dape_alibi_module = (
+            DAPEAliBiBias(self.num_heads)
+            if getattr(config, 'pe_method', 'vanilla') == 'dape_alibi'
+            else None
+        )
         if self.head_dim * self.num_heads != self.embed_dim:
             raise ValueError(
                 f"`embed_dim` must be divisible by num_heads (got `embed_dim`: {self.embed_dim} and `num_heads`:"
@@ -234,8 +606,168 @@ class GPT2Attention(nn.Module):
         self.attn_dropout = nn.Dropout(config.attn_pdrop)
         self.resid_dropout = nn.Dropout(config.resid_pdrop)
         self.is_causal = True
+        if config.pe_method == 'rotary':
+            self.rotary_emb = RotaryEmbedding(dim=self.head_dim, theta=getattr(config, 'rope_theta', 10000))
+
+        # Wavelet relative PE: precompute (head_dim, block_size, block_size) buffer
+        if config.pe_method == 'wavelet' and getattr(config, 'relative_type', None) == '4':
+            scales = [1, 2, 4, 8, 16, 32, 64, 128]
+            shifts = [0, 1, 2, 3, 4, 5, 6, 7]
+            pairs = [(s, t) for s in scales for t in shifts]  # 64 pairs
+            if len(pairs) != self.head_dim:
+                raise ValueError(
+                    f"wavelet PE expects head_dim={len(pairs)} (8 scales × 8 shifts), "
+                    f"got head_dim={self.head_dim}"
+                )
+            block_size = config.max_position_embeddings
+            i_idx = torch.arange(block_size, dtype=torch.float32).unsqueeze(1)  # [L, 1]
+            j_idx = torch.arange(block_size, dtype=torch.float32).unsqueeze(0)  # [1, L]
+            W = torch.zeros(self.head_dim, block_size, block_size)
+            for d, (s, t) in enumerate(pairs):
+                u = (i_idx - j_idx) / s - t  # [L, L]
+                W[d] = (1.0 - u ** 2) * torch.exp(-0.5 * u ** 2)
+            self.register_buffer("wavelet_relative_tensor", W, persistent=False)
+            wavelet_scales = torch.tensor([float(s) for s, _ in pairs], dtype=torch.float32)
+            wavelet_shifts = torch.tensor([float(t) for _, t in pairs], dtype=torch.float32)
+            self.register_buffer("wavelet_scales", wavelet_scales, persistent=False)
+            self.register_buffer("wavelet_shifts", wavelet_shifts, persistent=False)
+            # PaTH logit blending parameters (only when wavelet PE is active, fla is available,
+            # and this layer_idx is listed in config.path_blend_layers)
+            _path_blend_layers = getattr(config, 'path_blend_layers', None)
+            _use_path_blend = (
+                _path_ut_base_raw is not None and
+                _path_blend_layers is not None and
+                layer_idx is not None and
+                layer_idx in _path_blend_layers
+            )
+            if _use_path_blend:
+                # w projection: hidden_states → [B,T,H,D] float32 weights for path attention
+                self.path_w_proj = Conv1D(self.embed_dim, self.embed_dim)
+                # std=1e-4 init via _path_small_init_std (applied by _init_weights / post_init).
+                # F.normalize keeps ||w||=0.1 at every forward pass, bounding A off-diagonals
+                # to ≤ beta*0.01 ≤ 0.02 and κ(A) ≈ 2.6 for T=512 — no NaN from solve backward.
+                # Small init ensures A ≈ I before _init_weights fires (e.g. during __init__),
+                # consistent with the runtime normalization.
+                self.path_w_proj._path_small_init_std = 1e-4
+                # beta projection: hidden_states → [B,T,H] gate scalar (sigmoid → ×2 → (0,2))
+                # beta participates in A directly: A[i,j] = beta[i] * (w_i · w_j), so small
+                # init (beta ≈ sigmoid(0)*2 = 1) keeps A well-conditioned at initialisation.
+                self.path_beta_proj = Conv1D(self.num_heads, self.embed_dim)
+                self.path_beta_proj._path_small_init_std = 1e-4
+                # λ: learnable blend scalar, init=0 (pure wavelet PE at start), warms up to 1
+                self.path_lam = nn.Parameter(torch.zeros(1))
+                # step counter for linear warmup (not persistent — resets on reload, intentional)
+                self.register_buffer('_path_warmup_step', torch.tensor(0, dtype=torch.long), persistent=False)
+                # Safety gradient hooks: zero NaN/Inf gradients on all path parameters.
+                # Covers weight AND bias of both projections (bias also gets NaN grad when
+                # the triangular-solve backward is ill-conditioned).
+                def _safe_grad_hook(grad):
+                    return grad.nan_to_num(nan=0.0, posinf=0.0, neginf=0.0)
+                self.path_w_proj.weight.register_hook(_safe_grad_hook)
+                self.path_w_proj.bias.register_hook(_safe_grad_hook)
+                self.path_beta_proj.weight.register_hook(_safe_grad_hook)
+                self.path_beta_proj.bias.register_hook(_safe_grad_hook)
+                self.path_lam.register_hook(_safe_grad_hook)
+                # PAT-100: sparse query-conditioned gate on path logits (query-token-wise output control)
+                if getattr(config, 'path_sparse_gate', False):
+                    self.path_gate_ln = nn.LayerNorm(self.head_dim)
+                    self.path_gate_proj = nn.Linear(self.head_dim, 1, bias=True)
+                    nn.init.constant_(self.path_gate_proj.bias, -2.0)
+                    self.register_buffer(
+                        '_gate_warmup_step', torch.tensor(0, dtype=torch.long), persistent=False)
+                    # Guard gate params against NaN gradients (M_base can be NaN from ill-conditioned solve)
+                    for _p in list(self.path_gate_ln.parameters()) + list(self.path_gate_proj.parameters()):
+                        _p.register_hook(_safe_grad_hook)
+        else:
+            self.wavelet_relative_tensor = None
+            self.wavelet_scales = None
+            self.wavelet_shifts = None
 
         self.pruned_heads = set()
+
+    def _get_wavelet_relative_tensor(
+        self,
+        q_len: int,
+        k_len: int,
+        device: torch.device,
+        dtype: torch.dtype,
+        base_tensor: Optional[torch.Tensor] = None,
+    ) -> torch.Tensor:
+        rel_buf = self.wavelet_relative_tensor if base_tensor is None else base_tensor
+        if rel_buf is not None and rel_buf.size(1) >= q_len and rel_buf.size(2) >= k_len:
+            return rel_buf[:, :q_len, :k_len].to(device=device, dtype=dtype)
+
+        if self.wavelet_scales is None or self.wavelet_shifts is None:
+            raise RuntimeError("wavelet_scales/wavelet_shifts are required for dynamic wavelet relative tensor.")
+
+        i_idx = torch.arange(q_len, dtype=dtype, device=device).unsqueeze(1)  # [q_len, 1]
+        j_idx = torch.arange(k_len, dtype=dtype, device=device).unsqueeze(0)  # [1, k_len]
+        delta = (i_idx - j_idx).unsqueeze(0)  # [1, q_len, k_len]
+
+        scales = self.wavelet_scales.to(device=device, dtype=dtype).view(-1, 1, 1)  # [D,1,1]
+        shifts = self.wavelet_shifts.to(device=device, dtype=dtype).view(-1, 1, 1)  # [D,1,1]
+        u = delta / scales - shifts
+        u.mul_(u)                                # in-place: u → u²
+        exp_term = torch.empty_like(u)
+        torch.mul(u, -0.5, out=exp_term)         # no intermediate: -0.5 * u²
+        exp_term.exp_()                          # in-place: exp(-0.5 * u²)
+        u.neg_().add_(1.0)                       # in-place: u → 1 - u²
+        return u.mul_(exp_term)                  # in-place: (1 - u²) * exp(-0.5 * u²)
+
+    def _add_wavelet_rel_inplace(
+        self,
+        attn_weights: torch.Tensor,
+        query: torch.Tensor,
+        q_len: int,
+        k_len: int,
+        base_tensor: Optional[torch.Tensor] = None,
+        d_chunk: int = 8,
+        q_chunk: int = 512,
+    ) -> None:
+        """Add wavelet relative bias directly into attn_weights in-place.
+
+        Double-chunked over D and q_len so the largest intermediate is
+        [d_chunk, q_chunk, k_len] instead of [D, q_len, k_len], avoiding OOM
+        at long sequence lengths (e.g. L=12288).
+        """
+        rel_buf = self.wavelet_relative_tensor if base_tensor is None else base_tensor
+        device, dtype = query.device, query.dtype
+
+        # Fast path: cached buffer covers requested length (L <= max_position_embeddings)
+        if rel_buf is not None and rel_buf.size(1) >= q_len and rel_buf.size(2) >= k_len:
+            W = rel_buf[:, :q_len, :k_len].to(device=device, dtype=dtype)
+            attn_weights.add_(torch.einsum("bhld,dln->bhln", query, W))
+            return
+
+        if self.wavelet_scales is None or self.wavelet_shifts is None:
+            raise RuntimeError("wavelet_scales/wavelet_shifts are required for dynamic wavelet relative tensor.")
+
+        scales = self.wavelet_scales.to(device=device, dtype=dtype)
+        shifts = self.wavelet_shifts.to(device=device, dtype=dtype)
+        D = scales.size(0)
+        j_idx = torch.arange(k_len, dtype=dtype, device=device).unsqueeze(0)  # [1, k_len]
+
+        for q0 in range(0, q_len, q_chunk):
+            q1 = min(q0 + q_chunk, q_len)
+            i_idx = torch.arange(q0, q1, dtype=dtype, device=device).unsqueeze(1)  # [qc, 1]
+            delta_q = i_idx - j_idx  # [qc, k_len]
+            q_slice = query[:, :, q0:q1, :]  # [B, H, qc, D]
+
+            for d0 in range(0, D, d_chunk):
+                d1 = min(d0 + d_chunk, D)
+                s_c = scales[d0:d1].view(-1, 1, 1)
+                t_c = shifts[d0:d1].view(-1, 1, 1)
+                u = delta_q.unsqueeze(0) / s_c - t_c  # [dc, qc, k_len]
+                u.mul_(u)                               # in-place: u → u²
+                exp_u = u.mul(-0.5).exp_()              # [dc, qc, k_len]
+                u.neg_().add_(1.0)                      # in-place: u → 1 - u²
+                W_c = u.mul_(exp_u)                     # in-place: (1-u²)·exp(-½u²)
+                del exp_u
+                # attn_weights[:, :, q0:q1, :] shape [B, H, qc, k_len]
+                attn_weights[:, :, q0:q1, :].add_(
+                    torch.einsum("bhld,dln->bhln", q_slice[..., d0:d1], W_c)
+                )
+                del u, W_c
 
     def prune_heads(self, heads):
         if len(heads) == 0:
@@ -277,7 +809,13 @@ class GPT2Attention(nn.Module):
         if not self.is_cross_attention:
             # if only "normal" attention layer implements causal mask
             query_length, key_length = query.size(-2), key.size(-2)
-            causal_mask = self.bias[:, :, key_length - query_length : key_length, :key_length]
+            if self.bias.size(-1) >= key_length:
+                causal_mask = self.bias[:, :, key_length - query_length : key_length, :key_length]
+            else:
+                causal_mask = torch.tril(
+                    torch.ones((query_length, key_length), dtype=torch.bool, device=attn_weights.device),
+                    diagonal=key_length - query_length,
+                ).view(1, 1, query_length, key_length)
             mask_value = torch.finfo(attn_weights.dtype).min
             # Need to be a tensor, otherwise we get error: `RuntimeError: expected scalar type float but found double`.
             # Need to be on the same device, otherwise `RuntimeError: ..., x and y to be on the same device`
@@ -316,6 +854,8 @@ class GPT2Attention(nn.Module):
         encoder_hidden_states: Optional[torch.Tensor] = None,
         encoder_attention_mask: Optional[torch.FloatTensor] = None,
         output_attentions: Optional[bool] = False,
+        rope=None,
+        wavelet_decay_table=None,
         **kwargs,
     ) -> tuple[Union[torch.Tensor, tuple[torch.Tensor]], ...]:
         is_cross_attention = encoder_hidden_states is not None
@@ -373,14 +913,140 @@ class GPT2Attention(nn.Module):
 
         using_eager = self.config._attn_implementation == "eager"
         attention_interface: Callable = eager_attention_forward
-        if self.config._attn_implementation != "eager":
+        # wavelet/alibi/dape_alibi PE require eager (custom bias injected inside eager_attention_forward)
+        if self.config.pe_method == 'wavelet' and getattr(self.config, 'relative_type', None) == '4':
+            using_eager = True
+        elif self.config.pe_method in ('alibi', 'dape_alibi'):
+            using_eager = True
+        elif self.config._attn_implementation != "eager" and self.config.pe_method != 'rotary':
             attention_interface = ALL_ATTENTION_FUNCTIONS[self.config._attn_implementation]
+        if self.config.pe_method == 'rotary':
+            query_states = self.rotary_emb.rotate_queries_or_keys(query_states)
+            key_states = self.rotary_emb.rotate_queries_or_keys(key_states)
+            # query_states = query_states.permute(0, 2, 1, 3)
+            # key_states = key_states.permute(0, 2, 1, 3)
+        # QWAB bias for Rotary PE (computed from hidden_states, no path-attention dependency)
+        _qwab_bias = None
+        _qwab_branch_amp = None
+        if self.qwab_bias_module is not None and not is_cross_attention:
+            _T_q, _T_k = query_states.shape[-2], key_states.shape[-2]
+            if _T_q == _T_k:  # skip during KV-cache decode (T_q=1, T_k=full)
+                _qwab_bias, _qwab_branch_amp = self.qwab_bias_module(hidden_states)
+        router1 = None
+        if self.router is not None:
+            jitter_std = getattr(self.config, "router_jitter_std", 0.0)   # e.g. 0.01
+            jitter_apply_in_eval = getattr(self.config, "router_jitter_apply_in_eval", False)
+            jitter_scale_by_logit_std = getattr(self.config, "router_jitter_scale_by_logit_std", True)      
+            def _add_gaussian_jitter(logits: torch.Tensor, std: float) -> torch.Tensor:
+                """
+                logits: [B,T,H,S]
+                std: base noise std in logit space
+                """
+                if std <= 0:
+                    return logits
+                if (not self.training) and (not jitter_apply_in_eval):
+                    return logits
 
-        if using_eager and self.reorder_and_upcast_attn:
+                if jitter_scale_by_logit_std:
+                    # scale noise by per-(B,T,H) logit std over S to be robust to logit magnitude
+                    # detach so the scaling factor doesn't backprop weirdly
+                    scale = logits.detach().std(dim=-1, keepdim=True).clamp_min(1e-6)
+                    noise = torch.randn_like(logits) * (std * scale)
+                else:
+                    noise = torch.randn_like(logits) * std
+
+                return logits + noise
+            B,H,T,D = query_states.shape
+            router1_logits = self.router(hidden_states)          # [B,T,H*S]
+            router1_logits = router1_logits.view(B, T, H, self.config.router_band_num)      # [B,T,H,S]
+            router1_logits = _add_gaussian_jitter(router1_logits, jitter_std)
+            router1 = torch.softmax(router1_logits / 1.0, dim=-1)  # [B,T,H,S]            
+
+        _gate_sparse_loss = query_states.new_zeros(())
+        if _qwab_branch_amp is not None:
+            # Accumulate branch_amp as dis_loss for monitoring via training logs.
+            # geom_p defaults to 0 so this does NOT affect the training loss unless explicitly set.
+            _gate_sparse_loss = _gate_sparse_loss + _qwab_branch_amp
+        if using_eager and self.reorder_and_upcast_attn and self.config.pe_method not in ('rotary', 'wavelet', 'alibi', 'dape_alibi'):
             attn_output, attn_weights = self._upcast_and_reordered_attn(
                 query_states, key_states, value_states, attention_mask, head_mask
             )
         else:
+            wavelet_rel_kwarg = {}
+            if self.wavelet_relative_tensor is not None:
+                wavelet_rel_kwarg["wavelet_relative_tensor"] = self.wavelet_relative_tensor
+            # PAT-100: sparse query-conditioned gate on path logits.
+            # Single path_ut_base_raw call. M_base (returned by that call) provides q_corr
+            # for gate conditioning; gate_eff then scales E_base_raw before lam-blending.
+            if (self.wavelet_relative_tensor is not None and hasattr(self, 'path_lam')
+                    and _path_ut_base_raw is not None and not self.is_cross_attention):
+                _B, _H, _T_q, _D = query_states.shape
+                _T_k = key_states.shape[-2]
+                # Skip during KV-cache generation (T_q=1, T_k=full sequence length).
+                if _T_q == _T_k:
+                    # lam warmup
+                    if self.training:
+                        self._path_warmup_step.add_(1)
+                        _warmup = min(float(self._path_warmup_step.item()) / 2000.0, 1.0)
+                    else:
+                        _warmup = 1.0
+                    _lam_eff = (
+                        self.path_lam.float()
+                        .nan_to_num(nan=0.0, posinf=1.0, neginf=0.0)
+                        .clamp(0.0, 1.0)
+                        * _warmup
+                    )
+
+                    _q = query_states.permute(0, 2, 1, 3).contiguous()  # [B,T,H,D]
+                    _k = key_states.permute(0, 2, 1, 3).contiguous()
+                    _hs = hidden_states
+                    _w_raw = self.path_w_proj(_hs).view(_B, _T_q, _H, _D).to(torch.float32)
+                    # l2-normalise w to unit vectors — matches original PaTHAttention design
+                    # (path_attn.py uses l2_norm(w) giving ||w||=1 before the path kernel).
+                    _w = F.normalize(_w_raw, p=2, dim=-1, eps=1e-6)
+                    _beta = torch.sigmoid(self.path_beta_proj(_hs)).to(torch.float32) * 2.0
+
+                    # Single call — M_base also used for gate conditioning when sparse gate is on.
+                    _E_base, _M_base, _, _ = _path_ut_base_raw(_q, _k, _w, _beta)
+                    _E_base = _E_base.nan_to_num(nan=0.0, posinf=0.0, neginf=0.0)
+                    _M_base = _M_base.nan_to_num(nan=0.0, posinf=0.0, neginf=0.0)
+
+                    if getattr(self.config, 'path_sparse_gate', False) and hasattr(self, 'path_gate_proj'):
+                        # Gate warmup coefficient (shared for both learned and forced-open gate)
+                        if self.training:
+                            self._gate_warmup_step.add_(1)
+                            _eta = min(
+                                float(self._gate_warmup_step.item()) /
+                                float(getattr(self.config, 'gate_warmup_steps', 2000)),
+                                1.0)
+                        else:
+                            _eta = 1.0
+                        if getattr(self.config, 'path_gate_force_open', False):
+                            # Forced-open control: g_i≡1, gate_eff = eta (full Route-A gradient)
+                            # Bypasses LN/proj/sigmoid; path_gate_ln/proj params receive no gradient.
+                            _gate_eff = torch.ones(
+                                _B, _T_q, _H, 1, dtype=torch.float32, device=query_states.device) * _eta
+                            # No sparse loss: constant penalty alpha*1 has no gradient signal
+                        else:
+                            # Learned gate conditioned on delta = q - q_corr
+                            # nan_to_num guards: M_base can be NaN from ill-conditioned triangular solve
+                            _q_corr = torch.einsum("bhij,bjhd->bihd", _M_base, _w).nan_to_num(nan=0.0, posinf=0.0, neginf=0.0)  # [B,T,H,D]
+                            _delta = _q.to(torch.float32) - _q_corr              # [B,T,H,D]
+                            _gate_feat = self.path_gate_ln(_delta)                # [B,T,H,D]
+                            _gate = torch.sigmoid(self.path_gate_proj(_gate_feat)).nan_to_num(nan=0.0)  # [B,T,H,1]
+                            _gate_eff = _gate * _eta                              # [B,T,H,1]
+                            if self.training:
+                                _alpha = float(getattr(self.config, 'gate_sparse_alpha', 0.01))
+                                _gate_sparse_loss = _alpha * _gate.mean()
+                        # Fold gate into λ to get per-query blend coefficient [B,H,T,1].
+                        # Semantics: ã[i,j] = (1 - λ·g_i)·a_wav[i,j] + λ·g_i·E[i,j]
+                        # When g_i=0 → pure wavelet (no dilution from λ).
+                        # When g_i=1 → same as scalar-λ blend.
+                        _lam_eff = _lam_eff * _gate_eff.permute(0, 2, 1, 3)      # [B,H,T,1]
+
+                    _path_logits = (_E_base * (_D ** -0.5)).to(torch.float32)
+                    wavelet_rel_kwarg['_path_logits'] = _path_logits
+                    wavelet_rel_kwarg['_path_lam'] = _lam_eff
             attn_output, attn_weights = attention_interface(
                 self,
                 query_states,
@@ -390,14 +1056,19 @@ class GPT2Attention(nn.Module):
                 head_mask=head_mask,
                 dropout=self.attn_dropout.p if self.training else 0.0,
                 is_causal=is_causal,
+                wavelet_decay_table=wavelet_decay_table,
+                router=router1,
+                qwab_bias=_qwab_bias,
+                **wavelet_rel_kwarg,
                 **kwargs,
             )
-
         attn_output = attn_output.reshape(*attn_output.shape[:-2], -1).contiguous()
         attn_output = self.c_proj(attn_output)
         attn_output = self.resid_dropout(attn_output)
 
-        return attn_output, attn_weights
+        # Return 5-tuple to match GPT2Block.forward unpacking.
+        # 3rd element: gate sparse loss (scalar) when PAT-100 is active, else zero.
+        return attn_output, attn_weights, _gate_sparse_loss, None, None
 
 
 class GPT2MLP(nn.Module):
@@ -448,13 +1119,18 @@ class GPT2Block(GradientCheckpointingLayer):
         encoder_attention_mask: Optional[torch.FloatTensor] = None,
         use_cache: Optional[bool] = False,
         output_attentions: Optional[bool] = False,
+        rope=None,
+        wavelet_decay_table=None,
+        geom_p=0,
+        analyzer=None,
+        input_ids=None,
         **kwargs,
     ) -> Union[tuple[torch.Tensor], Optional[tuple[torch.Tensor, tuple[torch.FloatTensor, ...]]]]:
         residual = hidden_states
         hidden_states = self.ln_1(hidden_states)
         # print(hidden_states, 'in GPT2Block.')
-        # pdb.set_trace()
-        attn_output, self_attn_weights = self.attn(
+        router1, router2 = None, None
+        attn_output, self_attn_weights, dis_loss, router1, router2 = self.attn(
             hidden_states,
             past_key_values=past_key_values,
             cache_position=cache_position,
@@ -462,6 +1138,11 @@ class GPT2Block(GradientCheckpointingLayer):
             head_mask=head_mask,
             use_cache=use_cache,
             output_attentions=output_attentions,
+            rope=rope,
+            wavelet_decay_table=wavelet_decay_table,
+            geom_p=geom_p,
+            analyzer=analyzer,
+            input_ids=input_ids,
             **kwargs,
         )
         # residual connection
@@ -500,7 +1181,7 @@ class GPT2Block(GradientCheckpointingLayer):
             if encoder_hidden_states is not None:
                 outputs += (cross_attn_weights,)
 
-        return outputs
+        return outputs, dis_loss, router1, router2
 
 
 # Copied from transformers.models.xlm.modeling_xlm.XLMSequenceSummary with XLM->GPT2
@@ -623,9 +1304,16 @@ class GPT2PreTrainedModel(PreTrainedModel):
     def _init_weights(self, module):
         """Initialize the weights."""
         if isinstance(module, (nn.Linear, Conv1D)):
-            module.weight.data.normal_(mean=0.0, std=self.config.initializer_range)
-            if module.bias is not None:
-                module.bias.data.zero_()
+            if getattr(module, '_dape_zero_init', False):
+                # DAPE correction output layer: must stay at zero so model = pure ALiBi at t=0.
+                module.weight.data.zero_()
+                if module.bias is not None:
+                    module.bias.data.zero_()
+            else:
+                std = getattr(module, "_path_small_init_std", self.config.initializer_range)
+                module.weight.data.normal_(mean=0.0, std=std)
+                if module.bias is not None:
+                    module.bias.data.zero_()
         elif isinstance(module, nn.Embedding):
             module.weight.data.normal_(mean=0.0, std=self.config.initializer_range)
             if module.padding_idx is not None:
@@ -730,6 +1418,141 @@ DEPARALLELIZE_DOCSTRING = r"""
 """
 
 import pdb
+import torch
+import matplotlib.pyplot as plt
+from tqdm import tqdm
+
+# 假设你的 tensor 叫 x，形状为 [64, 257]
+# x = your_tensor
+
+# 示例：如果你只是想测试，可以取消注释这句
+# x = torch.randn(64, 257)
+def plot_tensor_grouped_lines(x: torch.Tensor):
+    plt.figure(figsize=(10, 6))
+
+    num_groups = 64 // 16  # =4
+
+    for i in tqdm(range(num_groups), desc="Plotting groups"):
+        start = i * 16
+        
+        # 将这 16 条线合成为一条（可选），这里按照你的要求：每 16 条画一条折线
+        # 你需要的是把这 16 行的每一个元素画出来，同时画 16 条线的话可以改成循环画
+        # === 根据题意，我理解为：把每组16行平均后画一条线 ===
+        # y = x[start:end].mean(dim=0).tolist()
+        y = x[start].tolist()
+        
+        plt.plot(y, label=f"dim {start}")
+
+    plt.legend()
+    plt.title("Tensor grouped-by-16 line plot")
+    plt.xlabel("Index (257 dim)")
+    plt.ylabel("Value")
+    os.makedirs("wavelet_spectrum", exist_ok=True)
+    plt.savefig("wavelet_spectrum/tensor_64x257_group16_plot.png", dpi=300)
+    print("Saved to wavelet_spectrum/tensor_64x257_group16_plot.png")
+@torch.no_grad()
+def build_wavelet_dtt_bands(
+    wavelet_dtt: torch.Tensor,   # [D, T, T]
+    K: int = 8,
+    method: str = "freq_proxy",  # "freq_proxy" or "scale_d"
+    scale_d: torch.Tensor | None = None,  # [D], optional
+    compute_dtype: torch.dtype = torch.float32,
+    chunk_d: int = 1024,         # for big D
+):
+    """
+    Returns:
+      wavelet_dtt_bands: [K, D, T, T]  (each band masks a subset of D)
+      masks           : [K, D]         (0/1 float mask)
+      score_d         : [D]            (used for sorting / bucketing)
+      order           : [D]            (indices sorted by score_d ascending)
+    """
+    assert wavelet_dtt.dim() == 3, f"expect [D,T,T], got {tuple(wavelet_dtt.shape)}"
+    D, T1, T2 = wavelet_dtt.shape
+    assert T1 == T2, f"expect square [T,T], got {T1}x{T2}"
+
+    device = wavelet_dtt.device
+    wav = wavelet_dtt.to(dtype=compute_dtype)
+
+    # ---- (A) build score_d for bucketing ----
+    if method == "scale_d":
+        assert scale_d is not None, "method='scale_d' needs scale_d: [D]"
+        assert scale_d.shape == (D,), f"scale_d should be [D], got {tuple(scale_d.shape)}"
+        score_d = scale_d.to(device=device, dtype=compute_dtype).clone()
+
+    elif method == "freq_proxy":
+        # proxy: average absolute finite differences along both axes
+        # higher => more rapidly varying kernel => "higher-frequency-ish"
+        score_d = torch.empty(D, device=device, dtype=compute_dtype)
+
+        # chunk to avoid big intermediate allocations if D large
+        for s in tqdm(range(0, D, chunk_d), desc="Scoring wavelet_dtt by freq proxy"):
+            e = min(D, s + chunk_d)
+            x = wav[s:e]  # [d',T,T]
+
+            # diffs
+            dx_t = (x[:, 1:, :] - x[:, :-1, :]).abs().mean(dim=(1, 2))    # [d']
+            dx_n = (x[:, :, 1:] - x[:, :, :-1]).abs().mean(dim=(1, 2))    # [d']
+
+            score_d[s:e] = dx_t + dx_n
+
+    else:
+        raise ValueError(f"Unknown method: {method}")
+
+    # ---- (B) sort + split D into K buckets ----
+    order = torch.argsort(score_d, dim=0)  # ascending
+    chunks = torch.chunk(order, K)         # nearly equal size
+
+    masks = torch.zeros((K, D), device=device, dtype=compute_dtype)
+    for k, ids in enumerate(chunks):
+        masks[k, ids] = 1.0
+
+    # ---- (C) apply masks to create bands ----
+    # [K,D,1,1] * [1,D,T,T] => [K,D,T,T]
+    wavelet_dtt_bands = masks[:, :, None, None] * wavelet_dtt[None, :, :, :].to(dtype=compute_dtype)
+
+    return wavelet_dtt_bands, masks, score_d, order
+from pathlib import Path
+def build_bucket_offsets(*, T: int, K: int, config) -> list:
+    mode = str(getattr(config, "shift_offset_mode", "linear"))
+
+    cap = int(getattr(config, "shift_offset_cap", 0))           # 0 => no cap
+    off_min = int(getattr(config, "shift_offset_min", 0))
+
+    def _apply_cap(x: int) -> int:
+        if cap and cap > 0:
+            x = min(x, cap)
+        # 不能超过 T-1，否则必然全被 mask 掉
+        x = min(x, T - 1)
+        # 最小值约束
+        x = max(x, off_min)
+        return int(x)
+
+    if mode == "linear":
+        stride = int(getattr(config, "shift_stride", 16))
+        center = int(getattr(config, "shift_center", 8))
+        offsets = [0] + [stride * j + center for j in range(1, K)]
+        return [_apply_cap(x) for x in offsets]
+
+    if mode == "list":
+        offsets = list(getattr(config, "shift_offsets", []))
+        assert len(offsets) == K, f"shift_offsets must have length K={K}, got {len(offsets)}"
+        return [_apply_cap(int(x)) for x in offsets]
+
+    if mode == "ratio":
+        ratios = list(getattr(config, "shift_offsets_ratio", []))
+        assert len(ratios) == K, f"shift_offsets_ratio must have length K={K}, got {len(ratios)}"
+        offsets = [int(round(r * T)) for r in ratios]
+        return [_apply_cap(x) for x in offsets]
+
+    if mode == "geom":
+        a = float(getattr(config, "shift_geom_a", 32.0))
+        r = float(getattr(config, "shift_geom_r", 2.0))
+        offsets = [0]
+        for j in range(1, K):
+            offsets.append(int(round(a * (r ** (j - 1)))))
+        return [_apply_cap(x) for x in offsets]
+
+    raise ValueError(f"Unknown shift_offset_mode={mode}")   
 @auto_docstring
 class GPT2Model(GPT2PreTrainedModel):
     _supports_param_buffer_assignment = False
@@ -738,9 +1561,13 @@ class GPT2Model(GPT2PreTrainedModel):
         super().__init__(config)
 
         self.embed_dim = config.hidden_size
-
         self.wte = nn.Embedding(config.vocab_size, self.embed_dim)
-        self.wpe = nn.Embedding(config.max_position_embeddings, self.embed_dim)
+        attn_impl = getattr(config, "attn_implementation", getattr(config, "_attn_implementation", "eager"))
+        if config.pe_method in ('no_pe', 'wavelet', 'alibi', 'dape_alibi'):
+            pass
+        else:
+            if config.pe_method != 'rotary' and attn_impl == 'eager':
+                self.wpe = nn.Embedding(config.max_position_embeddings, self.embed_dim)
 
         self.drop = nn.Dropout(config.embd_pdrop)
         self.h = nn.ModuleList([GPT2Block(config, layer_idx=i) for i in range(config.num_hidden_layers)])
@@ -753,8 +1580,390 @@ class GPT2Model(GPT2PreTrainedModel):
         self._attn_implementation = config._attn_implementation
 
         # Initialize weights and apply final processing
-        self.post_init()
 
+        self.post_init()
+        self.config=config
+        wavelet_mode = str(getattr(config, "wavelet_mode", "router_rel")).strip().lower()
+        self._skip_wavelet_decay_table = wavelet_mode in ("logit_bias_ctxscale_shift_v0", "logit_bias_ctxscale_shift_v0_film")
+        self.scale_range = getattr(config, 'scale_range', [0, 16])
+        _scale_type = getattr(config, 'scale_type', 'none')
+        self.s_tensor = None
+        self.beta_tensor = None
+        if not self._skip_wavelet_decay_table:
+            if _scale_type == 'learnable':
+                self.S = 8  # 你现在 interval 那套基本就是 8 个 scale
+
+                # 用你当前 custom 作为初始化
+                # 例如 scale_range=(0,16), interval=2 -> i=[0,2,4,...14]
+                init_exps = list(range(self.scale_range[0], self.scale_range[1], (self.scale_range[1]-self.scale_range[0])//self.S))
+                init_scales = torch.tensor([2**i for i in init_exps], dtype=torch.float32)  # [S]
+
+                # 初始化 a0 和 r：a0 = init_scales[0], r = (init_scales[-1]/init_scales[0])**(1/(S-1))
+                a0_init = init_scales[0].item()
+                r_init  = (init_scales[-1].item()/init_scales[0].item()) ** (1.0/(self.S-1))
+
+                self.theta_a0 = torch.nn.Parameter(torch.tensor([math.log(a0_init)], dtype=torch.float32, device='cuda'))
+                self.theta_r  = torch.nn.Parameter(torch.tensor([math.log(math.expm1(r_init-1))], dtype=torch.float32, device='cuda'))
+            if _scale_type == 'custom':
+                self.s_tensor, self.beta_tensor = self.make_scale_shift_vectors()
+            elif _scale_type == 'uniform':
+                self.s_tensor, self.beta_tensor = self.make_uniform_scale_shift_vectors()
+            elif _scale_type == 'learnable':
+                pass
+            elif _scale_type == 'none':
+                self.s_tensor = None
+                self.beta_tensor = None
+            else:
+                raise ValueError(f"Unknown scale_type: {_scale_type}")
+        self.d_m = None
+        _block_size = getattr(config, 'block_size', config.n_positions)
+        if (not self._skip_wavelet_decay_table) and _scale_type != 'learnable':
+            use_time_shift = getattr(config, 'use_time_shift', False)
+            if use_time_shift:
+                K = getattr(config, 'shift_bucket_K', 4)
+                # bucket_offsets = torch.tensor([0] + [16*j + 8 for j in range(1, K)], device=self.s_tensor.device)
+                bucket_offsets = build_bucket_offsets(T=_block_size, K=K, config=config)
+                self.d_m = self.make_decay_per_dim_custom_bucketed(64, _block_size, self.s_tensor, self.beta_tensor, bucket_offsets)
+            else:
+                self.d_m = self.make_decay_per_dim_custom(64, _block_size, self.s_tensor, self.beta_tensor)
+        # if config.wavelet_router:
+        #     self.d_m, _, _, _ = build_wavelet_dtt_bands(self.d_m)
+        if getattr(config, 'analyzer', False):
+            # self.analyzer = LayerAttentionAnalyzer(num_layers=config.num_hidden_layers, num_heads=12)
+            # self.analyzer.reset()
+            # self.scale_wise_analyzer = ScaleWiseAnalyzer(n_layers=config.num_hidden_layers, n_heads=12, head_dim=64, device='cuda', save_dir=f'scale_wise_analyzer_logs_{config.model_name_or_path}')
+            # self.router_analyzer = RouterAnalyzer(
+            #                             n_layers=config.num_hidden_layers,
+            #                             n_heads=config.num_attention_heads,
+            #                             n_scales=8,
+            #                             save_dir=f'router_analysis_{config.model_name_or_path}',
+            #                             device="cuda",              # 统计放 CPU 更省显存
+            #                             compute_dtype=torch.float32,
+            #                         )
+            self.analyzer_tools = {
+                'layer_attention_analyzer': LayerAttentionAnalyzer(num_layers=config.num_hidden_layers, num_heads=12),
+                'scale_wise_analyzer': ScaleWiseAnalyzer(n_layers=config.num_hidden_layers, n_heads=12, head_dim=64, device='cuda', save_dir=f'L_{config.block_size}_scale_wise_analyzer_logs_{config.model_name_or_path}'),
+                'router_analyzer': RouterAnalyzer(
+                                        n_layers=config.num_hidden_layers,
+                                        n_heads=config.num_attention_heads,
+                                        n_scales=8,
+                                        save_dir=f'L{config.block_size}_router_analysis_{config.model_name_or_path}',
+                                        device="cuda",              # 统计放 CPU 更省显存
+                                        compute_dtype=torch.float32,
+                                    ),
+                'token_scale_dumper': TokenScaleDumper(TokenScaleDumperConfig(
+                                                                                out_dir=f'L{config.block_size}_router_analysis_{config.model_name_or_path}',
+                                                                                tag="exp_router",
+                                                                                compress=False,
+                                                                                max_rows_per_shard=2_000_000,
+                                                                                flush_every=200_000,
+                                                                                low_frac=0.25,        # last 25% scales are "low-freq"
+                                                                                pos_segments=3,
+                                                                            )),
+                'pwav_mean_logger' : PWavMeanLogger(save_dir=f'L{config.block_size}_score_matrix_analysis_{config.model_name_or_path}'),
+            }
+        # X = torch.fft.rfft(self.d_m[:, -1,:], dim=-1, norm='ortho')   # [B, Q, K, H, D]
+        # A = X.abs()
+        # A_log = torch.log(A.clamp_min(1e-6))
+        # # pdb.set_trace()
+        # plot_tensor_grouped_lines(A_log)
+    def make_scale_shift_vectors(self, learnable_switch: bool = False):
+        shift_list = [0,1,2,3,4,5,6,7]
+        # shift_list = [0] * 8
+        device = 'cuda'
+
+        if learnable_switch:
+            a0 = self.theta_a0.exp().squeeze(0)                        # scalar
+            r  = (1.0 + torch.nn.functional.softplus(self.theta_r)).squeeze(0)  # scalar >1
+            k  = torch.arange(self.S, device=device, dtype=torch.float32)       # [S]
+            scales = a0 * (r ** k)                                     # [S]
+        else:
+            interval = (self.scale_range[1] - self.scale_range[0]) // 8
+            scale_list = [2**i for i in range(self.scale_range[0], self.scale_range[1], interval)]
+            scales = torch.tensor(scale_list, dtype=torch.float32, device=device)  # [S]
+
+        s_list = []
+        beta_list = []
+        for sc in scales:
+            for sh in shift_list:
+                s_list.append(sc)
+                beta_list.append(float(sh))
+
+        s_tensor = torch.stack(s_list).to(torch.float32)
+        beta_tensor = torch.tensor(beta_list, dtype=torch.float32, device=device)
+        return s_tensor, beta_tensor
+    # def make_scale_shift_vectors(self, learnable_switch: bool = False):
+    #     """
+    #     1) 定义 scale_list = [2^1, 2^2, ..., 2^15]  共 15 个值
+    #     2) 定义 shift_list = [0, 32, 64, 96]         共 4 个值
+    #     3) 组合成 d_h=15*4=60 维的 s 向量与 beta 向量:
+    #     s = [2^1,2^1,2^1,2^1, 2^2,2^2,2^2,2^2, …, 2^15,2^15,2^15,2^15]
+    #     beta = [0,32,64,96, 0,32,64,96, …, 0,32,64,96]
+    #     返回:
+    #     - s_tensor:  shape=(d_h,) dtype=float32
+    #     - beta_tensor:shape=(d_h,) dtype=float32
+    #     """
+    #     interval = (self.scale_range[1] - self.scale_range[0]) // 8
+    #     scale_list = [2**i for i in range(self.scale_range[0], self.scale_range[1], interval)]  # [2^1, 2^2, …, 2^15]
+    #     shift_list = [0, 1, 2, 3, 4, 5, 6, 7]
+    #     s = []
+    #     beta = []
+    #     for sc in scale_list:
+    #         for sh in shift_list:
+    #             s.append(float(sc))
+    #             if self.config.scale_use_for_shift:
+    #                 beta.append(float(sc * sh))
+    #             else:
+    #                 beta.append(float(sh))
+
+    #     # 现在 len(s) == len(beta) == 15*4 = 60
+    #     s_tensor = torch.tensor(s, dtype=torch.float32, device='cuda')
+    #     beta_tensor = torch.tensor(beta, dtype=torch.float32, device='cuda')
+    #     return s_tensor, beta_tensor
+    def make_uniform_scale_shift_vectors(self):
+        """
+        Log-uniform scale list + fixed shift list
+
+        - scale 在 [2^scale_range[0], 2^scale_range[1]] 上 log-space 均匀
+        - scale 个数 = d_h / len(shift_list)
+        - 不改变 d_h，不改变 shift_list
+        """
+
+        device = 'cuda'
+
+        # -------------------------
+        # 1) shift list（保持不变）
+        # -------------------------
+        shift_list = [0, 1, 2, 3, 4, 5, 6, 7]
+        # shift_list = [0] * 8
+        num_shifts = len(shift_list)
+
+        # -------------------------
+        # 2) scale 个数由 d_h 决定
+        # -------------------------
+        num_scales = 8
+
+        # -------------------------
+        # 3) log-uniform scale list
+        # -------------------------
+        scale_min = 2 ** self.scale_range[0]
+        scale_max = 2 ** self.scale_range[1]
+
+        # log-space 均匀
+        scale_list = torch.logspace(
+            start=torch.log10(torch.tensor(scale_min, dtype=torch.float32)),
+            end=torch.log10(torch.tensor(scale_max, dtype=torch.float32)),
+            steps=num_scales,
+            base=10.0,
+            device=device
+        )
+
+        # （可选）如果你希望 scale 是“干净”的整数
+        # scale_list = torch.round(scale_list)
+
+        # -------------------------
+        # 4) 组合 scale × shift
+        # -------------------------
+        s = []
+        beta = []
+
+        for sc in scale_list:
+            for sh in shift_list:
+                s.append(sc)
+                beta.append(float(sh))
+
+        s_tensor = torch.stack(s).to(device)           # (d_h,)
+        beta_tensor = torch.tensor(beta, device=device, dtype=torch.float32)
+
+        return s_tensor, beta_tensor    
+    def make_decay_per_dim_custom_bucketed(
+        self,
+        d_h: int,
+        L: int,
+        s: torch.Tensor,        # [d_h]
+        beta: torch.Tensor,     # [d_h]
+        bucket_offsets: torch.Tensor,  # [K] (e.g., [0, 24, 40, ...])
+        device: str = "cuda",
+        dtype: torch.dtype = torch.float32,
+        enable_tqdm: bool = False,
+    ):
+        """
+        Return: p_bucketed [K, d_h, L, L], each is tril() causal.
+        Implements: u = (diff - (beta + bucket_offset)) / s
+        """
+        assert s is not None and beta is not None
+        assert s.shape[0] == d_h and beta.shape[0] == d_h
+
+        s = s.to(device=device, dtype=dtype)
+        beta = beta.to(device=device, dtype=dtype)
+        bucket_offsets = torch.tensor(bucket_offsets, dtype=dtype, device=device)
+
+        # diff[m,n] = m - n
+        idx = torch.arange(L, device=device, dtype=dtype)
+        diff = idx.view(L, 1) - idx.view(1, L)  # [L,L]
+
+        a = s.view(d_h, 1, 1)       # [d_h,1,1]
+        b = beta.view(d_h, 1, 1)    # [d_h,1,1]
+
+        K = bucket_offsets.numel()
+        out = torch.empty((K, d_h, L, L), device=device, dtype=dtype)
+
+        it = range(K)
+        if enable_tqdm:
+            it = tqdm(it, desc="build wavelet_dtt buckets", total=K)
+
+        for k in it:
+            t = bucket_offsets[k].view(1, 1, 1)          # scalar broadcast
+            u = (diff.unsqueeze(0) - (b + t)) / a        # [d_h,L,L]
+            p = (1.0 - u**2) * torch.exp(-0.5 * u**2)    # [d_h,L,L]
+            out[k] = p.tril()                            # causal
+        return out.view(K, 8, d_h // 8, L, L).mean(dim=2)  # [K, d_h, L, L]
+    def make_decay_per_dim_custom(self, d_h: int, L: int, s: torch.Tensor, beta: torch.Tensor, device='cuda'):
+        """
+         改造后直接输出 p_{m,n} 矩阵，shape=(d_h, L, L)
+        """
+         # 1) 构造位置差 diff_{m,n} = m - n
+        if s is None or beta is None:
+            return None
+        idx = torch.arange(L, device=device).float()             # (L,)
+        m = idx.view(L, 1)                                      # (L,1)
+        n = idx.view(1, L)                                      # (1,L)
+        diff = m - n                                            # (L,L)
+
+         # 2) 扩展 scale a 和 shift b 到 (d_h,1,1)
+        a = s.view(d_h, 1, 1)                                   # (d_h,1,1)
+        b = beta.view(d_h, 1, 1)                                # (d_h,1,1)
+
+         # 3) 计算 u = (diff - b) / a
+        u = (diff.unsqueeze(0) - b) / a                         # (d_h,L,L)
+
+         # 4) 公式 p_{m,n} = (1 - u^2) * exp(-0.5 * u^2)
+        p = (1 - u**2) * torch.exp(-0.5 * u**2)                 # (d_h,L,L)
+
+         # 返回 shape=(d_h, L, L)，自注意力里再做 sqrt(d) 缩放和合并
+        return p.tril()
+    # def make_decay_per_dim_custom(self,
+    #                           d_h: int,
+    #                           L: int,
+    #                           s: torch.Tensor,
+    #                           beta: torch.Tensor,
+    #                           device: str = "cuda",
+    #                           target_norm: float = 1.0):
+    #     idx = torch.arange(L, device=device, dtype=torch.float32)
+    #     m = idx.view(L, 1)
+    #     n = idx.view(1, L)
+    #     diff = m - n  # (L,L)
+
+    #     a = s.view(d_h, 1, 1)
+    #     b = beta.view(d_h, 1, 1)
+
+    #     u = (diff.unsqueeze(0) - b) / a              # (d_h, L, L)
+    #     p = (1.0 - u**2) * torch.exp(-0.5 * u**2)    # (d_h, L, L)
+
+    #     tril_mask = torch.tril(torch.ones(L, L, device=device, dtype=torch.float32))
+    #     mask = tril_mask.unsqueeze(0)                # (1, L, L)
+
+    #     p_causal = p * mask                          # (d_h, L, L)
+
+    #     # 关键一句：对最后一维做 L2 norm 归一
+    #     w = torch.nn.functional.normalize(p_causal, p=2, dim=-1, eps=1e-8)
+    #     w = w * target_norm
+
+    #     return w   # [d_h, L, L]
+
+    # def make_decay_per_dim_custom(self,
+    #                             d_h: int,
+    #                             L: int,
+    #                             s: torch.Tensor,
+    #                             beta: torch.Tensor,
+    #                             device: str = "cuda",
+    #                             target_m2: float = 1.0):
+    #     """
+    #     输出 w_{d,i,j}, shape = (d_h, L, L)
+    #     - 先按 Ricker wavelet 公式得到 p
+    #     - 施加 causal tril mask（只保留下三角 i>=j）
+    #     - 再对 mask 后的有效区域做二阶矩归一，让 E[w^2] ~= target_m2
+    #     """
+
+    #     # 1) 位置差 diff_{m,n} = m - n
+    #     idx = torch.arange(L, device=device, dtype=torch.float32)  # (L,)
+    #     m = idx.view(L, 1)                                         # (L,1)
+    #     n = idx.view(1, L)                                         # (1,L)
+    #     diff = m - n                                               # (L,L)
+
+    #     # 2) 扩展 scale a 和 shift b 到 (d_h,1,1)
+    #     a = s.view(d_h, 1, 1)                                      # (d_h,1,1)
+    #     b = beta.view(d_h, 1, 1)                                   # (d_h,1,1)
+
+    #     # 3) u = (diff - b) / a
+    #     u = (diff.unsqueeze(0) - b) / a                            # (d_h,L,L)
+
+    #     # 4) 原始 Ricker wavelet 分数 p_{d,i,j}
+    #     p = (1.0 - u**2) * torch.exp(-0.5 * u**2)                  # (d_h,L,L)
+
+    #     # === 关键变化从这里开始 ===
+
+    #     # 5) causal mask: 只保留下三角 (i >= j)
+    #     tril_mask = torch.tril(torch.ones(L, L, device=device, dtype=torch.float32))  # (L,L)
+    #     mask = tril_mask.unsqueeze(0)                                                 # (1,L,L)
+
+    #     p_causal = p * mask  # 上三角直接置 0（不会被用到）
+
+    #     # 6) 在 mask 后的有效区域上做「全局二阶矩归一」
+    #     #    目标: E[w^2] ~= target_m2，避免整体坍缩或爆炸
+    #     eps = 1e-8
+    #     # valid 元素数量：d_h * 有效(i,j)个数
+    #     num_valid = (mask > 0).sum() * d_h
+
+    #     # 注意只统计有效区域
+    #     m2 = (p_causal.pow(2) * mask).sum() / (num_valid + eps)    # 标量
+
+    #     alpha = (target_m2 / (m2 + eps)).sqrt()                    # 标量
+
+    #     w = p_causal * alpha                                       # [d_h,L,L]
+
+    #     return w
+    # def make_decay_per_dim_custom(self, d_h: int, L: int,
+    #                             s: torch.Tensor, beta: torch.Tensor,
+    #                             device='cuda'):
+    #     """
+    #     输出 p_{m,n}，shape=(d_h, L, L)。
+    #     改动：
+    #     1) 严格上三角位置（m < n）替换为“每一行的最小值”
+    #     2) 对最后一维做 softmax
+    #     """
+    #     # 1) 位置差 diff_{m,n} = m - n
+    #     idx = torch.arange(L, device=device, dtype=torch.float32)  # (L,)
+    #     m = idx.view(L, 1)                                         # (L,1)
+    #     n = idx.view(1, L)                                         # (1,L)
+    #     diff = m - n                                               # (L,L)
+
+    #     # 2) 扩展 scale a 和 shift b 到 (d_h,1,1)
+    #     a = s.view(d_h, 1, 1)                                      # (d_h,1,1)
+    #     b = beta.view(d_h, 1, 1)                                   # (d_h,1,1)
+
+    #     # 3) u = (diff - b) / a
+    #     u = (diff.unsqueeze(0) - b) / a                            # (d_h,L,L)
+
+    #     # 4) 原始分数 p_{m,n} = (1 - u^2) * exp(-0.5 * u^2)
+    #     p = (1 - u**2) * torch.exp(-0.5 * u**2)                   # (d_h,L,L)
+    #     p = p / (p.norm(dim=-1, keepdim=True) + 1e-12)
+    #     # 5) 严格上三角掩码（True 表示 m < n）
+    #     # upper_mask = torch.triu(torch.ones(L, L, device=device, dtype=torch.bool), diagonal=1)  # (L,L)
+
+    #     # 6) 每一行（固定 m）最小值，沿最后一维求最小：(d_h, L, 1)
+    #     # row_min = p.amin(dim=-1, keepdim=True)
+
+    #     # 7) 将严格上三角置为对应行的最小值
+    #     # p = torch.where(upper_mask, row_min, p)
+
+    #     # 8) 对最后一维做 softmax
+    #     # p = 2 * torch.sigmoid(p) ###keep consistent with fox paper
+
+    #     # p = torch.sigmoid(p) ###keep consistent with fox paper
+    #     # return p - 1
+
+    #     return p
     @add_start_docstrings(PARALLELIZE_DOCSTRING)
     def parallelize(self, device_map=None):
         # Check validity of device_map
@@ -829,6 +2038,7 @@ class GPT2Model(GPT2PreTrainedModel):
         output_attentions: Optional[bool] = None,
         output_hidden_states: Optional[bool] = None,
         return_dict: Optional[bool] = None,
+        geom_p=0,
         **kwargs,
     ) -> Union[tuple, BaseModelOutputWithPastAndCrossAttentions]:
         r"""
@@ -900,14 +2110,21 @@ class GPT2Model(GPT2PreTrainedModel):
             cache_position = torch.arange(
                 past_seen_tokens, past_seen_tokens + inputs_embeds.shape[1], device=inputs_embeds.device
             )
+        rope = None
         if position_ids is None:
             position_ids = cache_position.unsqueeze(0)
-        # if self.config.attn_implementation in ['path_attn', 'path_attn_wfreq']:
-        #     hidden_states = inputs_embeds
-        # else:
-        position_embeds = self.wpe(position_ids)
-        hidden_states = inputs_embeds + position_embeds.to(inputs_embeds.device)
-
+        attn_impl = getattr(self.config, "attn_implementation", getattr(self.config, "_attn_implementation", "eager"))
+        if attn_impl in ['path_attn', 'path_attn_wfreq']:
+            hidden_states = inputs_embeds
+        elif self.config.pe_method == 'rotary':
+            assert attn_impl == "eager", "only in eager mode you can use rotary."
+            hidden_states = inputs_embeds
+        elif self.config.pe_method in ('no_pe', 'wavelet', 'alibi', 'dape_alibi'):
+            hidden_states = inputs_embeds
+        else:
+            position_embeds = self.wpe(position_ids)
+            hidden_states = inputs_embeds + position_embeds.to(inputs_embeds.device)
+            
         # Attention mask.
         # ._update_causal_mask() and ._prepare_4d_causal_attention_mask_with_cache_position() copied from LlamaModel
         if attention_mask is not None and attention_mask.ndim < 4:
@@ -956,6 +2173,12 @@ class GPT2Model(GPT2PreTrainedModel):
         all_self_attentions = () if output_attentions else None
         all_cross_attentions = () if output_attentions and self.config.add_cross_attention else None
         all_hidden_states = () if output_hidden_states else None
+        dis_loss_total = hidden_states.new_zeros([])
+        if getattr(self.config, 'scale_type', 'fixed') == 'learnable' and not self._skip_wavelet_decay_table:
+            s_tensor, beta_tensor = self.make_scale_shift_vectors(learnable_switch=True)
+            self.d_m = self.make_decay_per_dim_custom(64, self.config.block_size, s_tensor, beta_tensor)
+        router1_idx_layers = []
+        router2_idx_layers = []
         for i, block in enumerate(self.h):
             # Model parallel
             if self.model_parallel:
@@ -965,7 +2188,7 @@ class GPT2Model(GPT2PreTrainedModel):
             if output_hidden_states:
                 all_hidden_states = all_hidden_states + (hidden_states,)
 
-            outputs = block(
+            outputs, cur_dis_loss, router1, router2 = block(
                 hidden_states,
                 past_key_values if not (self.gradient_checkpointing and self.training) else None,
                 cache_position,
@@ -976,10 +2199,23 @@ class GPT2Model(GPT2PreTrainedModel):
                 use_cache=use_cache,
                 output_attentions=output_attentions,
                 attention_mask_2d=attention_mask,  # ← 传给 PaTH 用的 2D 0/1 mask；其他实现会忽略
+                rope=rope,
+                wavelet_decay_table=self.d_m,
+                geom_p=geom_p,
+                analyzer=self.analyzer_tools if self.config.analyzer else None,
+                # Always pass input_ids when available so eval-time attention exports
+                # can recover token_id/token text even when analyzer is disabled.
+                input_ids=input_ids,
+                # analyzer=self.analyzer if self.config.analyzer else None,
+                # scale_wise_analyzer=self.scale_wise_analyzer if self.config.analyzer else None,
+                # router_analyzer=self.router_analyzer if self.config.analyzer else None,
                 **kwargs,
             )
 
-
+            router1_idx_layers.append(router1)
+            router2_idx_layers.append(router2)
+            if cur_dis_loss is not None:
+                dis_loss_total += cur_dis_loss
             hidden_states = outputs[0]
 
             if output_attentions:
@@ -992,7 +2228,14 @@ class GPT2Model(GPT2PreTrainedModel):
                 for k, v in self.device_map.items():
                     if i == v[-1] and "cuda:" + str(k) != self.last_device:
                         hidden_states = hidden_states.to("cuda:" + str(k + 1))
-
+        try:
+            router1_idx = torch.stack(router1_idx_layers, dim=0)  # [L,B,T,H]
+            router2_idx = torch.stack(router2_idx_layers, dim=0)
+            self.last_router1_idx = router1_idx.detach()
+            self.last_router2_idx = router2_idx.detach()
+        
+        except:
+            pass
         hidden_states = self.ln_f(hidden_states)
 
         hidden_states = hidden_states.view(output_shape)
@@ -1014,7 +2257,7 @@ class GPT2Model(GPT2PreTrainedModel):
             hidden_states=all_hidden_states,
             attentions=all_self_attentions,
             cross_attentions=all_cross_attentions,
-        )
+        ), dis_loss_total
 
 
 @auto_docstring(
@@ -1030,7 +2273,6 @@ class GPT2LMHeadModel(GPT2PreTrainedModel, GenerationMixin):
         super().__init__(config)
         self.transformer = GPT2Model(config)
         self.lm_head = nn.Linear(config.n_embd, config.vocab_size, bias=False)
-
         # Model parallel
         self.model_parallel = False
         self.device_map = None
@@ -1088,6 +2330,7 @@ class GPT2LMHeadModel(GPT2PreTrainedModel, GenerationMixin):
         output_hidden_states: Optional[bool] = None,
         return_dict: Optional[bool] = None,
         logits_to_keep: Union[int, torch.Tensor] = 0,
+        geom_p = 0,
         **kwargs,
     ) -> Union[tuple, CausalLMOutputWithCrossAttentions]:
         r"""
@@ -1110,7 +2353,7 @@ class GPT2LMHeadModel(GPT2PreTrainedModel, GenerationMixin):
         """
         return_dict = return_dict if return_dict is not None else self.config.use_return_dict
 
-        transformer_outputs = self.transformer(
+        transformer_outputs, dis_loss = self.transformer(
             input_ids,
             past_key_values=past_key_values,
             attention_mask=attention_mask,
@@ -1125,9 +2368,9 @@ class GPT2LMHeadModel(GPT2PreTrainedModel, GenerationMixin):
             output_attentions=output_attentions,
             output_hidden_states=output_hidden_states,
             return_dict=return_dict,
+            geom_p=geom_p,
         )
         hidden_states = transformer_outputs[0]
-
         # Set device for model parallelism
         if self.model_parallel:
             torch.cuda.set_device(self.transformer.first_device)
@@ -1145,13 +2388,19 @@ class GPT2LMHeadModel(GPT2PreTrainedModel, GenerationMixin):
                 vocab_size=self.config.vocab_size,
                 **kwargs,
             )
+        # Keep auxiliary dis_loss (including router entropy regularization) explicit in
+        # training objective when LM loss exists.
+        if loss is not None:
+            loss = loss + (float(geom_p) * dis_loss)
 
+        # loss += self.dis_loss_coe * dis_loss
         if not return_dict:
             output = (logits,) + transformer_outputs[1:]
             return ((loss,) + output) if loss is not None else output
 
         return CausalLMOutputWithCrossAttentions(
             loss=loss,
+            auxiliary_loss=dis_loss,
             logits=logits,
             past_key_values=transformer_outputs.past_key_values,
             hidden_states=transformer_outputs.hidden_states,
