@@ -1589,43 +1589,41 @@ class GPT2Model(GPT2PreTrainedModel):
         _scale_type = getattr(config, 'scale_type', 'none')
         self.s_tensor = None
         self.beta_tensor = None
-        if not self._skip_wavelet_decay_table:
-            if _scale_type == 'learnable':
-                self.S = 8  # 你现在 interval 那套基本就是 8 个 scale
-
-                # 用你当前 custom 作为初始化
-                # 例如 scale_range=(0,16), interval=2 -> i=[0,2,4,...14]
-                init_exps = list(range(self.scale_range[0], self.scale_range[1], (self.scale_range[1]-self.scale_range[0])//self.S))
-                init_scales = torch.tensor([2**i for i in init_exps], dtype=torch.float32)  # [S]
-
-                # 初始化 a0 和 r：a0 = init_scales[0], r = (init_scales[-1]/init_scales[0])**(1/(S-1))
-                a0_init = init_scales[0].item()
-                r_init  = (init_scales[-1].item()/init_scales[0].item()) ** (1.0/(self.S-1))
-
-                self.theta_a0 = torch.nn.Parameter(torch.tensor([math.log(a0_init)], dtype=torch.float32, device='cuda'))
-                self.theta_r  = torch.nn.Parameter(torch.tensor([math.log(math.expm1(r_init-1))], dtype=torch.float32, device='cuda'))
-            if _scale_type == 'custom':
-                self.s_tensor, self.beta_tensor = self.make_scale_shift_vectors()
-            elif _scale_type == 'uniform':
-                self.s_tensor, self.beta_tensor = self.make_uniform_scale_shift_vectors()
-            elif _scale_type == 'learnable':
-                pass
-            elif _scale_type == 'none':
-                self.s_tensor = None
-                self.beta_tensor = None
-            else:
-                raise ValueError(f"Unknown scale_type: {_scale_type}")
         self.d_m = None
-        _block_size = getattr(config, 'block_size', config.n_positions)
-        if (not self._skip_wavelet_decay_table) and _scale_type != 'learnable':
-            use_time_shift = getattr(config, 'use_time_shift', False)
-            if use_time_shift:
-                K = getattr(config, 'shift_bucket_K', 4)
-                # bucket_offsets = torch.tensor([0] + [16*j + 8 for j in range(1, K)], device=self.s_tensor.device)
-                bucket_offsets = build_bucket_offsets(T=_block_size, K=K, config=config)
-                self.d_m = self.make_decay_per_dim_custom_bucketed(64, _block_size, self.s_tensor, self.beta_tensor, bucket_offsets)
-            else:
-                self.d_m = self.make_decay_per_dim_custom(64, _block_size, self.s_tensor, self.beta_tensor)
+        if _scale_type not in ('none', None):
+            if not self._skip_wavelet_decay_table:
+                if _scale_type == 'learnable':
+                    self.S = 8  # 你现在 interval 那套基本就是 8 个 scale
+
+                    # 用你当前 custom 作为初始化
+                    # 例如 scale_range=(0,16), interval=2 -> i=[0,2,4,...14]
+                    init_exps = list(range(self.scale_range[0], self.scale_range[1], (self.scale_range[1]-self.scale_range[0])//self.S))
+                    init_scales = torch.tensor([2**i for i in init_exps], dtype=torch.float32)  # [S]
+
+                    # 初始化 a0 和 r：a0 = init_scales[0], r = (init_scales[-1]/init_scales[0])**(1/(S-1))
+                    a0_init = init_scales[0].item()
+                    r_init  = (init_scales[-1].item()/init_scales[0].item()) ** (1.0/(self.S-1))
+
+                    self.theta_a0 = torch.nn.Parameter(torch.tensor([math.log(a0_init)], dtype=torch.float32, device='cuda'))
+                    self.theta_r  = torch.nn.Parameter(torch.tensor([math.log(math.expm1(r_init-1))], dtype=torch.float32, device='cuda'))
+                if _scale_type == 'custom':
+                    self.s_tensor, self.beta_tensor = self.make_scale_shift_vectors()
+                elif _scale_type == 'uniform':
+                    self.s_tensor, self.beta_tensor = self.make_uniform_scale_shift_vectors()
+                elif _scale_type == 'learnable':
+                    pass
+                else:
+                    raise ValueError(f"Unknown scale_type: {_scale_type}")
+            _block_size = getattr(config, 'block_size', config.n_positions)
+            if (not self._skip_wavelet_decay_table) and _scale_type != 'learnable':
+                use_time_shift = getattr(config, 'use_time_shift', False)
+                if use_time_shift:
+                    K = getattr(config, 'shift_bucket_K', 4)
+                    # bucket_offsets = torch.tensor([0] + [16*j + 8 for j in range(1, K)], device=self.s_tensor.device)
+                    bucket_offsets = build_bucket_offsets(T=_block_size, K=K, config=config)
+                    self.d_m = self.make_decay_per_dim_custom_bucketed(64, _block_size, self.s_tensor, self.beta_tensor, bucket_offsets)
+                else:
+                    self.d_m = self.make_decay_per_dim_custom(64, _block_size, self.s_tensor, self.beta_tensor)
         # if config.wavelet_router:
         #     self.d_m, _, _, _ = build_wavelet_dtt_bands(self.d_m)
         if getattr(config, 'analyzer', False):
