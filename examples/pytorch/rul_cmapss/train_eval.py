@@ -295,13 +295,36 @@ def run_experiment(args) -> dict:
     if best_state is not None:
         model.load_state_dict(best_state)
     model.to(device)
+
+    # Standard test at training window size
     test_result = evaluate(model, test_loader, device,
                            critical_rul=args.critical_rul,
                            include_phm=args.include_phm, max_rul=args.max_rul)
+    print(f'Test (win={args.window_size}) clipped:', test_result['clipped'])
 
-    print('Test metrics (clipped):', test_result['clipped'])
-    print('Pred dist raw:    ', test_result['pred_dist_raw'])
-    print('Pred dist clipped:', test_result['pred_dist_clipped'])
+    # Train-short/test-long: evaluate at additional test window sizes
+    test_window_sizes = getattr(args, 'test_window_sizes', None) or []
+    test_by_window = {str(args.window_size): test_result['clipped']}
+
+    from cmapss_dataset import build_test_windows, apply_standardizer, WindowedRULDataset
+    _, test_raw_df, rul_df = __import__('cmapss_dataset').load_fd001_raw(args.data_dir)
+    test_norm_df = apply_standardizer(test_raw_df, meta['feature_cols'], meta['mean'], meta['std'])
+
+    for tw in test_window_sizes:
+        if tw == args.window_size:
+            continue
+        _, x_te, y_te, te_masks = build_test_windows(
+            test_norm_df, rul_df, meta['feature_cols'],
+            window_size=tw, max_rul=args.max_rul,
+        )
+        tw_ds = WindowedRULDataset(x_te, y_te, te_masks)
+        tw_loader = DataLoader(tw_ds, shuffle=False, **loader_kw)
+        tw_result = evaluate(model, tw_loader, device,
+                             critical_rul=args.critical_rul,
+                             include_phm=False, max_rul=args.max_rul)
+        test_by_window[str(tw)] = tw_result['clipped']
+        print(f'Test (win={tw:3d}) clipped: rmse={tw_result["clipped"]["rmse"]:.4f}  '
+              f'rmse_crit={tw_result["clipped"]["rmse_critical"]:.4f}')
 
     results = {
         'model':                args.model,
@@ -309,6 +332,7 @@ def run_experiment(args) -> dict:
         'best_val_epoch':       best_val_epoch,
         'test_clipped':         test_result['clipped'],
         'test_raw':             test_result['raw'],
+        'test_by_window':       test_by_window,
         'pred_dist_raw':        test_result['pred_dist_raw'],
         'pred_dist_clipped':    test_result['pred_dist_clipped'],
         'target_dist':          test_result['target_dist'],
