@@ -53,6 +53,9 @@ class GPT2RULBase(nn.Module):
             block_size=max_position_embeddings,
             distill_teacher='none',
             wavelet_router=False,
+            qk_rotation=False,
+            ablate_switch=False,
+            distill_in_which_layers=0,
         )
         self.backbone = GPT2Model(config)
         self.reg_head = nn.Linear(hidden_size, 1)
