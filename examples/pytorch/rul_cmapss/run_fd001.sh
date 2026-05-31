@@ -18,8 +18,8 @@ _slack() {
 }
 trap '_slack $?' EXIT
 
-source /home/is/hongyu-s/miniconda3/etc/profile.d/conda.sh
-conda activate latest_transformers
+export PYTHONPATH=/project/nlp-work5/hongyu-s/transformers/src:${PYTHONPATH:-}
+PYTHON=/cl/work5/hongyu-s/conda/envs/latest_transformers/bin/python
 
 cd /project/nlp-work5/hongyu-s/transformers
 
@@ -32,7 +32,7 @@ if [ ! -f data/cmapss/train_FD001.txt ]; then
     exit 1
 fi
 
-python examples/pytorch/rul_cmapss/run_fd001.py \
+$PYTHON examples/pytorch/rul_cmapss/run_fd001.py \
     --model path \
     --data_dir data/cmapss \
     --output_dir examples/pytorch/rul_cmapss/outputs/fd001 \
