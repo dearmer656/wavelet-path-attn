@@ -267,6 +267,8 @@ def run_experiment(args) -> dict:
     best_val_rmse = float('inf')
     best_val_epoch = -1
     best_state = None
+    no_improve = 0
+    patience = getattr(args, 'patience', 8)
 
     for epoch in range(1, args.epochs + 1):
         train_loss = train_one_epoch(model, train_loader, optimizer, device,
@@ -279,9 +281,15 @@ def run_experiment(args) -> dict:
             best_val_rmse  = val_rmse
             best_val_epoch = epoch
             best_state = {k: v.cpu().clone() for k, v in model.state_dict().items()}
+            no_improve = 0
+        else:
+            no_improve += 1
         if epoch % 10 == 0 or epoch == 1:
             print(f'epoch {epoch:3d}  train_mse={train_loss:.4f}  '
-                  f'val_rmse(clipped)={val_rmse:.4f}')
+                  f'val_rmse(clipped)={val_rmse:.4f}  no_improve={no_improve}')
+        if patience > 0 and no_improve >= patience:
+            print(f'Early stopping at epoch {epoch} (no improvement for {patience} epochs)')
+            break
 
     # load best checkpoint for test
     if best_state is not None:

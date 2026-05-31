@@ -35,6 +35,8 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--device", type=str, default="cuda")
     parser.add_argument("--critical_rul", type=int, default=30)
     parser.add_argument("--include_phm", action="store_true")
+    parser.add_argument("--patience", type=int, default=8,
+                        help="Early stopping patience (0 = disabled)")
     parser.add_argument("--smoke_test", action="store_true",
                         help="Run forward-pass smoke test for all 6 models and exit.")
     return parser
