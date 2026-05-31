@@ -447,7 +447,7 @@ class GPT2PaTHAttention(nn.Module):
 
         self.layer_idx = layer_idx
         # 构造 PaTH 核心
-        if getattr(config, "attn_implementation", None) == "path_attn_wfreq":
+        if getattr(config, "_attn_implementation", getattr(config, "attn_implementation", None)) == "path_attn_wfreq":
             self.core = _PaTHAttentionWfreq(
                 hidden_size=config.hidden_size,
                 num_heads=getattr(config, "num_attention_heads", getattr(config, "n_head", None)),
@@ -467,7 +467,7 @@ class GPT2PaTHAttention(nn.Module):
                 use_soft_wavelet_fox=getattr(config, "use_soft_wavelet_fox", False),
                 wavelet_mode=getattr(config, "wavelet_mode", "router_rel"),
             )
-        elif getattr(config, "attn_implementation", None) == "path_attn":
+        elif getattr(config, "_attn_implementation", getattr(config, "attn_implementation", None)) == "path_attn":
             self.core = _PaTHAttention(
                 hidden_size=config.hidden_size,
                 num_heads=getattr(config, "num_attention_heads", getattr(config, "n_head", None)),
@@ -1095,7 +1095,7 @@ class GPT2Block(GradientCheckpointingLayer):
         inner_dim = config.n_inner if config.n_inner is not None else 4 * hidden_size
 
         self.ln_1 = nn.LayerNorm(hidden_size, eps=config.layer_norm_epsilon)
-        if getattr(config, "attn_implementation", None) in ["path_attn", "path_attn_wfreq"]:
+        if getattr(config, "_attn_implementation", getattr(config, "attn_implementation", None)) in ["path_attn", "path_attn_wfreq"]:
             self.attn = GPT2PaTHAttention(config=config, layer_idx=layer_idx)
         else:
             self.attn = GPT2Attention(config=config, layer_idx=layer_idx)
