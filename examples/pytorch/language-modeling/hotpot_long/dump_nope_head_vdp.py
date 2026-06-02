@@ -331,7 +331,10 @@ def run(args):
                     return hook
                 hooks.append(model.transformer.h[layer_idx].attn.register_forward_hook(make_hook(layer_idx)))
             with torch.no_grad():
-                model(input_ids, output_attentions=True)
+                # output_attentions=False: model does not accumulate all layers into
+                # all_self_attentions; hooks still capture per-layer attn_weights from
+                # the attention module's output tuple before they are freed.
+                model(input_ids, output_attentions=False)
             for h in hooks:
                 h.remove()
         else:

@@ -2,7 +2,8 @@
 #SBATCH --job-name=pat178_nope_vdp_L8192
 #SBATCH --output=/cl/work5/hongyu-s/transformers/examples/pytorch/language-modeling/hotpot_long/logs/%j_pat178_nope_vdp_L8192.txt
 #SBATCH --partition=gpu_long
-#SBATCH --gres=gpu:a6000:1
+#SBATCH --gres=gpu:q6000:1
+#SBATCH --nodelist=elm26
 #SBATCH --time=12:00:00
 #SBATCH --ntasks=1
 #SBATCH --cpus-per-task=4
@@ -13,7 +14,7 @@ _slack() {
         --job-id "${SLURM_JOB_ID}" \
         --node "${SLURMD_NODENAME}" \
         --issue "PAT-178" \
-        --gpu "a6000x1" \
+        --gpu "q6000x1" \
         --summary "NoPE head-wise V/D/P dump L8192 (64 cases, s42 ckpt15900, hooks+recv_attn)"
 }
 trap '_slack $?' EXIT
@@ -28,6 +29,7 @@ export PYTHONPATH=/project/nlp-work5/hongyu-s/flash-linear-attention:/project/nl
 export HF_HOME=/cl/work5/hongyu-s/huggingfac
 export HF_DATASETS_CACHE=/cl/work5/hongyu-s/huggingfac/datasets
 export WANDB_DISABLED=true
+export PYTORCH_CUDA_ALLOC_CONF=expandable_segments:True
 
 BASE=/cl/work5/hongyu-s/transformers/examples/pytorch/language-modeling
 CKPT=${BASE}/runs/wikitext_pe_cmp/wavelet/finetune_eager_nope_seed42/checkpoint-15900
