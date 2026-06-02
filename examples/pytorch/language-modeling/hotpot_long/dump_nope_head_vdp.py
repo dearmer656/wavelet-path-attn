@@ -116,6 +116,9 @@ def compute_vdp_features(
         diagonal_vals.append(d)
         jsd_vals.append(_jsd(prev_row, cur_row))
 
+    # support_key_mass: average attention from sampled query rows to support key positions
+    sampled_rows = rows[rids]  # [n_sampled, k_len]
+
     # periodic score via FFT over aligned query rows
     if aligned.shape[0] > 2:
         spec = torch.fft.rfft(aligned, dim=0)
@@ -132,7 +135,7 @@ def compute_vdp_features(
     else:
         periodic_seq = 0.0
 
-    support_key_mass = float(rows[:, support_mask].sum(dim=-1).mean().item()) if support_mask is not None else float("nan")
+    support_key_mass = float(sampled_rows[:, support_mask].sum(dim=-1).mean().item()) if support_mask is not None else float("nan")
 
     def _mean(xs): return float(sum(xs) / len(xs)) if xs else float("nan")
 
