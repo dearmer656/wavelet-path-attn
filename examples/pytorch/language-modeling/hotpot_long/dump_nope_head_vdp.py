@@ -173,6 +173,79 @@ def extract_model_tag(checkpoint: str) -> str:
     return f"nope_{seed}_{step_num}"
 
 
+def _process_layer_attn(
+    attn_cpu: torch.Tensor,
+    layer_idx: int,
+    case_idx: int,
+    actual_len: int,
+    query_stride: int,
+    support_start: Optional[int],
+    support_end: Optional[int],
+    target_row_ids: list,
+    model_tag: str,
+    example_id: str,
+    target_query_start: int,
+    target_query_end: int,
+    feat_dir: Path,
+    save_received_attn: bool,
+    top_k_recv: int = 20,
+) -> None:
+    """Compute and save per-head VDP features for one layer."""
+    n_heads = attn_cpu.shape[0]
+    all_query_feats = []
+    target_query_feats = []
+    recv_attn_top = []  # optional: top-k received-attention key positions per head
+
+    for h in range(n_heads):
+        head_mat = attn_cpu[h, :actual_len, :actual_len]
+        all_query_feats.append(compute_vdp_features(
+            head_mat, query_stride=query_stride,
+            support_start=support_start, support_end=support_end,
+        ))
+        target_query_feats.append(compute_vdp_features(
+            head_mat, query_stride=query_stride,
+            support_start=support_start, support_end=support_end,
+            query_row_ids=target_row_ids,
+        ))
+        if save_received_attn and len(target_row_ids) > 0:
+            # R_j = sum_{i in target_rows} A_{i,j}: total attention mass received by key j
+            recv = head_mat[target_row_ids, :].sum(dim=0)  # [actual_len]
+            topk_vals, topk_idx = torch.topk(recv, k=min(top_k_recv, actual_len))
+            recv_attn_top.append({
+                "top_key_positions": topk_idx.tolist(),
+                "top_key_masses": [round(float(v), 4) for v in topk_vals.tolist()],
+            })
+
+    meta_out = {
+        "model_tag": model_tag,
+        "layer": layer_idx,
+        "case_id": case_idx,
+        "q_len": actual_len,
+        "k_len": actual_len,
+        "query_stride": query_stride,
+        "support_start_tok": support_start,
+        "support_end_tok": support_end,
+        "example_id": example_id,
+        "target_query_start": target_query_start,
+        "target_query_end": target_query_end,
+        "n_heads": n_heads,
+    }
+    payload: dict = {
+        "meta": meta_out,
+        "per_head": {
+            "all_query": all_query_feats,
+            "target_query": target_query_feats,
+        },
+    }
+    if save_received_attn and recv_attn_top:
+        payload["received_attn_top"] = recv_attn_top
+
+    out_dir = feat_dir / f"layer{layer_idx:02d}" / f"case{case_idx:03d}"
+    out_dir.mkdir(parents=True, exist_ok=True)
+    with open(out_dir / "pattern_features.json", "w") as f:
+        json.dump(payload, f)
+
+
 def run(args):
     checkpoint = args.checkpoint
     seq_len = args.seq_len
@@ -181,8 +254,10 @@ def run(args):
     out_root = Path(args.out_root)
     jsonl_path = Path(args.jsonl)
     model_tag = extract_model_tag(checkpoint)
+    save_received_attn = args.save_received_attn
+    # auto-select hook mode for large seq_len to avoid OOM (>4096 requires hooks)
+    use_hooks = args.use_hooks or (seq_len > 4096)
 
-    # load cases for this seq_len
     cases = []
     with open(jsonl_path) as f:
         for line in f:
@@ -191,9 +266,8 @@ def run(args):
                 cases.append(rec)
                 if len(cases) >= case_limit:
                     break
-    print(f"Loaded {len(cases)} cases for seq_len={seq_len}")
+    print(f"Loaded {len(cases)} cases for seq_len={seq_len}, use_hooks={use_hooks}")
 
-    # load model + tokenizer
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     print(f"Loading model from {checkpoint} on {device}")
     tokenizer = AutoTokenizer.from_pretrained(checkpoint)
@@ -212,19 +286,14 @@ def run(args):
         prompt_fixed_tokens = int(meta.get("prompt_fixed_tokens", 0))
         actual_total_tokens = int(meta.get("actual_total_tokens", seq_len))
 
-        # target-query: positions after the context docs (question-suffix + answer)
         target_query_start = prompt_fixed_tokens + context_tokens
-        target_query_end = actual_total_tokens  # exclusive
+        target_query_end = actual_total_tokens
 
-        # tokenize
         prompt_str = render_prompt(rec)
         answer_str = f" {rec['answer']}"
         prompt_ids = tokenizer(prompt_str, add_special_tokens=False)["input_ids"]
         answer_ids = tokenizer(answer_str, add_special_tokens=False)["input_ids"]
-        full_ids = prompt_ids + answer_ids
-        # truncate / pad to seq_len
-        if len(full_ids) > seq_len:
-            full_ids = full_ids[:seq_len]
+        full_ids = (prompt_ids + answer_ids)[:seq_len]
         actual_len = len(full_ids)
         input_ids = torch.tensor([full_ids], dtype=torch.long, device=device)
 
@@ -232,62 +301,64 @@ def run(args):
         target_query_start = min(target_query_start, target_query_end)
         target_row_ids = list(range(target_query_start, target_query_end))
 
-        with torch.no_grad():
-            outputs = model(input_ids, output_attentions=True)
-        # outputs.attentions: tuple of n_layers tensors, each [1, n_heads, Q, Q]
-        attn_layers = outputs.attentions  # 12 tensors for GPT-2 small
+        if use_hooks:
+            # Process one layer at a time via forward hooks to bound GPU memory.
+            # Hook captures attn_weights (output[1] of GPT2Attention) immediately.
+            hooks = []
+            for layer_idx in range(len(model.transformer.h)):
+                def make_hook(lidx):
+                    def hook(module, input, output):
+                        attn_weights = output[1]  # [batch, n_heads, Q, Q]
+                        if attn_weights is None:
+                            return output
+                        _process_layer_attn(
+                            attn_cpu=attn_weights[0].cpu(),
+                            layer_idx=lidx,
+                            case_idx=case_idx,
+                            actual_len=actual_len,
+                            query_stride=query_stride,
+                            support_start=support_start,
+                            support_end=support_end,
+                            target_row_ids=target_row_ids,
+                            model_tag=model_tag,
+                            example_id=example_id,
+                            target_query_start=target_query_start,
+                            target_query_end=target_query_end,
+                            feat_dir=feat_dir,
+                            save_received_attn=save_received_attn,
+                        )
+                        return output
+                    return hook
+                hooks.append(model.transformer.h[layer_idx].attn.register_forward_hook(make_hook(layer_idx)))
+            with torch.no_grad():
+                model(input_ids, output_attentions=True)
+            for h in hooks:
+                h.remove()
+        else:
+            with torch.no_grad():
+                outputs = model(input_ids, output_attentions=True)
+            attn_layers = outputs.attentions
+            for layer_idx, attn_layer in enumerate(attn_layers):
+                _process_layer_attn(
+                    attn_cpu=attn_layer[0].cpu(),
+                    layer_idx=layer_idx,
+                    case_idx=case_idx,
+                    actual_len=actual_len,
+                    query_stride=query_stride,
+                    support_start=support_start,
+                    support_end=support_end,
+                    target_row_ids=target_row_ids,
+                    model_tag=model_tag,
+                    example_id=example_id,
+                    target_query_start=target_query_start,
+                    target_query_end=target_query_end,
+                    feat_dir=feat_dir,
+                    save_received_attn=save_received_attn,
+                )
+            del attn_layers, outputs
 
-        for layer_idx, attn_layer in enumerate(attn_layers):
-            # attn_layer: [1, n_heads, actual_len, actual_len]
-            attn = attn_layer[0].cpu()  # [n_heads, Q, Q]
-            n_heads = attn.shape[0]
-
-            all_query_feats = []
-            target_query_feats = []
-            for h in range(n_heads):
-                head_mat = attn[h, :actual_len, :actual_len]  # [Q, Q]
-                all_query_feats.append(compute_vdp_features(
-                    head_mat, query_stride=query_stride,
-                    support_start=support_start, support_end=support_end,
-                ))
-                target_query_feats.append(compute_vdp_features(
-                    head_mat, query_stride=query_stride,
-                    support_start=support_start, support_end=support_end,
-                    query_row_ids=target_row_ids,
-                ))
-
-            payload = {
-                "meta": {
-                    "model_tag": model_tag,
-                    "layer": layer_idx,
-                    "case_id": case_idx,
-                    "q_len": actual_len,
-                    "k_len": actual_len,
-                    "query_stride": query_stride,
-                    "support_start_tok": support_start,
-                    "support_end_tok": support_end,
-                    "example_id": example_id,
-                    "target_query_start": target_query_start,
-                    "target_query_end": target_query_end,
-                    "n_heads": n_heads,
-                },
-                "per_head": {
-                    "all_query": all_query_feats,
-                    "target_query": target_query_feats,
-                },
-            }
-
-            out_dir = feat_dir / f"layer{layer_idx:02d}" / f"case{case_idx:03d}"
-            out_dir.mkdir(parents=True, exist_ok=True)
-            out_path = out_dir / "pattern_features.json"
-            with open(out_path, "w") as f:
-                json.dump(payload, f)
-
-        # free attention tensors
-        del attn_layers, outputs
         if device.type == "cuda":
             torch.cuda.empty_cache()
-
         if (case_idx + 1) % 10 == 0:
             print(f"  case {case_idx + 1}/{len(cases)}")
 
@@ -302,6 +373,8 @@ def main():
     parser.add_argument("--seq_len", type=int, required=True, help="Sequence length (filters JSONL cases)")
     parser.add_argument("--case_limit", type=int, default=64, help="Max number of cases to process")
     parser.add_argument("--query_stride", type=int, default=1, help="Query stride for all-query scope (ignored for target-query)")
+    parser.add_argument("--use_hooks", action="store_true", help="Use forward hooks instead of output_attentions (auto-enabled for seq_len>4096)")
+    parser.add_argument("--save_received_attn", action="store_true", help="Save top-20 received-attention key positions per head (from target query rows)")
     args = parser.parse_args()
     run(args)
 
