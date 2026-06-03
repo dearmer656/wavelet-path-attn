@@ -271,7 +271,10 @@ def run(args):
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     print(f"Loading model from {checkpoint} on {device}")
     tokenizer = AutoTokenizer.from_pretrained(checkpoint)
-    model = AutoModelForCausalLM.from_pretrained(checkpoint, dtype=torch.float32, attn_implementation="eager")
+    # Use float16 on GPU to halve attention tensor memory (3.2GB->1.6GB per layer for L8192).
+    # VDP computation is done on CPU in float32 after .cpu(), so precision is preserved.
+    model_dtype = torch.float16 if (device.type == "cuda" and seq_len > 4096) else torch.float32
+    model = AutoModelForCausalLM.from_pretrained(checkpoint, dtype=model_dtype, attn_implementation="eager")
     model.eval().to(device)
 
     feat_dir = out_root / f"block_{seq_len}" / model_tag
