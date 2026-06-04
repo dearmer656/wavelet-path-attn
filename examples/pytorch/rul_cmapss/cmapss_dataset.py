@@ -161,14 +161,19 @@ def prepare_fd001_datasets(
     max_rul: int = 125,
     val_ratio: float = 0.2,
     split_seed: int = 42,
+    sensor_stride: int = 1,
 ) -> tuple["WindowedRULDataset", "WindowedRULDataset", "WindowedRULDataset", dict]:
     """Full pipeline: load → label → split → normalize → build datasets.
-    
+
+    sensor_stride=2 keeps every other feature (24→12), reducing input dim.
     Engine-level train/val split prevents data leakage.
     Scaler is fit on training-engine rows only.
     """
     train_raw, test_raw, rul_df = load_fd001_raw(data_dir)
     train_labeled = add_piecewise_rul(train_raw, max_rul=max_rul)
+
+    # feature subsampling: keep every sensor_stride-th feature
+    feature_cols = FEATURE_COLS[::sensor_stride]
 
     # engine-level split
     rng = np.random.default_rng(split_seed)
@@ -181,21 +186,21 @@ def prepare_fd001_datasets(
     train_split = train_labeled[train_labeled['engine_id'].isin(train_engines)]
     val_split   = train_labeled[train_labeled['engine_id'].isin(val_engines)]
 
-    mean, std = fit_standardizer(train_split, FEATURE_COLS)
-    train_norm = apply_standardizer(train_split, FEATURE_COLS, mean, std)
-    val_norm   = apply_standardizer(val_split,   FEATURE_COLS, mean, std)
-    test_norm  = apply_standardizer(test_raw,    FEATURE_COLS, mean, std)
+    mean, std = fit_standardizer(train_split, feature_cols)
+    train_norm = apply_standardizer(train_split, feature_cols, mean, std)
+    val_norm   = apply_standardizer(val_split,   feature_cols, mean, std)
+    test_norm  = apply_standardizer(test_raw,    feature_cols, mean, std)
 
-    x_tr, y_tr = build_train_windows(train_norm, FEATURE_COLS, window_size, stride)
-    x_va, y_va = build_train_windows(val_norm,   FEATURE_COLS, window_size, stride)
-    _, x_te, y_te, te_masks = build_test_windows(test_norm, rul_df, FEATURE_COLS, window_size, max_rul)
+    x_tr, y_tr = build_train_windows(train_norm, feature_cols, window_size, stride)
+    x_va, y_va = build_train_windows(val_norm,   feature_cols, window_size, stride)
+    _, x_te, y_te, te_masks = build_test_windows(test_norm, rul_df, feature_cols, window_size, max_rul)
 
     train_ds = WindowedRULDataset(x_tr, y_tr)
     val_ds   = WindowedRULDataset(x_va, y_va)
     test_ds  = WindowedRULDataset(x_te, y_te, te_masks)
 
     meta = {
-        'feature_cols': FEATURE_COLS,
+        'feature_cols': feature_cols,
         'mean': mean,
         'std': std,
         'train_engines': [int(x) for x in sorted(train_engines)],

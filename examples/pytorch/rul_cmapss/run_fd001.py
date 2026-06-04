@@ -39,6 +39,8 @@ def build_parser() -> argparse.ArgumentParser:
                         help="Early stopping patience (0 = disabled)")
     parser.add_argument("--test_window_sizes", type=int, nargs="+", default=[],
                         help="Additional test window sizes for train-short/test-long eval")
+    parser.add_argument("--sensor_stride", type=int, default=1,
+                        help="Feature subsampling stride: 1=all features, 2=every other (k→k/2)")
     parser.add_argument("--smoke_test", action="store_true",
                         help="Run forward-pass smoke test for all 6 models and exit.")
     return parser

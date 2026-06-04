@@ -242,6 +242,7 @@ def run_experiment(args) -> dict:
         max_rul=args.max_rul,
         val_ratio=args.val_ratio,
         split_seed=args.split_seed,
+        sensor_stride=getattr(args, 'sensor_stride', 1),
     )
 
     loader_kw = dict(batch_size=args.batch_size, num_workers=args.num_workers,
