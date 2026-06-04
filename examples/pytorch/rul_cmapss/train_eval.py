@@ -350,7 +350,12 @@ def run_experiment(args) -> dict:
         'args':                 vars(args),
     }
     os.makedirs(args.output_dir, exist_ok=True)
-    out_path = os.path.join(args.output_dir, f'results_{args.model}.json')
+    # Include window_size and sensor_stride in filename to avoid overwrites in sweeps
+    ss = getattr(args, 'sensor_stride', 1)
+    out_name = f'results_{args.model}_tw{args.window_size}'
+    if ss != 1:
+        out_name += f'_ss{ss}'
+    out_path = os.path.join(args.output_dir, f'{out_name}.json')
     with open(out_path, 'w') as f:
         json.dump(results, f, indent=2)
     print(f'Results saved to {out_path}')
