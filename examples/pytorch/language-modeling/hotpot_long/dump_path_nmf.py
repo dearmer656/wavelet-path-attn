@@ -23,7 +23,7 @@ inserted just before `P_base = None` in path_attention_with_wavelet_QH.
 import argparse
 import csv
 import json
-import math
+import subprocess
 from pathlib import Path
 from typing import List, Optional
 
@@ -31,6 +31,16 @@ import numpy as np
 import torch
 from sklearn.decomposition import NMF as SklearnNMF
 from transformers import AutoModelForCausalLM, AutoTokenizer
+
+
+def _git_sha(repo_path: str) -> str:
+    try:
+        return subprocess.check_output(
+            ["git", "-C", repo_path, "rev-parse", "--short", "HEAD"],
+            stderr=subprocess.DEVNULL,
+        ).decode().strip()
+    except Exception:
+        return "unknown"
 
 
 # ── preprocessing helpers ─────────────────────────────────────────────────────
@@ -86,10 +96,17 @@ def masked_sum_pool_2d(X_raw: torch.Tensor, M: int = 128) -> torch.Tensor:
 
 
 def salient_mass_filter(pool_map: torch.Tensor, alpha: float = 0.90) -> torch.Tensor:
-    """Row-wise cumulative-mass filter: zero cells below the alpha-mass threshold."""
+    """Row-wise cumulative-mass filter at threshold alpha.
+
+    For each coarse row r, only considers valid causal columns c ≤ r (lower
+    triangle of the 128×128 coarse grid). Upper-triangle cells remain 0.
+    Keeps cells with value >= the minimum value needed to cover alpha mass.
+    """
+    M = pool_map.shape[0]
     out = torch.zeros_like(pool_map)
-    for r in range(pool_map.shape[0]):
-        row = pool_map[r]
+    for r in range(M):
+        # Only valid causal columns: c <= r
+        row = pool_map[r, :r + 1]
         row_sum = row.sum().item()
         if row_sum < 1e-12:
             continue
@@ -97,22 +114,29 @@ def salient_mass_filter(pool_map: torch.Tensor, alpha: float = 0.90) -> torch.Te
         cumsum = torch.cumsum(sorted_vals, dim=0)
         nz = (cumsum >= alpha * row_sum).nonzero(as_tuple=False)
         if nz.numel() == 0:
-            out[r] = row
+            out[r, :r + 1] = row
             continue
         k = int(nz[0].item())
         thresh = float(sorted_vals[k].item()) if k < sorted_vals.shape[0] else 0.0
-        out[r] = row.clamp_min(thresh) * (row >= thresh).float()
+        out[r, :r + 1] = row * (row >= thresh).float()
     return out
 
 
 def top_pct_filter(pool_map: torch.Tensor, keep_frac: float) -> torch.Tensor:
-    """Keep the top `keep_frac` fraction of cells by value (per map, not per row)."""
-    flat = pool_map.reshape(-1)
-    pos = flat[flat > 0]
-    if pos.numel() == 0:
-        return torch.zeros_like(pool_map)
-    thresh = float(torch.quantile(pos, 1.0 - keep_frac).item())
-    return pool_map * (pool_map >= thresh).float()
+    """Row-wise top-fraction filter: keep top keep_frac fraction per coarse row.
+
+    Only considers causal-valid columns c ≤ r per row. Upper-triangle stays 0.
+    """
+    M = pool_map.shape[0]
+    out = torch.zeros_like(pool_map)
+    for r in range(M):
+        row = pool_map[r, :r + 1]
+        pos = row[row > 0]
+        if pos.numel() == 0:
+            continue
+        thresh = float(torch.quantile(pos, 1.0 - keep_frac).item())
+        out[r, :r + 1] = row * (row >= thresh).float()
+    return out
 
 
 def l1_normalize_map(pool_map: torch.Tensor) -> torch.Tensor:
@@ -226,10 +250,14 @@ def run(args):
         with torch.no_grad():
             _ = model(input_ids)
 
-        for layer_idx, (_, module) in enumerate(path_attn_layers):
+        for layer_idx, (layer_name, module) in enumerate(path_attn_layers):
             buf = getattr(module, "_nmf_last_base_logits", None)
             if buf is None:
-                continue
+                raise RuntimeError(
+                    f"Layer {layer_idx} ({layer_name}) has no _nmf_last_base_logits "
+                    f"after forward pass (case {case_idx}). "
+                    f"Check that the _nmf_capture patch is applied in path_attn.py."
+                )
             # buf: [B, H, T, T] on CPU float32
             attn = buf[0, :, :actual_len, :actual_len]  # [H, T, T]
             n_heads = attn.shape[0]
@@ -238,7 +266,10 @@ def run(args):
                 if row is None:
                     continue
                 X_rows.append(row.numpy())
-                row_meta.append({"case_id": case_idx, "layer": layer_idx, "head": h})
+                row_meta.append({
+                    "case_id": case_idx, "layer": layer_idx, "head": h,
+                    "actual_len": actual_len, "seq_len": seq_len,
+                })
 
         if (case_idx + 1) % 5 == 0 or (case_idx + 1) == len(cases):
             print(f"  case {case_idx + 1}/{len(cases)} | rows so far: {len(X_rows)}")
@@ -276,9 +307,15 @@ def run(args):
         "rank": rank,
         "pool_size": M,
         "preprocessing": preprocessing,
+        "pooling_method": "masked_sum",
+        "salient_alpha": 0.90,
+        "min_valid_keys": _NMF_MIN_VALID_KEYS,
+        "max_normalized": _NMF_MAX_NORMALIZED,
         "n_maps": len(X_rows),
         "n_layers": n_layers,
         "reconstruction_err": recon_err,
+        "git_sha_transformers": _git_sha(str(Path(__file__).parents[3])),
+        "git_sha_fla": _git_sha("/cl/work5/hongyu-s/flash-linear-attention"),
     }
     with open(out_dir / "meta.json", "w") as f:
         json.dump(meta, f, indent=2)
@@ -313,6 +350,7 @@ def run(args):
             if mask.sum() == 0:
                 continue
             U_sub = U[mask]
+            n_sub = int(mask.sum())
             for r in range(rank):
                 usage_rows.append({
                     "layer": layer,
@@ -320,11 +358,12 @@ def run(args):
                     "component": r,
                     "mean_usage": float(U_sub[:, r].mean()),
                     "std_usage": float(U_sub[:, r].std()),
+                    "n_maps": n_sub,
                 })
     usage_path = out_dir / "usage_by_layer_head.csv"
     with open(usage_path, "w", newline="") as f:
         writer = csv.DictWriter(f, fieldnames=["layer", "head", "component",
-                                               "mean_usage", "std_usage"])
+                                               "mean_usage", "std_usage", "n_maps"])
         writer.writeheader()
         writer.writerows(usage_rows)
     print(f"Saved usage table to {usage_path}")
