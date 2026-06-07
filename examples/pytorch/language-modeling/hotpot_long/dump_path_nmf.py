@@ -35,21 +35,32 @@ from transformers import AutoModelForCausalLM, AutoTokenizer
 
 # ── preprocessing helpers ─────────────────────────────────────────────────────
 
+_NMF_MAX_NORMALIZED = 5.0   # clamp to prevent amplification when MAD≈0 (early rows, few keys)
+_NMF_MIN_VALID_KEYS = 4     # skip rows with fewer than this many valid keys
+
+
 def robust_relu_normalize(logit_mat: torch.Tensor) -> torch.Tensor:
     """Row-wise robust ReLU normalization over causal-valid positions (j ≤ i).
+
+    Rows with fewer than _NMF_MIN_VALID_KEYS valid keys are skipped (left as 0)
+    because median/MAD are unstable for very small samples and can produce
+    catastrophic amplification when MAD≈0 (s_i→1e-6).
+
+    Normalized values are clamped at _NMF_MAX_NORMALIZED to bound any residual
+    amplification effects.
 
     Returns X_raw [T, T] with non-negative values; upper triangle zeroed.
     """
     T = logit_mat.shape[0]
     out = torch.zeros(T, T, dtype=torch.float32)
     for i in range(T):
-        vals = logit_mat[i, :i + 1].float()
-        if vals.numel() == 0:
+        if i + 1 < _NMF_MIN_VALID_KEYS:
             continue
+        vals = logit_mat[i, :i + 1].float()
         m_i = float(vals.median().item())
         mad = float((vals - m_i).abs().median().item())
         s_i = 1.4826 * mad + 1e-6
-        out[i, :i + 1] = (vals - m_i).div(s_i).clamp_min_(0.0)
+        out[i, :i + 1] = (vals - m_i).div(s_i).clamp_(0.0, _NMF_MAX_NORMALIZED)
     return out
 
 
