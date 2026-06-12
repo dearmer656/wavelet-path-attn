@@ -32,6 +32,7 @@ export PYTHONPATH=/project/nlp-work5/hongyu-s/transformers/src:/cl/work5/hongyu-
 export SKIP_FENICE=1
 export SKIP_SUMMAC=1
 export WANDB_DISABLED=true
+export TRITON_CACHE_DIR="/tmp/triton_cache_${SLURM_JOB_ID}"
 
 WORKDIR=/cl/work5/hongyu-s/transformers/examples/pytorch/language-modeling
 PYTHON_BIN=/cl/work5/hongyu-s/conda/envs/latest_transformers/bin/python

@@ -27,6 +27,7 @@ PATH_ATTN_IMPL="${4:-}"
 
 export PYTHONPATH=/project/nlp-work5/hongyu-s/transformers/src:/cl/work5/hongyu-s/flash-linear-attention${PYTHONPATH:+:${PYTHONPATH}}
 export WANDB_DISABLED=true
+export TRITON_CACHE_DIR="/tmp/triton_cache_${SLURM_JOB_ID}"
 
 WORKDIR=/cl/work5/hongyu-s/transformers/examples/pytorch/language-modeling
 PYTHON_BIN=/cl/work5/hongyu-s/conda/envs/path_ok/bin/python3
