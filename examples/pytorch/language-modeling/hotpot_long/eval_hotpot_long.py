@@ -31,6 +31,15 @@ from typing import Optional
 import torch
 
 
+PAT195_OVERRIDE_KEYS = {
+    "attn_norm",
+    "entmax_alpha",
+    "entmax_scope",
+    "entmax_layers",
+    "entmax_stable_heads_csv",
+}
+
+
 def read_kv_config(path: str) -> dict:
     cfg = {}
     with open(path, "r", encoding="utf-8") as f:
@@ -50,16 +59,28 @@ def read_kv_config(path: str) -> dict:
     return cfg
 
 
-def add_missing_to_hf_config(config, kv: dict):
+def apply_kv_to_hf_config(config, kv: dict):
+    """Apply a supply_model.cfg-style dict to a HF config.
+
+    PAT-195 eval-time keys are true overrides because entmax is intentionally
+    controlled by the copied cfg file. Other keys preserve the previous
+    run_clm_v_arc-style behavior: add only when missing, so accidental standard
+    GPT-2 architectural keys in the cfg cannot silently mutate the checkpoint.
+    """
     existing = set(config.to_dict().keys())
-    added, skipped = [], []
+    added, overridden, skipped = [], [], []
     for k, v in kv.items():
-        if k in existing:
-            skipped.append(k)
-        else:
+        force_override = k in PAT195_OVERRIDE_KEYS
+        already_present = k in existing or hasattr(config, k)
+        if force_override or not already_present:
             setattr(config, k, v)
-            added.append(k)
-    return added, skipped
+            if already_present:
+                overridden.append(k)
+            else:
+                added.append(k)
+        else:
+            skipped.append(k)
+    return added, overridden, skipped
 
 
 # ---------------------------------------------------------------------------
@@ -166,7 +187,15 @@ def main():
     parser.add_argument("--device", default="auto")
     parser.add_argument("--max-examples", type=int, default=None)
     parser.add_argument("--n-boot", type=int, default=2000, help="Bootstrap iterations")
-    parser.add_argument("--cfg-path", default=None, help="Optional supply_model.cfg-style KEY=value file; keys not already in the model config are set via setattr before model construction (e.g. attn_norm=entmax, entmax_alpha=1.5, entmax_scope=all)")
+    parser.add_argument(
+        "--cfg-path",
+        default=None,
+        help=(
+            "Optional supply_model.cfg-style KEY=value file applied before "
+            "model construction. PAT-195 entmax keys override checkpoint config; "
+            "other keys are added only when missing."
+        ),
+    )
     args = parser.parse_args()
 
     out_dir = Path(args.output_dir)
@@ -195,8 +224,11 @@ def main():
             config._attn_implementation = attn_impl
     if args.cfg_path:
         cfg = read_kv_config(args.cfg_path)
-        added, skipped = add_missing_to_hf_config(config, cfg)
-        print(f"cfg_path={args.cfg_path}: added={added}, skipped={skipped}")
+        added, overridden, skipped = apply_kv_to_hf_config(config, cfg)
+        print(
+            f"cfg_path={args.cfg_path}: "
+            f"added={added}, overridden={overridden}, skipped={skipped}"
+        )
     if args.device == "auto":
         model = AutoModelForCausalLM.from_pretrained(
             args.model_path, config=config, torch_dtype=torch.float16, device_map="auto"
