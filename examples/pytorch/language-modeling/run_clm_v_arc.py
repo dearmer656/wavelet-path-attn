@@ -1715,7 +1715,7 @@ def main():
                         truncation=False,
                     )
                     enc_summ = tokenizer(
-                        ex["summary"] if "summary" in ex else ex["summary_original"],
+                        ex.get("summary", ex.get("summary_filtered", ex.get("summary_original", ""))),
                         add_special_tokens=False,
                         truncation=False,
                     )
