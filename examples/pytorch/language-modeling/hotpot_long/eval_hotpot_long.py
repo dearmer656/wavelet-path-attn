@@ -206,6 +206,7 @@ def main():
 
     print(f"Loading tokenizer from {args.tokenizer}...")
     tokenizer = AutoTokenizer.from_pretrained(args.tokenizer)
+    tokenizer.padding_side = "left"
     if tokenizer.pad_token_id is None:
         tokenizer.pad_token_id = tokenizer.eos_token_id
 

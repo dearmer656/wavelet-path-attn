@@ -12,27 +12,6 @@ mkdir -p "${TMP_ROOT}"
 alphas=(1.05 1.1 1.2 1.5)
 submitted=()
 
-find_hotpot_baseline_dir() {
-    local ckpt="$1"
-    local readme
-    while IFS= read -r readme; do
-        if grep -Fqx "base_model: ${ckpt}" "${readme}"; then
-            local out_dir
-            out_dir="$(dirname "${readme}")"
-            if [ -f "${out_dir}/eval_results.json" ]; then
-                printf '%s\n' "${out_dir}"
-                return 0
-            fi
-        fi
-    done < <(find "${BASE}/hotpot_long/results_uniform" -path '*/L4096/README.md' | sort)
-    return 1
-}
-
-xsum_baseline_exists() {
-    local run_dir="$1"
-    compgen -G "${run_dir}/ckpt_eval_xsum_rouge/xsum_L1536*/eval_results.json" > /dev/null
-}
-
 write_entmax_cfg() {
     local src_cfg="$1"
     local dst_cfg="$2"
@@ -76,20 +55,15 @@ for model_spec in "${models[@]}"; do
         exit 1
     fi
 
-    hotpot_baseline_dir="$(find_hotpot_baseline_dir "${ckpt}" || true)"
-    if [ -z "${hotpot_baseline_dir}" ]; then
-        hotpot_softmax_cfg="${TMP_ROOT}/${model_key}_hotpot_softmax/supply_model.cfg"
-        write_softmax_cfg_copy "${base_cfg}" "${hotpot_softmax_cfg}"
-        hotpot_softmax_out="${BASE}/hotpot_long/results_uniform/pat195_stage1a_${model_key}_softmax/L4096"
-        submit_job "${HOTPOT_SCRIPT}" "${ckpt}" "${hotpot_softmax_cfg}" "${hotpot_softmax_out}" "${path_attn_impl}"
-    fi
+    hotpot_softmax_cfg="${TMP_ROOT}/${model_key}_hotpot_softmax/supply_model.cfg"
+    write_softmax_cfg_copy "${base_cfg}" "${hotpot_softmax_cfg}"
+    hotpot_softmax_out="${BASE}/hotpot_long/results_uniform/pat195_stage1a_${model_key}_softmax/L4096"
+    submit_job "${HOTPOT_SCRIPT}" "${ckpt}" "${hotpot_softmax_cfg}" "${hotpot_softmax_out}" "${path_attn_impl}"
 
-    if ! xsum_baseline_exists "${run_dir}"; then
-        xsum_softmax_cfg="${TMP_ROOT}/${model_key}_xsum_softmax/supply_model.cfg"
-        write_softmax_cfg_copy "${base_cfg}" "${xsum_softmax_cfg}"
-        xsum_softmax_out="${run_dir}/ckpt_eval_xsum_rouge/pat195_stage1a_${model_key}_softmax_L1536"
-        submit_job "${XSUM_SCRIPT}" "${ckpt}" "${xsum_softmax_cfg}" "${xsum_softmax_out}" "${path_attn_impl}"
-    fi
+    xsum_softmax_cfg="${TMP_ROOT}/${model_key}_xsum_softmax/supply_model.cfg"
+    write_softmax_cfg_copy "${base_cfg}" "${xsum_softmax_cfg}"
+    xsum_softmax_out="${run_dir}/ckpt_eval_xsum_rouge/pat195_stage1a_${model_key}_softmax_L1536"
+    submit_job "${XSUM_SCRIPT}" "${ckpt}" "${xsum_softmax_cfg}" "${xsum_softmax_out}" "${path_attn_impl}"
 
     for alpha in "${alphas[@]}"; do
         alpha_tag="${alpha//./p}"
