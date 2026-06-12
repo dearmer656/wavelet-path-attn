@@ -26,6 +26,7 @@ OUT_DIR="${3:?OUT_DIR required}"
 PATH_ATTN_IMPL="${4:-}"
 EVAL_BATCH_SIZE="${5:-8}"
 SEED="${6:-42}"
+XSUM_VALIDATION_FILE="${7:-/cl/work5/hongyu-s/fact-check-summarization/xsum_test_filter_level2_official_style.jsonl}"
 
 export PYTHONPATH=/project/nlp-work5/hongyu-s/transformers/src:/cl/work5/hongyu-s/flash-linear-attention${PYTHONPATH:+:${PYTHONPATH}}
 export SKIP_FENICE=1
@@ -115,6 +116,7 @@ cd "${WORKDIR}"
     --block_size 1536 \
     --dataset_name xsum \
     --dataset_config_name default \
+    --validation_file "${XSUM_VALIDATION_FILE}" \
     --do_eval \
     --output_dir "${OUT_DIR}" \
     --overwrite_output_dir \

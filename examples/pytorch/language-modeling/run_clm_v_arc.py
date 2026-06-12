@@ -1320,6 +1320,23 @@ def main():
                     **dataset_args,
                 )
 
+    # "Filtered XSum" eval set: when --dataset_name xsum is combined with
+    # --validation_file, override the hub validation split with the given
+    # file (e.g. a pre-generated factuality-filtered subset). The hub-load
+    # branch above ignores validation_file entirely without this override.
+    if data_args.dataset_name == "xsum" and data_args.validation_file is not None:
+        val_extension = data_args.validation_file.split(".")[-1]
+        if val_extension == "jsonl":
+            val_extension = "json"
+        elif val_extension == "txt":
+            val_extension = "text"
+        raw_datasets["validation"] = load_dataset(
+            val_extension,
+            data_files={"validation": data_args.validation_file},
+            cache_dir=model_args.cache_dir,
+            token=model_args.token,
+        )["validation"]
+
     # See more about loading any type of standard or custom dataset (from files, python dict, pandas DataFrame, etc) at
     # https://huggingface.co/docs/datasets/loading_datasets.
 
@@ -1643,6 +1660,7 @@ def main():
                 "tok_name": getattr(tokenizer, "name_or_path", None),
                 "block_size": data_args.block_size,
                 "eos_id": tokenizer.eos_token_id,
+                "validation_file": getattr(data_args, "validation_file", None),
             }
             return hashlib.md5(json.dumps(key, sort_keys=True).encode("utf-8")).hexdigest()
 
@@ -1697,7 +1715,7 @@ def main():
                         truncation=False,
                     )
                     enc_summ = tokenizer(
-                        ex["summary"],
+                        ex["summary"] if "summary" in ex else ex["summary_original"],
                         add_special_tokens=False,
                         truncation=False,
                     )
@@ -1752,7 +1770,7 @@ def main():
                     processed_splits[split] = raw_datasets[split].map(
                         build_and_index_factory(split),
                         with_indices=True,
-                        remove_columns=column_names,
+                        remove_columns=raw_datasets[split].column_names,
                         num_proc=1,
                         desc=f"Tokenize & pad (split={split})",
                         load_from_cache_file=False,
