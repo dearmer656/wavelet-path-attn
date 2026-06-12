@@ -1707,6 +1707,18 @@ def main():
             assert not data_args.streaming, "XSUM prefix-LM 分支暂不支持 streaming=True"
 
             def build_and_index_factory(split_name):
+                def _discarded_record():
+                    # Keep the same schema as the non-discarded branch below so
+                    # the Arrow writer doesn't choke on a missing "input_ids" key;
+                    # the row is dropped right after by the .filter(discard) pass.
+                    return {
+                        "input_ids": [tokenizer.eos_token_id] * block_size,
+                        "labels": [-100] * block_size,
+                        "attention_mask": [0] * block_size,
+                        "total_token_len": 0,
+                        "discard": True,
+                    }
+
                 def build_and_index(ex, idx):
                     # 1) 编码 document 和 summary
                     enc_prompt = tokenizer(
@@ -1724,7 +1736,7 @@ def main():
                     summ_ids   = enc_summ["input_ids"]
 
                     if len(summ_ids) == 0:
-                        return {"discard": True}
+                        return _discarded_record()
 
                     # 2) 拼接 ids
                     ids = prompt_ids + summ_ids + [tokenizer.eos_token_id]
@@ -1739,7 +1751,7 @@ def main():
 
                     L = len(ids)
                     if L <= 1:
-                        return {"discard": True}
+                        return _discarded_record()
 
                     # 4) truncate / pad 到 block_size
                     if L > block_size:
@@ -1758,6 +1770,7 @@ def main():
                         "labels": labels,
                         "attention_mask": attn,
                         "total_token_len": L,
+                        "discard": False,
                     }
                 return build_and_index
 
