@@ -1,0 +1,10 @@
+{
+  "R_star": 6,
+  "gate1": true,
+  "gate2": true,
+  "stability_frac_ge_085": 1.0,
+  "comps_strong": 6,
+  "f1_lift": 0.1355071004437169,
+  "perm95_max_er": 1.1002083333333332,
+  "verdict": "PROCEED to Phase B. Components are stable and query-enriched \u2192 evidence for query-conditioned scale routing (pending attention-effect check)."
+}

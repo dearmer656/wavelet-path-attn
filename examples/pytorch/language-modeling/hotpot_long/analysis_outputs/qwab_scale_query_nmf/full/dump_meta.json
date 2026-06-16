@@ -1,0 +1,28 @@
+{
+  "checkpoint": "runs/head_wise_scale_selection_vs_layer_wise/layer_wise/sigmoid_exp/s42_delta_detach/checkpoint-15900",
+  "seq_len": 4096,
+  "n_case": 150,
+  "n_layers": 12,
+  "K": 8,
+  "query_budget": 384,
+  "min_pos": 16,
+  "capture_base_attn": true,
+  "n_rows": 691200,
+  "roles": [
+    "question",
+    "evidence",
+    "answer_near",
+    "title_special",
+    "irrelevant"
+  ],
+  "seed": 42,
+  "role_counts": {
+    "irrelevant": 511320,
+    "evidence": 133380,
+    "title_special": 25044,
+    "question": 11880,
+    "answer_near": 9576
+  },
+  "git_sha_transformers": "c447fd9536",
+  "git_sha_fla": "a5c69588ea"
+}
