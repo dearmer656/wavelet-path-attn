@@ -2,8 +2,7 @@
 #SBATCH --job-name=PAT160_hln_s43
 #SBATCH --output=log_file/train/%j_pat160_hidden_ln_s43.txt
 #SBATCH --partition=gpu_long
-#SBATCH --gres=gpu:6000:4
-#SBATCH --nodelist=elm73
+#SBATCH --gres=gpu:a6000:4
 #SBATCH --time=100:00:00
 #SBATCH --ntasks=1
 #SBATCH --cpus-per-task=4
