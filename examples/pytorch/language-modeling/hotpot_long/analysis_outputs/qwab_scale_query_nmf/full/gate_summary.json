@@ -6,5 +6,19 @@
   "comps_strong": 6,
   "f1_lift": 0.1355071004437169,
   "perm95_max_er": 1.1002083333333332,
-  "verdict": "PROCEED to Phase B. Components are stable and query-enriched \u2192 evidence for query-conditioned scale routing (pending attention-effect check)."
+  "verdict": "PROCEED to Phase B. Components are stable and query-enriched \u2192 evidence for query-conditioned scale routing (pending attention-effect check).",
+  "gate3": true,
+  "gate3_separating_metrics": [
+    "FlipRate@16",
+    "FlipRate@32",
+    "BiasMassGain@16",
+    "BiasMassGain@32",
+    "dTopKMass@16",
+    "dTopKMass@32",
+    "dEntropy",
+    "dESS",
+    "dSelfMass",
+    "dEvidenceMass"
+  ],
+  "all_gates_pass": true
 }

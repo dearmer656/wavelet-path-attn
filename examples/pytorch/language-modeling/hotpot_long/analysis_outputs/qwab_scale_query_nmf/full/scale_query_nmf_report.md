@@ -116,3 +116,48 @@ PROCEED to Phase B. Components are stable and query-enriched → evidence for qu
 **Framing:** Stronger than "uniform wavelet bias" and stronger than pure layer
 specialization (query state adds held-out signal beyond layer+position), but the
 mechanism claim ("modes induce different attention effects") still requires Phase B.
+
+## Phase B — attention-effect linkage (QWAB on vs off, R*=6)
+
+|   component |   n_rows |   FlipRate@32 |   BiasMassGain@32 |     dEntropy |      dESS |   dEvidenceMass |
+|------------:|---------:|--------------:|------------------:|-------------:|----------:|----------------:|
+|           0 |   192916 |     0.0241404 |       0.00124947  | -0.00466554  | -2.28074  |    -0.000942401 |
+|           1 |   168867 |     0.0102016 |      -0.000580543 |  0.00376948  |  0.398816 |    -0.000402293 |
+|           2 |   149063 |     0.0223699 |       0.00116377  | -0.00330606  | -2.61185  |    -0.000974238 |
+|           3 |   105362 |     0.0197005 |       0.000341323 |  0.000375608 | -1.7232   |    -0.000746456 |
+|           4 |    34781 |     0.0295743 |       0.00199319  | -0.00621804  | -3.95528  |    -0.00133187  |
+|           5 |    40211 |     0.0236433 |       0.000948767 | -0.00252849  | -1.60445  |    -0.00109385  |
+
+(Full per-metric means + case-bootstrap 95% CIs in `component_attention_effects_R6.csv`.)
+
+**Gate 3 — PASS.** Metrics with disjoint extreme-component 95% CIs (effect differs beyond case-bootstrap noise):
+- `FlipRate@16`: comp1=0.0101 vs comp4=0.0317
+- `FlipRate@32`: comp1=0.0102 vs comp4=0.0296
+- `BiasMassGain@16`: comp1=-0.0006 vs comp4=0.0015
+- `BiasMassGain@32`: comp1=-0.0006 vs comp4=0.0020
+- `dTopKMass@16`: comp1=-0.0007 vs comp4=0.0013
+- `dTopKMass@32`: comp1=-0.0006 vs comp4=0.0018
+- `dEntropy`: comp4=-0.0062 vs comp1=0.0038
+- `dESS`: comp4=-3.9553 vs comp1=0.3988
+- `dSelfMass`: comp5=-0.0006 vs comp1=-0.0002
+- `dEvidenceMass`: comp4=-0.0013 vs comp1=-0.0004
+
+### Final framing
+All three gates pass: QWAB does **not** apply a uniform wavelet bias. Its head-shared router decomposes into stable scale-selection modes that are query-enriched (beyond layer+position) and induce **distinguishable attention-support changes** — supporting the preferred mechanism claim.
+### Phase B caveats (scope of the claim)
+1. **Effects are small in absolute magnitude** (FlipRate@32 ≈ 1–3%, |ΔEntropy| ≲ 0.006,
+   |ΔESS| ≲ 4). QWAB's wavelet bias is a *gentle* perturbation; the modes differ
+   reliably (disjoint case-bootstrap CIs) but the per-query reshaping is modest.
+2. **Direction of the contrast is interpretable:** comp1 (layer_low / coarse-s8) is the
+   only mode that *diffuses* attention (+ΔEntropy, +ΔESS, negative BiasMassGain), while
+   comp0/2/4 *concentrate* it (−ΔEntropy, −ΔESS, +BiasMassGain), comp4 most strongly.
+3. **`ΔEvidenceMass` is uniformly negative across all modes** (−0.0004 … −0.0013): the
+   wavelet bias does **not** increase attention mass on supporting-fact tokens for any
+   mode — it modestly *reduces* it (least for the diffusing comp1, most for comp4).
+   → The **stronger "PaTH makes scale-selection task-aligned"** claim is **NOT supported**
+   here; modes differ in attention *shape* (concentration vs diffusion), not in
+   evidence-grounding. The supported claim is the preferred (non-task-aligned) one.
+
+**Bottom line:** Gates 1–3 pass → QWAB's head-shared router is a stable, query-conditioned
+(beyond layer+position) scale selector whose modes induce distinguishable attention-shape
+changes. It is *not* a uniform bias and *not* (on this evidence) a task-aligned evidence booster.
